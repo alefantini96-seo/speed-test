@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Analisi velocità</title>
+<style>
+:root { --testo:#1f2328; --tenue:#6b7280; --bordo:#e5e7eb; --sfondo:#fff; --tela:#f6f7f9;
+        --buono:#1a7f4b; --medio:#a16207; --scarso:#b42318; }
+* { box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+       color:var(--testo); background:var(--tela); margin:0; padding:28px 20px 80px;
+       line-height:1.5; }
+main { max-width:940px; margin-inline:auto; }
+h1 { font-size:26px; margin:0 0 4px; }
+.sottotitolo { color:var(--tenue); margin:0 0 26px; font-size:14px; }
+.riquadro { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
+            padding:20px; margin-bottom:18px; }
+label { display:block; font-size:12px; font-weight:600; text-transform:uppercase;
+        letter-spacing:.04em; color:var(--tenue); margin:0 0 6px; }
+textarea, input[type=text], input[type=password] {
+  width:100%; font-family:ui-monospace,Consolas,monospace; font-size:13px;
+  padding:10px 12px; border:1px solid var(--bordo); border-radius:6px;
+  background:var(--sfondo); color:var(--testo); }
+textarea { min-height:120px; resize:vertical; }
+.aiuto { font-size:12px; color:var(--tenue); margin:6px 0 0; }
+.riga { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; }
+.riga > div { flex:1 1 220px; }
+.comandi { display:flex; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap; }
+button { font:inherit; font-weight:600; padding:10px 20px; border-radius:6px;
+         border:1px solid var(--testo); background:var(--testo); color:#fff; cursor:pointer; }
+button.secondario { background:transparent; color:var(--testo); }
+button:disabled { opacity:.45; cursor:default; }
+.avanzamento { font-size:13px; color:var(--tenue); }
+.errore { background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
+          padding:10px 14px; border-radius:6px; font-size:13px; margin-top:14px; }
+.errore .rimedio { color:#7f1d1d; opacity:.85; margin-top:4px; }
+h2 { font-size:18px; margin:0 0 2px; }
+.url { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--tenue);
+       word-break:break-all; margin:0 0 4px; }
+.meta { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
+table { width:100%; border-collapse:collapse; font-size:14px; margin:12px 0 4px; }
+th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--bordo); }
+th { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px;
+        font-weight:600; border:1px solid currentColor; }
+h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue);
+     margin:22px 0 8px; }
+.fase { display:flex; align-items:center; gap:10px; font-size:13px; margin:3px 0; }
+.fase .et { width:210px; color:var(--tenue); }
+.fase .barra { height:9px; background:#dbe1e8; border-radius:2px; }
+.fase .barra.dom { background:var(--scarso); }
+.fase .pc { width:44px; text-align:right; font-variant-numeric:tabular-nums; }
+.problema { border:1px solid var(--bordo); border-left:3px solid var(--tenue);
+            border-radius:6px; padding:12px 14px; margin:10px 0; }
+.problema h4 { margin:0 0 2px; font-size:15px; }
+ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
+li { margin:3px 0; }
+.evidenza li { color:var(--tenue); font-size:13px; }
+.nota { font-size:12px; color:var(--tenue); font-style:italic; margin-top:8px; }
+.marchio { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:9px;
+           font-size:10px; font-weight:600; text-transform:uppercase;
+           color:var(--tenue); border:1px solid #d1d5db; vertical-align:middle; }
+table.risorse td.tag { width:26px; font-size:10px; font-weight:600; color:var(--tenue); }
+table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-size:11px;
+                           word-break:break-all; }
+.attesa { color:var(--tenue); font-size:13px; font-style:italic; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Analisi velocità</h1>
+  <p class="sottotitolo">Incolla gli URL da analizzare, uno per riga. Ogni pagina viene
+    misurata sui dati di campo reali e diagnosticata in laboratorio.</p>
+
+  <div class="riquadro">
+    <label for="password">Password</label>
+    <input type="password" id="password" autocomplete="current-password">
+
+    <div style="margin-top:16px">
+      <label for="urls">URL da analizzare</label>
+      <textarea id="urls" placeholder="https://www.esempio.it/&#10;https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
+      <p class="aiuto">Uno per riga. Conviene una pagina per template, la più trafficata
+        del suo gruppo: sotto una certa soglia di traffico i dati di campo non esistono.</p>
+    </div>
+
+    <div class="riga">
+      <div>
+        <label for="domini">Domini propri (opzionale)</label>
+        <input type="text" id="domini" placeholder="cdn-esempio.net, static.esempio.com">
+        <p class="aiuto">CDN o domini fratelli del cliente. Senza, vengono scambiati
+          per terze parti e l'intervento finisce assegnato alla squadra sbagliata.</p>
+      </div>
+      <div>
+        <label>Dispositivo</label>
+        <label style="text-transform:none;font-weight:400;font-size:14px;color:var(--testo)">
+          <input type="checkbox" id="desktop"> misura desktop invece di mobile
+        </label>
+      </div>
+    </div>
+
+    <div class="comandi">
+      <button id="avvia">Analizza</button>
+      <button id="scarica" class="secondario" disabled>Scarica report Word</button>
+      <span class="avanzamento" id="avanzamento"></span>
+    </div>
+    <div id="errore"></div>
+  </div>
+
+  <div id="risultati"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const risultati = [];
+
+const SOGLIE = {
+  largest_contentful_paint:  { et:'LCP',  buono:2500, scarso:4000 },
+  interaction_to_next_paint: { et:'INP',  buono:200,  scarso:500 },
+  cumulative_layout_shift:   { et:'CLS',  buono:0.10, scarso:0.25, decimali:true },
+  first_contentful_paint:    { et:'FCP',  buono:1800, scarso:3000 },
+  experimental_time_to_first_byte: { et:'TTFB', buono:800, scarso:1800 },
+};
+const FASI = {
+  timeToFirstByte:'Risposta del server (TTFB)',
+  resourceLoadDelay:'Attesa prima del download',
+  resourceLoadDuration:'Download della risorsa',
+  elementRenderDelay:'Rendering dell’elemento',
+};
+const FONTE = {
+  lighthouse:'testo di Lighthouse',
+  classificazione:'classificazione su dati di laboratorio',
+  campo:'classificazione su dati di campo',
+};
+const COLORE = { buono:'var(--buono)', da_migliorare:'var(--medio)', scarso:'var(--scarso)' };
+
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+function giudizio(metrica, valore) {
+  const s = SOGLIE[metrica];
+  if (!s || valore == null) return 'sconosciuto';
+  return valore <= s.buono ? 'buono' : (valore <= s.scarso ? 'da_migliorare' : 'scarso');
+}
+function formatta(metrica, valore) {
+  if (valore == null) return 'n/d';
+  return SOGLIE[metrica]?.decimali ? valore.toFixed(2) : Math.round(valore) + ' ms';
+}
+
+function tabellaCampo(campo) {
+  const metriche = campo?.metriche || {};
+  const chiavi = Object.keys(SOGLIE).filter(k => k in metriche);
+  if (!chiavi.length) return `<p class="attesa">Nessun dato di campo per questo URL:
+    CrUX non ha traffico sufficiente. Resta la diagnosi di laboratorio, senza metrica
+    reale né storico.</p>`;
+  const serie = campo?.storico?.serie || {};
+  const righe = chiavi.map(k => {
+    const g = giudizio(k, metriche[k]);
+    const s = (serie[k] || []).filter(v => v != null);
+    const delta = s.length > 1
+      ? (SOGLIE[k].decimali ? (s.at(-1)-s[0]).toFixed(2) : Math.round(s.at(-1)-s[0]) + ' ms')
+      : '';
+    const segno = s.length > 1 && s.at(-1) >= s[0] ? '+' : '';
+    return `<tr><td><strong>${SOGLIE[k].et}</strong></td>
+      <td class="num">${formatta(k, metriche[k])}</td>
+      <td><span class="pill" style="color:${COLORE[g] || 'var(--tenue)'}">${g.replace('_',' ')}</span></td>
+      <td class="num">${delta ? segno + delta : ''}</td></tr>`;
+  }).join('');
+  const periodi = campo?.storico?.periodi || [];
+  const nota = periodi.length
+    ? `<p class="meta">storico ${esc(periodi[0])} → ${esc(periodi.at(-1))} ·
+       ${periodi.length} settimane · delta = ultimo meno primo</p>` : '';
+  return `<table><tr><th>metrica</th><th class="num">p75 reale</th><th></th>
+    <th class="num">delta</th></tr>${righe}</table>${nota}`;
+}
+
+function fasiLcp(fatti) {
+  const fasi = fatti?.lcp_fasi || {};
+  const chiavi = Object.keys(fasi);
+  if (!chiavi.length) return '';
+  const totale = chiavi.reduce((a,k) => a + fasi[k], 0) || 1;
+  const dom = chiavi.reduce((a,b) => fasi[a] > fasi[b] ? a : b);
+  const barre = chiavi.map(k => {
+    const q = fasi[k] / totale;
+    return `<div class="fase"><span class="et">${FASI[k] || k}</span>
+      <span class="barra ${k === dom ? 'dom' : ''}" style="width:${Math.round(q*260)}px"></span>
+      <span class="pc">${Math.round(q*100)}%</span></div>`;
+  }).join('');
+  const snippet = fatti.lcp_elemento_snippet
+    ? `<p class="url">elemento LCP: ${esc(fatti.lcp_elemento_snippet.slice(0,200))}</p>` : '';
+  return `<h3>Dove si perde il tempo dell'LCP</h3>${barre}${snippet}`;
+}
+
+function problemi(lista) {
+  if (!lista?.length) return '<p class="attesa">Nessun problema rilevato oltre soglia.</p>';
+  return lista.map(p => {
+    const colore = { alta:'var(--scarso)', media:'var(--medio)' }[p.gravita] || 'var(--tenue)';
+    const evidenza = (p.evidenza||[]).map(e => `<li>${esc(e)}</li>`).join('');
+    const azioni = (p.azioni||[]).map(a => `<li>${esc(a)}</li>`).join('');
+    const risorse = (p.risorse||[]).length ? `<table class="risorse">
+      <tr><th></th><th>risorsa</th><th class="num">impatto</th></tr>
+      ${p.risorse.map(([u,m,t]) => `<tr><td class="tag">${t?'3P':'1P'}</td>
+        <td class="risorsa">${esc(u)}</td><td class="num">${esc(m)}</td></tr>`).join('')}
+      </table>` : '';
+    const doc = p.documentazione
+      ? `<p class="nota"><a href="${esc(p.documentazione)}" target="_blank" rel="noopener">Documentazione Google</a></p>` : '';
+    const marchio = p.azionabile === false
+      ? '<span class="marchio">non azionabile direttamente</span>' : '';
+    return `<div class="problema" style="border-left-color:${colore}">
+      <h4>${esc(p.titolo)}${marchio}</h4>
+      <p class="meta">priorità ${esc(p.gravita)} · interviene: ${esc(p.responsabile)} ·
+        ${esc(FONTE[p.fonte] || p.fonte)}</p>
+      <ul class="evidenza">${evidenza}</ul><ul>${azioni}</ul>${risorse}
+      ${p.nota ? `<p class="nota">${esc(p.nota)}</p>` : ''}${doc}</div>`;
+  }).join('');
+}
+
+function disegna(pagina) {
+  const terze = pagina.terze_parti || {};
+  const quota = terze.byte_totali ? terze.byte_terzi / terze.byte_totali : 0;
+  const div = document.createElement('div');
+  div.className = 'riquadro';
+  div.innerHTML = `
+    <h2>${esc(new URL(pagina.url).pathname === '/' ? 'Home' : new URL(pagina.url).pathname)}</h2>
+    <p class="url">${esc(pagina.url)}</p>
+    <p class="meta">${pagina.misurazioni} misurazioni di laboratorio${
+      pagina.consenso ? ' · ' + esc(pagina.consenso) : ''}</p>
+    ${tabellaCampo(pagina.campo)}
+    ${fasiLcp(pagina.fatti)}
+    <h3>Peso della pagina</h3>
+    <p>${Math.round((terze.byte_totali||0)/1024)} KB su ${terze.richieste_totali||0} richieste,
+       di cui <strong>${Math.round((terze.byte_terzi||0)/1024)} KB di terze parti
+       (${Math.round(quota*100)}%)</strong>.</p>
+    <h3>Interventi</h3>${problemi(pagina.problemi)}`;
+  $('risultati').appendChild(div);
+}
+
+function mostraErrore(messaggio, rimedio) {
+  $('errore').innerHTML = `<div class="errore">${esc(messaggio)}
+    ${rimedio ? `<div class="rimedio">${esc(rimedio)}</div>` : ''}</div>`;
+}
+
+async function avvia() {
+  const password = $('password').value;
+  const urls = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const domini = $('domini').value.split(',').map(s => s.trim()).filter(Boolean);
+  const desktop = $('desktop').checked;
+
+  $('errore').innerHTML = '';
+  $('risultati').innerHTML = '';
+  risultati.length = 0;
+  $('scarica').disabled = true;
+
+  if (!urls.length) return mostraErrore('Inserisci almeno un URL.');
+  sessionStorage.setItem('speed_password', password);
+  $('avvia').disabled = true;
+
+  for (let i = 0; i < urls.length; i++) {
+    $('avanzamento').textContent =
+      `${i+1} di ${urls.length} — ${urls[i]} (può richiedere un minuto)`;
+    try {
+      const risposta = await fetch('/api/analizza', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urls[i], password, desktop, domini_propri: domini }),
+      });
+      const dati = await risposta.json();
+      if (!risposta.ok) { mostraErrore(dati.errore || 'Errore', dati.rimedio); break; }
+      risultati.push(dati);
+      disegna(dati);
+    } catch (e) {
+      mostraErrore(`Impossibile analizzare ${urls[i]}: ${e.message}`);
+      break;
+    }
+  }
+
+  $('avanzamento').textContent = risultati.length
+    ? `${risultati.length} pagine analizzate.` : '';
+  $('avvia').disabled = false;
+  $('scarica').disabled = risultati.length === 0;
+}
+
+async function scarica() {
+  $('scarica').disabled = true;
+  $('avanzamento').textContent = 'preparo il documento...';
+  try {
+    const risposta = await fetch('/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        password: sessionStorage.getItem('speed_password') || '',
+        pagine: risultati,
+        desktop: $('desktop').checked,
+      }),
+    });
+    if (!risposta.ok) {
+      const dati = await risposta.json().catch(() => ({}));
+      throw new Error(dati.errore || 'errore nella generazione');
+    }
+    const blob = await risposta.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const oggi = new Date();
+    const gg = String(oggi.getDate()).padStart(2,'0');
+    const mm = String(oggi.getMonth()+1).padStart(2,'0');
+    a.download = `Report velocità ${gg}${mm}${oggi.getFullYear()}.docx`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    $('avanzamento').textContent = `${risultati.length} pagine analizzate.`;
+  } catch (e) {
+    mostraErrore(e.message);
+    $('avanzamento').textContent = '';
+  }
+  $('scarica').disabled = false;
+}
+
+$('avvia').addEventListener('click', avvia);
+$('scarica').addEventListener('click', scarica);
+$('password').value = sessionStorage.getItem('speed_password') || '';
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/analizza.py": {
+      "maxDuration": 300,
+      "includeFiles": "speed/**"
+    },
+    "api/report.py": {
+      "maxDuration": 60,
+      "includeFiles": "speed/**"
+    }
+  }
+}

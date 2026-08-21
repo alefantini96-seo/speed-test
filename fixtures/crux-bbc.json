@@ -1,0 +1,185 @@
+{
+  "record": {
+    "key": {
+      "formFactor": "PHONE",
+      "url": "https://www.bbc.com/"
+    },
+    "metrics": {
+      "cumulative_layout_shift": {
+        "histogram": [
+          {
+            "start": "0.00",
+            "end": "0.10",
+            "density": 0.8847
+          },
+          {
+            "start": "0.10",
+            "end": "0.25",
+            "density": 0.0882
+          },
+          {
+            "start": "0.25",
+            "density": 0.027
+          }
+        ],
+        "percentiles": {
+          "p75": "0.03"
+        }
+      },
+      "experimental_time_to_first_byte": {
+        "histogram": [
+          {
+            "start": 0,
+            "end": 800,
+            "density": 0.9128
+          },
+          {
+            "start": 800,
+            "end": 1800,
+            "density": 0.0588
+          },
+          {
+            "start": 1800,
+            "density": 0.0285
+          }
+        ],
+        "percentiles": {
+          "p75": 342
+        }
+      },
+      "first_contentful_paint": {
+        "histogram": [
+          {
+            "start": 0,
+            "end": 1800,
+            "density": 0.9435
+          },
+          {
+            "start": 1800,
+            "end": 3000,
+            "density": 0.0313
+          },
+          {
+            "start": 3000,
+            "density": 0.0253
+          }
+        ],
+        "percentiles": {
+          "p75": 685
+        }
+      },
+      "interaction_to_next_paint": {
+        "histogram": [
+          {
+            "start": 0,
+            "end": 200,
+            "density": 0.9153
+          },
+          {
+            "start": 200,
+            "end": 500,
+            "density": 0.063
+          },
+          {
+            "start": 500,
+            "density": 0.0217
+          }
+        ],
+        "percentiles": {
+          "p75": 109
+        }
+      },
+      "largest_contentful_paint": {
+        "histogram": [
+          {
+            "start": 0,
+            "end": 2500,
+            "density": 0.9232
+          },
+          {
+            "start": 2500,
+            "end": 4000,
+            "density": 0.044
+          },
+          {
+            "start": 4000,
+            "density": 0.0328
+          }
+        ],
+        "percentiles": {
+          "p75": 1162
+        }
+      },
+      "largest_contentful_paint_image_element_render_delay": {
+        "percentiles": {
+          "p75": 257
+        }
+      },
+      "largest_contentful_paint_resource_type": {
+        "fractions": {
+          "image": 0.8923,
+          "text": 0.1077
+        }
+      },
+      "round_trip_time": {
+        "histogram": [
+          {
+            "start": 0,
+            "end": 75,
+            "density": 0.4272
+          },
+          {
+            "start": 75,
+            "end": 275,
+            "density": 0.4723
+          },
+          {
+            "start": 275,
+            "density": 0.1006
+          }
+        ],
+        "percentiles": {
+          "p75": 156
+        }
+      },
+      "largest_contentful_paint_image_resource_load_delay": {
+        "percentiles": {
+          "p75": 498
+        }
+      },
+      "largest_contentful_paint_image_resource_load_duration": {
+        "percentiles": {
+          "p75": 176
+        }
+      },
+      "largest_contentful_paint_image_time_to_first_byte": {
+        "percentiles": {
+          "p75": 339
+        }
+      },
+      "navigation_types": {
+        "fractions": {
+          "reload": 0.1017,
+          "restore": 0.0001,
+          "back_forward": 0.0872,
+          "back_forward_cache": 0.152,
+          "prerender": 0.1164,
+          "navigate": 0.5035,
+          "navigate_cache": 0.0391
+        }
+      }
+    },
+    "collectionPeriod": {
+      "firstDate": {
+        "year": 2026,
+        "month": 7,
+        "day": 22
+      },
+      "lastDate": {
+        "year": 2026,
+        "month": 8,
+        "day": 18
+      }
+    }
+  }
+}

@@ -1,0 +1,31 @@
+# Un URL per template, il piu' trafficato del suo gruppo.
+#
+# Prima di fissare questa lista:  speed check-config clienti/esempio.yaml
+# Verifica due cose e ti dice come sistemarle:
+#   - quali URL hanno dati di campo CrUX (senza, resta solo la diagnosi lab)
+#   - chi serve gli asset, per compilare domini_propri qui sotto
+
+cliente: Esempio
+sito: https://www.esempio.it
+form_factor: PHONE          # PHONE | DESKTOP
+output: ""                  # vuoto = ./out ; altrimenti la cartella del cliente
+
+# Domini del cliente serviti da host diversi: CDN, domini fratelli, sottodomini
+# statici. Senza questa dichiarazione il tool li scambia per terze parti e
+# assegna a "marketing/tag" lavori che sono di "sviluppo".
+# Esempio reale: bbc.com serve gli asset da bbci.co.uk — dichiararlo sposta le
+# terze parti dal 95% al 20%.
+domini_propri: []
+#   - cdn-esempio.net
+#   - static.esempio.com
+
+template:
+  - nome: Home
+    url: https://www.esempio.it/
+  - nome: Categoria
+    url: https://www.esempio.it/categoria/esempio/
+    note: template condiviso da ~200 pagine
+  - nome: Prodotto
+    url: https://www.esempio.it/prodotto/esempio/
+  - nome: Articolo blog
+    url: https://www.esempio.it/blog/esempio/
