@@ -11,7 +11,6 @@ import asyncio
 import pytest
 
 from speed.io import crux
-from speed.web import raccogli_campo
 
 RECORD = {
     "url": "https://x.it/", "livello": "url",
@@ -35,7 +34,7 @@ def _esegui(record_risultato, storico_risultato, monkeypatch):
 
     monkeypatch.setattr(crux, "record", finto_record)
     monkeypatch.setattr(crux, "storico", finto_storico)
-    return asyncio.run(raccogli_campo(None, "chiave", "https://x.it/", "PHONE"))
+    return asyncio.run(crux.raccogli(None, "chiave", "https://x.it/", "PHONE"))
 
 
 def test_tutto_disponibile(monkeypatch):

@@ -132,22 +132,31 @@ async def _mostra_entita(conf: cfg.Config, api_key: str) -> None:
 # --------------------------------------------------------------------------- #
 #  run
 # --------------------------------------------------------------------------- #
-async def _dati_campo(api_key: str, conf: cfg.Config) -> dict:
+async def _dati_campo(api_key: str, conf: cfg.Config, parallelismo: int = 10) -> dict:
+    """Campo e andamento per tutti i template, in parallelo.
+
+    Prima si procedeva in serie, due chiamate per URL: su venti template erano una
+    quarantina di round trip messi in fila senza motivo. CrUX regge 150 richieste
+    al minuto, e `check-config` usava gia' asyncio.gather.
+
+    Il semaforo a 10 lascia margine sotto il limite anche se qualcuno lancia due
+    scansioni insieme.
+    """
+    sem = asyncio.Semaphore(parallelismo)
     out: dict = {}
+
     async with httpx.AsyncClient() as client:
-        for t in conf.template:
-            voce = {"livello": None, "metriche": {}, "storico": None}
-            try:
-                rec = await crux.record(client, api_key, t.url, conf.form_factor)
-                voce["livello"] = "url"
-                voce["metriche"] = rec["metriche"]
-                voce["periodo_a"] = rec["periodo_a"]
-                voce["storico"] = await crux.storico(client, api_key, t.url, conf.form_factor)
-            except crux.CruxNonDisponibile:
-                voce["livello"] = "assente"
-            except Exception as exc:
-                voce["errore"] = str(exc)
-            out[t.url] = voce
+        async def una(url: str):
+            async with sem:
+                try:
+                    out[url] = await crux.raccogli(client, api_key, url, conf.form_factor)
+                except Exception as exc:
+                    # Un URL che fallisce non deve fermare la scansione degli altri:
+                    # il report dichiara il buco invece di non esistere.
+                    out[url] = {"livello": "errore", "metriche": {}, "storico": None,
+                                "errore": str(exc)}
+
+        await asyncio.gather(*(una(t.url) for t in conf.template))
     return out
 
 

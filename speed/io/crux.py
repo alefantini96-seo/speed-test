@@ -109,6 +109,36 @@ async def storico(client: httpx.AsyncClient, api_key: str, url: str,
     return {"url": url} | leggi_storico(dati)
 
 
+async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
+                   form_factor: str = "PHONE") -> dict:
+    """Metriche di campo e andamento di una pagina, in due passi SEPARATI.
+
+    Chiedere record e storico in un'unica espressione faceva perdere tutto: se lo
+    storico falliva, l'eccezione impediva l'assegnazione dell'intero risultato, la
+    pagina restava "assente" pur avendo metriche correnti valide, e ogni priorita'
+    ricadeva su "media". Il tool smetteva di calibrare sul campo senza dirlo.
+
+    Lo storico e' un di piu' che serve all'andamento, non alla diagnosi: se manca,
+    degrada solo se stesso.
+
+    Vive qui e non nei chiamanti perche' CLI e versione web ne avevano una copia
+    a testa, e solo una delle due era corretta.
+    """
+    voce = {"livello": "assente", "metriche": {}, "storico": None}
+    try:
+        rec = await record(client, api_key, url, form_factor)
+    except CruxNonDisponibile:
+        return voce      # resta la sola diagnosi di laboratorio, dichiarata nel report
+
+    voce = {"livello": "url", "metriche": rec["metriche"],
+            "periodo_a": rec["periodo_a"], "storico": None}
+    try:
+        voce["storico"] = await storico(client, api_key, url, form_factor)
+    except Exception:
+        pass             # niente andamento, ma le metriche correnti restano
+    return voce
+
+
 async def disponibilita(client: httpx.AsyncClient, api_key: str, url: str,
                         form_factor: str = "PHONE") -> dict:
     """Usata da `check-config`: dice se l'URL ha dati di campo a livello di pagina."""
