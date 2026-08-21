@@ -139,6 +139,19 @@ documentazione: Lighthouse 13 ha sostituito i vecchi audit diagnostici con gli
 "Insights" (`lcp-breakdown-insight`, `lcp-discovery-insight`). Quando cambieranno
 ancora, saranno i test su `fixtures/` a segnalarlo.
 
+## Decisioni architetturali
+
+Cinque decisioni non si cambiano senza aggiornare l'ADR corrispondente in
+`docs/adr/`. Sono citate dai docstring dei moduli che le applicano.
+
+| # | Decisione |
+|---|-----------|
+| 1 | Il campo e' la metrica, il laboratorio la diagnosi; il punteggio PSI non entra in nessuna valutazione |
+| 2 | Il campo si legge da CrUX API, non da `loadingExperience` di PSI |
+| 3 | Nessun database: lo storico arriva da CrUX History a ogni esecuzione |
+| 4 | Il testo delle raccomandazioni viene da Lighthouse verbatim, il tool non ne scrive |
+| 5 | La ripartizione dell'LCP si prende dal campo, il laboratorio e' il ripiego |
+
 ## Limiti dichiarati
 
 - **Un URL per template**: non distingue un problema del template da un problema di
