@@ -68,18 +68,38 @@ def terze_essenziali(riepilogo) -> dict:
     }
 
 
+async def raccogli_campo(client, api_key: str, url: str, form_factor: str) -> dict:
+    """Metriche di campo e andamento, chiesti in due passi SEPARATI.
+
+    Costruire la voce in un'unica espressione che contiene la chiamata allo
+    storico faceva perdere tutto: se lo storico falliva, l'eccezione impediva
+    l'assegnazione dell'intero dizionario, la pagina restava "assente" anche
+    avendo metriche correnti valide, e ogni priorita' ricadeva su "media". Il
+    tool smetteva di calibrare sul campo senza dirlo a nessuno.
+
+    Lo storico mancante deve degradare solo lo storico: e' un di piu' che serve
+    all'andamento, non alla diagnosi.
+    """
+    voce = {"livello": "assente", "metriche": {}, "storico": None}
+    try:
+        record = await crux.record(client, api_key, url, form_factor)
+    except crux.CruxNonDisponibile:
+        return voce      # resta la sola diagnosi di laboratorio, dichiarata nel report
+
+    voce = {"livello": "url", "metriche": record["metriche"],
+            "periodo_a": record["periodo_a"], "storico": None}
+    try:
+        voce["storico"] = await crux.storico(client, api_key, url, form_factor)
+    except Exception:
+        pass             # niente andamento, ma le metriche correnti restano
+    return voce
+
+
 async def analizza_una(api_key: str, url: str, form_factor: str,
                        domini_propri: list) -> dict:
     """Campo + laboratorio + diagnosi per una singola pagina."""
-    voce_campo = {"livello": "assente", "metriche": {}, "storico": None}
     async with httpx.AsyncClient() as client:
-        try:
-            record = await crux.record(client, api_key, url, form_factor)
-            voce_campo = {"livello": "url", "metriche": record["metriche"],
-                          "periodo_a": record["periodo_a"],
-                          "storico": await crux.storico(client, api_key, url, form_factor)}
-        except crux.CruxNonDisponibile:
-            pass   # resta la sola diagnosi di laboratorio, dichiarata nel report
+        voce_campo = await raccogli_campo(client, api_key, url, form_factor)
 
     # Se le fasi LCP arrivano dal campo basta una misurazione: il laboratorio
     # serve solo per i fatti diagnostici, che sono stabili fra i run.
