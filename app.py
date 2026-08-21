@@ -21,6 +21,7 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
+from speed.errori import ErroreSpeed
 from speed.io import render_docx
 from speed.web import LIMITE_PAGINE, analizza_una, serializza, valida_url
 
@@ -111,6 +112,9 @@ def _analizza(avvia, richiesta: dict):
     domini = [d for d in (richiesta.get("domini_propri") or []) if isinstance(d, str)]
     try:
         risultato = asyncio.run(analizza_una(api_key, url, form_factor, domini))
+    except ErroreSpeed as errore:
+        return _json(avvia, "502 Bad Gateway", {"errore": errore.messaggio,
+                                                "rimedio": errore.rimedio, "url": url})
     except Exception as exc:
         return _json(avvia, "502 Bad Gateway", {"errore": str(exc)[:400], "url": url})
     return _json(avvia, "200 OK", risultato)

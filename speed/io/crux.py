@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import httpx
 
+from ..errori import da_risposta_google
+
 BASE = "https://chromeuxreport.googleapis.com/v1/records"
 METRICHE = [
     "largest_contentful_paint",
@@ -83,7 +85,7 @@ async def record(client: httpx.AsyncClient, api_key: str, url: str,
         err = dati["error"]
         if err.get("code") == 404:
             raise CruxNonDisponibile(url)
-        raise RuntimeError(f"CrUX {err.get('code')}: {err.get('message', '')[:160]}")
+        raise da_risposta_google("CrUX", err.get("code"), err.get("message", ""), url)
 
     return {"url": url, "livello": "origin" if origin else "url"} | leggi_record(dati)
 
@@ -101,7 +103,8 @@ async def storico(client: httpx.AsyncClient, api_key: str, url: str,
         err = dati["error"]
         if err.get("code") == 404:
             raise CruxNonDisponibile(url)
-        raise RuntimeError(f"CrUX History {err.get('code')}: {err.get('message', '')[:160]}")
+        raise da_risposta_google("CrUX History", err.get("code"),
+                                 err.get("message", ""), url)
 
     return {"url": url} | leggi_storico(dati)
 

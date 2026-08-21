@@ -22,6 +22,7 @@ import httpx
 from dotenv import load_dotenv
 
 from . import config as cfg
+from .errori import ErroreSpeed
 from .core import consenso, diagnose, extract, thirdparty
 from .core.soglie import fasi_dal_campo
 from .core.soglie import ETICHETTE, formatta, giudizio
@@ -313,8 +314,15 @@ def main(argv=None) -> int:
     p_rep.add_argument("--formato", choices=("html", "docx", "entrambi"), default="entrambi")
 
     args = parser.parse_args(argv)
-    if args.comando == "check-config":
-        return asyncio.run(_check(args.config))
-    if args.comando == "report":
-        return _report(args.json, args.formato)
-    return asyncio.run(_run(args.config, args.desktop, args.formato, args.ripetizioni))
+    # Gli errori previsti portano con se' il rimedio: si stampano, non si
+    # rovesciano addosso a chi ha lanciato il comando sotto forma di traceback.
+    try:
+        if args.comando == "check-config":
+            return asyncio.run(_check(args.config))
+        if args.comando == "report":
+            return _report(args.json, args.formato)
+        return asyncio.run(_run(args.config, args.desktop, args.formato, args.ripetizioni))
+    except ErroreSpeed as errore:
+        print("", file=sys.stderr)
+        print(errore, file=sys.stderr)
+        return 1

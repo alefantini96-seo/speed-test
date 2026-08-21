@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from .errori import configurazione
+
 
 @dataclass
 class Template:
@@ -43,13 +45,46 @@ class Config:
 
 
 def carica(percorso: str | Path) -> Config:
-    dati = yaml.safe_load(Path(percorso).read_text(encoding="utf-8"))
-    template = [Template(**t) for t in dati.get("template", [])]
+    """Legge il YAML di un cliente.
+
+    Gli errori escono come ErroreSpeed con il rimedio dentro: un file di
+    configurazione sbagliato lo scrive una persona, e un KeyError secco non le
+    dice quale chiave manca ne' dove.
+    """
+    file = Path(percorso)
+    if not file.exists():
+        raise configurazione(f"il file {percorso} non esiste.",
+                             "Vedi clienti/esempio.yaml per la struttura attesa.")
+    try:
+        dati = yaml.safe_load(file.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError as exc:
+        raise configurazione(f"{percorso} non e' un YAML valido.",
+                             str(exc)[:200]) from exc
+    if not isinstance(dati, dict):
+        raise configurazione(f"{percorso} non contiene una mappa di chiavi.",
+                             "Vedi clienti/esempio.yaml per la struttura attesa.")
+
+    mancanti = [chiave for chiave in ("cliente", "sito") if not dati.get(chiave)]
+    if mancanti:
+        raise configurazione(f"{percorso}: manca {', '.join(mancanti)}.",
+                             "Servono almeno `cliente`, `sito` e un `template`.")
+    try:
+        template = [Template(**t) for t in dati.get("template", [])]
+    except TypeError as exc:
+        raise configurazione(f"{percorso}: un template ha campi non previsti.",
+                             "Un template accetta solo `nome`, `url` e `note`.") from exc
     if not template:
-        raise ValueError(f"{percorso}: nessun template definito")
+        raise configurazione(f"{percorso}: nessun template definito.",
+                             "Serve almeno una voce sotto `template`, con `nome` e `url`.")
+    senza_url = [t.nome for t in template if not (t.url or "").startswith("http")]
+    if senza_url:
+        raise configurazione(f"{percorso}: URL mancante o non valido in "
+                             f"{', '.join(senza_url)}.",
+                             "Serve un indirizzo completo, che inizi con https://")
     doppi = {t.url for t in template}
     if len(doppi) != len(template):
-        raise ValueError(f"{percorso}: URL duplicati fra i template")
+        raise configurazione(f"{percorso}: due template puntano allo stesso URL.",
+                             "Ogni template va misurato su una pagina diversa.")
     return Config(
         cliente=dati["cliente"],
         sito=dati["sito"],

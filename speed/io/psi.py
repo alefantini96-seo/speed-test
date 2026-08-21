@@ -20,6 +20,8 @@ import asyncio
 
 import httpx
 
+from ..errori import da_risposta_google
+
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
 
@@ -35,7 +37,8 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
     dati = r.json()
     if "error" in dati:
         err = dati["error"]
-        raise RuntimeError(f"PSI {err.get('code')}: {err.get('message', '')[:160]}")
+        raise da_risposta_google("PageSpeed Insights", err.get("code"),
+                                 err.get("message", ""), url)
     return dati
 
 
