@@ -52,12 +52,54 @@ class RiepilogoTerzeParti:
         return [e for e in self.entita if e.terza_parte][:n]
 
 
+# Suffissi a due livelli sotto i quali si registra al terzo.
+#
+# Senza questa tabella `dominio_registrabile` prendeva gli ultimi due label e
+# restituiva "co.uk" per bbci.co.uk. Non era solo impreciso: dichiarando
+# `bbci.co.uk` fra i domini propri, l'insieme finiva per contenere "co.uk", e
+# QUALSIASI dominio britannico — compresi i vendor di terze parti — diventava
+# prima parte. La classificazione decide a chi viene assegnato l'intervento.
+#
+# La lista non e' esaustiva (lo sarebbe solo la Public Suffix List, che vorrebbe
+# una dipendenza esterna e un aggiornamento periodico): copre i mercati che
+# incontriamo. Un suffisso mancante ricade sul comportamento precedente, che e'
+# sbagliato ma non peggiore di prima.
+SUFFISSI_A_DUE_LIVELLI = frozenset({
+    # Regno Unito
+    "co.uk", "org.uk", "gov.uk", "ac.uk", "net.uk", "sch.uk", "me.uk", "ltd.uk", "plc.uk",
+    # Italia
+    "gov.it", "edu.it",
+    # Europa
+    "com.es", "org.es", "gob.es", "com.pl", "com.pt", "com.gr", "com.hr", "com.ua",
+    "co.at", "or.at", "com.de", "com.ro", "com.cy", "com.mt",
+    # Americhe
+    "com.br", "net.br", "org.br", "gov.br", "com.ar", "com.mx", "com.co", "com.pe",
+    "com.uy", "com.ve", "com.ec",
+    # Asia e Pacifico
+    "co.jp", "or.jp", "ne.jp", "ac.jp", "go.jp",
+    "com.cn", "net.cn", "org.cn", "gov.cn",
+    "com.hk", "com.sg", "com.tw", "com.my", "com.ph", "com.vn",
+    "co.in", "net.in", "org.in", "co.id", "co.th", "co.kr", "or.kr",
+    "com.au", "net.au", "org.au", "gov.au", "edu.au",
+    "co.nz", "org.nz", "govt.nz",
+    # Africa e Medio Oriente
+    "co.za", "org.za", "co.il", "com.tr", "com.sa", "com.eg", "com.ng",
+})
+
+
 def dominio_registrabile(host: str) -> str:
-    """Ultimi due label dell'host. Sufficiente per i domini che trattiamo
-    (.it, .com); non gestisce i suffissi a due livelli tipo .co.uk, per i quali
-    va usato `domini_propri` nella configurazione."""
-    parti = [p for p in host.split(".") if p]
-    return ".".join(parti[-2:]) if len(parti) >= 2 else host
+    """Il dominio sotto cui si registra, tenendo conto dei suffissi a due livelli.
+
+    bbci.co.uk resta bbci.co.uk e non diventa co.uk. Per i suffissi fuori tabella
+    valgono gli ultimi due label, e resta valida la via d'uscita di sempre:
+    dichiarare il dominio in `domini_propri`.
+    """
+    parti = [p for p in host.lower().split(".") if p]
+    if len(parti) < 2:
+        return host.lower()
+    if len(parti) >= 3 and ".".join(parti[-2:]) in SUFFISSI_A_DUE_LIVELLI:
+        return ".".join(parti[-3:])
+    return ".".join(parti[-2:])
 
 
 def _propri(url_pagina: str, domini_propri) -> set:
