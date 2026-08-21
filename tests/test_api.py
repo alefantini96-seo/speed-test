@@ -176,26 +176,101 @@ def test_il_report_scarica_un_docx(monkeypatch, pagina):
 
 
 def test_lo_stato_dice_cosa_vede_il_server(monkeypatch):
+    """Senza password configurata risponde, ma in forma ridotta: la diagnosi resta
+    possibile proprio nel caso in cui serve."""
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-finta-1234")
     monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     stato, _, corpo = _chiama("/api/stato")
     dati = json.loads(corpo)
     assert stato.startswith("200")
-    assert "presente" in dati["GOOGLE_API_KEY"]
+    assert dati["GOOGLE_API_KEY"] == "presente", "senza password niente lunghezze"
     assert dati["SPEED_PASSWORD"] == "assente"
-    assert "aperta a chiunque" in dati["protezione"]
+    assert "consuma la tua quota" in dati["protezione"]
 
 
-def test_lo_stato_non_espone_i_valori(monkeypatch):
+def test_lo_stato_e_protetto_quando_la_password_c_e(monkeypatch):
+    """Prima rispondeva a chiunque annunciando 'protezione ASSENTE' e le lunghezze."""
+    monkeypatch.setenv("GOOGLE_API_KEY", "AIza-finta-1234")
+    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
+    assert _chiama("/api/stato")[0].startswith("401")
+    stato, _, corpo = _chiama("/api/stato", "POST", {"password": "segreta"})
+    assert stato.startswith("200")
+    assert "caratteri" in json.loads(corpo)["GOOGLE_API_KEY"], "autenticati, il dettaglio c'e'"
+
+
+def test_lo_stato_non_espone_mai_i_valori(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "chiave-segretissima")
     monkeypatch.setenv("SPEED_PASSWORD", "parola-segretissima")
-    corpo = _chiama("/api/stato")[2].decode("utf-8")
-    assert "segretissima" not in corpo, "lo stato non deve rivelare le credenziali"
+    for chiamata in (_chiama("/api/stato"),
+                     _chiama("/api/stato", "POST", {"password": "parola-segretissima"})):
+        assert "segretissima" not in chiamata[2].decode("utf-8")
 
 
 def test_lo_stato_riconosce_una_variabile_vuota(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "   ")
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     assert "vuota" in json.loads(_chiama("/api/stato")[2])["GOOGLE_API_KEY"]
+
+
+# --- protezione della quota -------------------------------------------------- #
+
+def test_confronto_password_a_tempo_costante(monkeypatch):
+    """`==` esce al primo carattere diverso: il tempo di risposta lascia indovinare
+    la password un carattere alla volta."""
+    import inspect
+    import app as applicazione
+    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
+    assert "compare_digest" in inspect.getsource(applicazione._password_valida)
+    assert applicazione._password_valida({"password": "segreta"}) is True
+    assert applicazione._password_valida({"password": "sbagliata"}) is False
+    assert applicazione._password_valida({"password": None}) is False
+    assert applicazione._password_valida({}) is False
+
+
+def test_il_limite_di_richieste_scatta(monkeypatch):
+    import app as applicazione
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 3)
+    environ = {"REMOTE_ADDR": "1.2.3.4"}
+    assert [applicazione._oltre_il_limite(environ) for _ in range(4)] ==         [False, False, False, True]
+
+
+def test_il_limite_e_per_origine(monkeypatch):
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 1)
+    assert applicazione._oltre_il_limite({"REMOTE_ADDR": "1.1.1.1"}) is False
+    assert applicazione._oltre_il_limite({"REMOTE_ADDR": "1.1.1.1"}) is True
+    assert applicazione._oltre_il_limite({"REMOTE_ADDR": "2.2.2.2"}) is False
+
+
+def test_la_finestra_scorre(monkeypatch):
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 1)
+    environ = {"REMOTE_ADDR": "3.3.3.3"}
+    assert applicazione._oltre_il_limite(environ, adesso=0) is False
+    assert applicazione._oltre_il_limite(environ, adesso=10) is True
+    assert applicazione._oltre_il_limite(
+        environ, adesso=applicazione.FINESTRA_SECONDI + 20) is False
+
+
+def test_l_origine_viene_dal_proxy():
+    import app as applicazione
+    assert applicazione._origine({"HTTP_X_FORWARDED_FOR": "9.9.9.9, 10.0.0.1"}) == "9.9.9.9"
+    assert applicazione._origine({"REMOTE_ADDR": "8.8.8.8"}) == "8.8.8.8"
+
+
+def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
+    import app as applicazione
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "finta")
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 0)
+    stato, _, corpo = _chiama("/api/analizza", "POST", {"url": "https://x.it/"})
+    assert stato.startswith("429")
+    assert "quota Google" in json.loads(corpo)["rimedio"]
 
 
 def test_url_valido_passa_la_validazione():

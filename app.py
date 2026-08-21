@@ -15,9 +15,11 @@ Nessuna dipendenza: WSGI e' nella libreria standard. La logica vera sta in
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import tempfile
+import time
 from datetime import date
 from pathlib import Path
 
@@ -53,9 +55,60 @@ def _leggi(environ) -> dict:
 
 def _password_valida(richiesta: dict) -> bool:
     """Senza SPEED_PASSWORD impostata l'app resta aperta: e' una scelta esplicita
-    di chi la installa, non un default che nascondiamo."""
+    di chi la installa, non un default che nascondiamo.
+
+    Il confronto usa compare_digest: `==` esce al primo carattere diverso, e il
+    tempo di risposta lascia indovinare la password un carattere alla volta.
+    """
     attesa = os.getenv("SPEED_PASSWORD")
-    return not attesa or richiesta.get("password") == attesa
+    if not attesa:
+        return True
+    fornita = richiesta.get("password")
+    if not isinstance(fornita, str):
+        return False
+    return hmac.compare_digest(fornita.encode("utf-8"), attesa.encode("utf-8"))
+
+
+# --------------------------------------------------------------------------- #
+#  Limite di richieste
+#
+#  Senza SPEED_PASSWORD chiunque abbia il link consuma le 25.000 richieste PSI
+#  giornaliere del progetto Google di chi ospita l'app.
+#
+#  LIMITE DICHIARATO: il contatore vive nella memoria dell'istanza. Su una
+#  piattaforma serverless le istanze sono piu' d'una e vengono ricreate, quindi
+#  questo argina un abuso da una sola sorgente su un'istanza calda, non un attacco
+#  distribuito. Un limite vero vorrebbe uno stato condiviso, cioe' un database:
+#  la scelta di non averne uno e' deliberata (vedi ADR-003).
+# --------------------------------------------------------------------------- #
+
+LIMITE_RICHIESTE = 40          # analisi per finestra, per indirizzo
+FINESTRA_SECONDI = 3600
+
+_conteggio: dict = {}
+
+
+def _origine(environ) -> str:
+    inoltrato = environ.get("HTTP_X_FORWARDED_FOR", "")
+    return (inoltrato.split(",")[0].strip() if inoltrato
+            else environ.get("REMOTE_ADDR", "sconosciuta"))
+
+
+def _oltre_il_limite(environ, adesso=None) -> bool:
+    adesso = time.time() if adesso is None else adesso
+    chiave = _origine(environ)
+    recenti = [t for t in _conteggio.get(chiave, []) if adesso - t < FINESTRA_SECONDI]
+    if len(recenti) >= LIMITE_RICHIESTE:
+        _conteggio[chiave] = recenti
+        return True
+    recenti.append(adesso)
+    _conteggio[chiave] = recenti
+    # Le origini inattive non restano in memoria per sempre.
+    if len(_conteggio) > 500:
+        for altra, tempi in list(_conteggio.items()):
+            if not any(adesso - t < FINESTRA_SECONDI for t in tempi):
+                _conteggio.pop(altra, None)
+    return False
 
 
 def _pagina(avvia):
@@ -66,35 +119,57 @@ def _pagina(avvia):
     return [corpo]
 
 
-def _stato(avvia):
+def _stato(avvia, richiesta: dict):
     """Dice quali variabili d'ambiente il server vede davvero.
 
     Serve a distinguere in un secondo fra "non l'ho impostata", "l'ho impostata
     dopo il deploy e non e' stata iniettata" e "l'ho impostata sull'ambiente
-    sbagliato". Non espone alcun valore: solo presenza e lunghezza, che bastano
-    a smascherare un incollaggio troncato o una stringa vuota.
+    sbagliato". Non espone MAI un valore: al massimo la lunghezza, che basta a
+    smascherare un incollaggio troncato o una stringa vuota.
+
+    Con la password configurata la richiede, come gli altri endpoint. Senza,
+    risponde in forma ridotta — solo presenza, niente lunghezze — perche' altrimenti
+    annuncerebbe a chiunque abbia il link che l'app e' senza protezione, insieme a
+    quanto e' lunga la chiave. La diagnosi resta possibile proprio nel caso in cui
+    serve: quando la password non e' arrivata al server.
     """
-    def descrivi(nome):
+    protetta = bool(os.getenv("SPEED_PASSWORD"))
+    if protetta and not _password_valida(richiesta):
+        return _json(avvia, "401 Unauthorized", {
+            "errore": "Password non valida.",
+            "rimedio": 'Lo stato e protetto: chiamalo in POST con {"password": "..."}.'})
+
+    def descrivi(nome, con_lunghezza):
         valore = os.getenv(nome)
         if valore is None:
             return "assente"
         if not valore.strip():
             return "presente ma vuota"
-        return f"presente ({len(valore)} caratteri)"
+        return f"presente ({len(valore)} caratteri)" if con_lunghezza else "presente"
 
-    return _json(avvia, "200 OK", {
-        "GOOGLE_API_KEY": descrivi("GOOGLE_API_KEY"),
-        "SPEED_PASSWORD": descrivi("SPEED_PASSWORD"),
-        "protezione": "attiva" if os.getenv("SPEED_PASSWORD") else
-                      "ASSENTE: l'app e' aperta a chiunque abbia il link",
+    risposta = {
+        "GOOGLE_API_KEY": descrivi("GOOGLE_API_KEY", protetta),
+        "SPEED_PASSWORD": descrivi("SPEED_PASSWORD", protetta),
         "nota": "Le variabili vengono iniettate al momento del deploy: se le hai "
                 "aggiunte dopo, serve un redeploy perche' arrivino.",
-    })
+    }
+    if protetta:
+        risposta["protezione"] = "attiva"
+    else:
+        risposta["protezione"] = ("assente: imposta SPEED_PASSWORD, altrimenti "
+                                  "chiunque abbia il link consuma la tua quota Google")
+    return _json(avvia, "200 OK", risposta)
 
 
-def _analizza(avvia, richiesta: dict):
+def _analizza(avvia, richiesta: dict, environ):
     if not _password_valida(richiesta):
         return _json(avvia, "401 Unauthorized", {"errore": "Password non valida."})
+
+    if _oltre_il_limite(environ):
+        return _json(avvia, "429 Too Many Requests", {
+            "errore": f"Troppe analisi: il limite e' {LIMITE_RICHIESTE} all'ora.",
+            "rimedio": "Riprova fra un po'. Il limite protegge la quota Google "
+                       "del progetto che ospita l'app."})
 
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -164,10 +239,10 @@ def app(environ, avvia):
 
     if percorso in ("/", "/index.html") and metodo == "GET":
         return _pagina(avvia)
-    if percorso == "/api/stato" and metodo == "GET":
-        return _stato(avvia)
+    if percorso == "/api/stato" and metodo in ("GET", "POST"):
+        return _stato(avvia, _leggi(environ) if metodo == "POST" else {})
     if percorso == "/api/analizza" and metodo == "POST":
-        return _analizza(avvia, _leggi(environ))
+        return _analizza(avvia, _leggi(environ), environ)
     if percorso == "/api/report" and metodo == "POST":
         return _report(avvia, _leggi(environ))
     if percorso in ("/api/analizza", "/api/report"):
