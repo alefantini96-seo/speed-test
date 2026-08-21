@@ -273,6 +273,50 @@ def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
     assert "quota Google" in json.loads(corpo)["rimedio"]
 
 
+# --- ripresa dopo una pagina fallita ----------------------------------------- #
+
+def test_il_report_accetta_pagine_riuscite_e_fallite(monkeypatch, pagina, tmp_path):
+    """Il browser manda anche le pagine mancate: il report deve dichiararle invece
+    di presentare una lista piu' corta come se fosse completa."""
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    fallita = {"template": "/news", "url": "https://www.bbc.com/news",
+               "errore": "PageSpeed Insights: non e' riuscito ad analizzare la pagina."}
+    stato, _, corpo = _chiama("/api/report", "POST", {"pagine": [pagina, fallita]})
+    assert stato.startswith("200") and corpo[:2] == b"PK"
+
+    percorso = tmp_path / "r.docx"
+    percorso.write_bytes(corpo)
+    doc = Document(str(percorso))
+    testo = " ".join(p.text for p in doc.paragraphs)
+    assert "Misurazione fallita" in testo, "il report deve dire quali pagine mancano"
+    assert "bbc.com/news" in testo
+
+
+def test_il_ciclo_dell_interfaccia_non_si_ferma_alla_prima_pagina_fallita():
+    """Prima il ciclo faceva `break` e perdeva tutte le pagine successive.
+
+    Il controllo e' sul sorgente perche' e' JavaScript e non c'e' un browser nei
+    test: se qualcuno reintroduce l'uscita anticipata, questo test se ne accorge.
+    """
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    inizio = sorgente.index("for (let i = 0; i < urls.length; i++)")
+    fine = sorgente.index("$('avanzamento').textContent = riepilogo()")
+    ciclo = sorgente[inizio:fine]
+    assert "break" not in ciclo, "una pagina fallita non deve fermare le altre"
+    assert "falliti.push" in ciclo, "la pagina fallita va accumulata, non persa"
+
+
+def test_l_interfaccia_manda_al_report_anche_le_pagine_fallite():
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "[...risultati, ...falliti]" in sorgente
+
+
+def test_il_download_resta_possibile_con_pagine_fallite():
+    """Il pulsante si disabilita solo se NON e' riuscita nessuna pagina."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "$('scarica').disabled = risultati.length === 0;" in sorgente
+
+
 def test_url_valido_passa_la_validazione():
     assert valida_url("https://www.esempio.it/") is None
     assert valida_url("esempio.it") is not None
