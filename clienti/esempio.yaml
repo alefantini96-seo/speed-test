@@ -19,12 +19,26 @@ domini_propri: []
 #   - cdn-esempio.net
 #   - static.esempio.com
 
+# Peso di traffico (facoltativo, e alternativi fra loro: uno dei due, non entrambi).
+#
+#   sessioni: 82000          conteggio assoluto, qualunque unita' purche' coerente
+#   quota_traffico: 0.34     frazione del traffico del sito
+#
+# Serve quando i template hanno pesi molto diversi. Senza, un template da 200.000
+# sessioni e uno da 400 producono lo stesso ordine di intervento, ed e' il difetto
+# piu' vistoso di un master plan. Il numero lo si prende da GA4 o da Search Console:
+# non serve che sia esatto, serve che l'ordine di grandezza sia giusto.
+#
+# I pesi sono normalizzati sul template piu' trafficato, che vale 1.
+
 template:
   - nome: Home
     url: https://www.esempio.it/
+    # sessioni: 82000
   - nome: Categoria
     url: https://www.esempio.it/categoria/esempio/
     note: template condiviso da ~200 pagine
+    # sessioni: 41000
   - nome: Prodotto
     url: https://www.esempio.it/prodotto/esempio/
   - nome: Articolo blog

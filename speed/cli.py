@@ -166,7 +166,13 @@ async def _run(percorso: str, desktop: bool, formato: str, ripetizioni: int) -> 
         conf.form_factor = "DESKTOP"
     api_key = _chiave("GOOGLE_API_KEY")
 
+    pesi = conf.pesi()
     print(f"{conf.cliente} — {len(conf.template)} template ({conf.strategy})")
+    if conf.traffico_dichiarato:
+        print("  ordinamento pesato sul traffico dichiarato nel YAML")
+    else:
+        print("  ordinamento NON pesato: senza `sessioni` o `quota_traffico` nel YAML "
+              "tutti i template contano uguale")
     print("  campo (CrUX)...", flush=True)
     campo = await _dati_campo(api_key, conf)
 
@@ -209,7 +215,8 @@ async def _run(percorso: str, desktop: bool, formato: str, ripetizioni: int) -> 
         fatti = accordo.fatti
         metriche_campo = campo.get(t.url, {}).get("metriche", {})
         riepilogo = thirdparty.riepiloga(fatti.richieste, t.url, conf.domini_propri)
-        problemi = diagnose.diagnostica(fatti, metriche_campo, riepilogo, accordo)
+        problemi = diagnose.diagnostica(fatti, metriche_campo, riepilogo, accordo,
+                                        peso=pesi.get(t.url, 1.0))
 
         pagine.append({
             "template": t.nome,
@@ -221,6 +228,8 @@ async def _run(percorso: str, desktop: bool, formato: str, ripetizioni: int) -> 
             "consenso": accordo.descrizione,
             "terze_parti": riepilogo,
             "peso_per_tipo": thirdparty.peso_per_tipo(fatti.richieste),
+            "peso": pesi.get(t.url, 1.0),
+            "traffico": next((x.traffico for x in conf.template if x.url == t.url), None),
             "problemi": problemi,
         })
         _stampa_template(t.nome, fatti, metriche_campo, riepilogo, problemi)
@@ -230,6 +239,9 @@ async def _run(percorso: str, desktop: bool, formato: str, ripetizioni: int) -> 
         "sito": conf.sito,
         "data": date.today().isoformat(),
         "form_factor": conf.form_factor,
+        # Il master plan e i renderer devono sapere se l'ordine e' pesato: senza
+        # traffico dichiarato tutti i template contano uguale, e va detto.
+        "ordinamento_pesato": conf.traffico_dichiarato,
         "pagine": pagine,
     }
     # Il report si genera dalla forma JSON, non dagli oggetti in memoria: cosi'

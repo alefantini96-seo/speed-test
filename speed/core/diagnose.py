@@ -86,6 +86,11 @@ NON_DEDUCIBILE = "da assegnare"
 GRAVITA_DA_CAMPO = {"scarso": "alta", "da_migliorare": "media", "buono": "bassa",
                     "sconosciuto": "media"}
 
+# Gravita' come numero, per poterla moltiplicare per il peso di traffico del
+# template. Con peso uniforme l'ordine risultante e' identico a quello per sola
+# gravita': la moltiplicazione cambia qualcosa solo quando il traffico e' dichiarato.
+VALORE_GRAVITA = {"alta": 3.0, "media": 2.0, "bassa": 1.0}
+
 
 @dataclass
 class Problema:
@@ -102,6 +107,13 @@ class Problema:
     nota: str = ""
     azionabile: bool = True
     risparmio: float = 0.0
+    metrica: str = ""                # metrica di campo su cui e' calibrata la priorita'
+    peso: float = 1.0                # peso di traffico del template (1 = non pesato)
+
+    @property
+    def punteggio(self) -> float:
+        """Gravita' per peso di traffico: l'ordine con cui si interviene."""
+        return VALORE_GRAVITA.get(self.gravita, 1.0) * self.peso
 
 
 # --------------------------------------------------------------------------- #
@@ -150,7 +162,9 @@ ORDINE_GIUDIZIO = {"scarso": 0, "da_migliorare": 1, "buono": 2, "sconosciuto": 3
 
 
 def priorita_dal_campo(opportunita, campo: dict):
-    """(gravita, spiegazione). La priorita' viene dal campo, non dal laboratorio."""
+    """(gravita, spiegazione, metrica di campo). La priorita' viene dal campo,
+    non dal laboratorio. La metrica serve al master plan, che deve dire su quale
+    numero reale poggia l'intervento."""
     verdetti = []
     for metrica_lab in opportunita.risparmi:
         chiave = LAB_A_CAMPO.get(metrica_lab)
@@ -168,7 +182,7 @@ def priorita_dal_campo(opportunita, campo: dict):
 
     if not verdetti:
         return ("media", "Priorita' non calibrata sul campo: per questo URL mancano "
-                         "i dati CrUX sulle metriche interessate.")
+                         "i dati CrUX sulle metriche interessate.", "")
 
     peggiore, chiave, metrica_lab = min(verdetti, key=lambda v: ORDINE_GIUDIZIO[v[0]])
     if dichiarato:
@@ -184,7 +198,7 @@ def priorita_dal_campo(opportunita, campo: dict):
         nota += " " + CALIBRAZIONE_APPROSSIMATA[metrica_lab]
     if peggiore == "buono":
         nota += " Per gli utenti reali questa metrica e' gia' a posto: priorita' bassa."
-    return (GRAVITA_DA_CAMPO[peggiore], nota)
+    return (GRAVITA_DA_CAMPO[peggiore], nota, chiave)
 
 
 # --------------------------------------------------------------------------- #
@@ -225,7 +239,7 @@ def _misura_elemento(elemento) -> str:
 
 
 def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Problema:
-    gravita, spiegazione = priorita_dal_campo(opportunita, campo)
+    gravita, spiegazione, metrica = priorita_dal_campo(opportunita, campo)
     puo_agire = azionabile(opportunita)
 
     evidenza = []
@@ -283,6 +297,7 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
         nota=nota,
         azionabile=puo_agire,
         risparmio=opportunita.peso_relativo,
+        metrica=metrica,
     )
 
 
@@ -373,6 +388,7 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
         evidenza=evidenza,
         azioni=azioni,
         nota=nota,
+        metrica="largest_contentful_paint",
     )
 
 
@@ -409,7 +425,7 @@ ORDINE_GRAVITA = {"alta": 0, "media": 1, "bassa": 2}
 
 
 def diagnostica(fatti: FattiPagina, campo: dict | None = None, riepilogo=None,
-                accordo=None) -> list:
+                accordo=None, peso: float = 1.0) -> list:
     """Lista di problemi ordinata: prima cio' che il campo dice davvero rotto.
 
     `accordo` e' il Consenso fra le ripetizioni della misurazione lab: serve a
@@ -429,9 +445,12 @@ def diagnostica(fatti: FattiPagina, campo: dict | None = None, riepilogo=None,
         if terze:
             problemi.append(terze)
 
-    # A parita' di gravita': prima cio' che e' azionabile, poi il risparmio piu' alto.
-    problemi.sort(key=lambda p: (ORDINE_GRAVITA.get(p.gravita, 3), not p.azionabile,
-                                 -p.risparmio))
+    for problema in problemi:
+        problema.peso = peso
+
+    # Gravita' per peso di traffico, poi cio' che e' azionabile, poi il risparmio
+    # piu' alto. Con peso uniforme l'ordine e' identico a quello per sola gravita'.
+    problemi.sort(key=lambda p: (-p.punteggio, not p.azionabile, -p.risparmio))
     return problemi
 
 

@@ -235,6 +235,15 @@ def _problemi(problemi: list) -> str:
     return "".join(blocchi)
 
 
+def _nota_ordinamento(esecuzione: dict) -> str:
+    """Quando l'ordine non e' pesato sul traffico, va detto: e' la differenza fra
+    "questo va fatto prima" e "questo e' piu' grave su una pagina qualsiasi"."""
+    if esecuzione.get("ordinamento_pesato"):
+        return ""
+    return ('<div class="avviso"><strong>Ordinamento non pesato.</strong> '
+            "Gli interventi sono ordinati per gravita' sul campo, ma tutti i template contano uguale: nel file di configurazione non e' dichiarato il traffico. Con `sessioni` o `quota_traffico` per template l'ordine tiene conto di quante persone ne sono toccate.</div>")
+
+
 def _trasversale(pagine: list) -> str:
     """Se tutti i template perdono nella stessa fase, l'intervento e' uno solo."""
     fasi = {}
@@ -297,6 +306,7 @@ rilevazione del {_e(esecuzione.get('data'))} &middot;
 {_e('mobile' if esecuzione.get('form_factor') == 'PHONE' else 'desktop')} &middot;
 un URL rappresentativo per template</p>
 {_trasversale(pagine)}
+{_nota_ordinamento(esecuzione)}
 <div class="avviso">Le metriche <strong>p75 reale</strong> vengono da CrUX: sono
 l'esperienza degli utenti veri, su una finestra mobile di 28 giorni. Un intervento
 messo online oggi entra in questi numeri gradualmente e si legge pulito solo dopo

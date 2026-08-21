@@ -276,6 +276,9 @@ def docx_report(esecuzione: dict, percorso):
 
     pagine = esecuzione.get("pagine", [])
     _trasversale(doc, pagine)
+    if not esecuzione.get("ordinamento_pesato"):
+        _avviso(doc, "Ordinamento non pesato.",
+                "Gli interventi sono ordinati per gravita' sul campo, ma tutti i template contano uguale: nel file di configurazione non e' dichiarato il traffico. Con `sessioni` o `quota_traffico` per template l'ordine tiene conto di quante persone ne sono toccate.")
     _avviso(doc, "Come leggere i numeri.",
             "Le metriche «p75 reale» vengono da CrUX: sono l'esperienza degli utenti veri, "
             "su una finestra mobile di 28 giorni. Un intervento messo online oggi entra in "

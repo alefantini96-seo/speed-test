@@ -262,6 +262,7 @@ def test_priorita_dal_campo_anche_senza_risparmio(opportunita):
         opportunita["cls-culprits-insight"], {"cumulative_layout_shift": 0.40})
     buono = diagnose.priorita_dal_campo(
         opportunita["cls-culprits-insight"], {"cumulative_layout_shift": 0.02})
+    assert scarso[2] == "cumulative_layout_shift", "la metrica torna al chiamante"
     assert scarso[0] == "alta" and buono[0] == "bassa"
     assert "non dichiara un risparmio" in scarso[1]
 
@@ -269,5 +270,6 @@ def test_priorita_dal_campo_anche_senza_risparmio(opportunita):
 def test_lo_speed_index_dichiara_di_essere_approssimato():
     finta = extract.Opportunita(audit="x", titolo="x", descrizione="", documentazione="",
                                 display="", score=0, risparmi={"SI": 900.0})
-    _gravita, nota = diagnose.priorita_dal_campo(finta, {"largest_contentful_paint": 1162.0})
+    _gravita, nota, _metrica = diagnose.priorita_dal_campo(
+        finta, {"largest_contentful_paint": 1162.0})
     assert "non ha un equivalente nel campo" in nota
