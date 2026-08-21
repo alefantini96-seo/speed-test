@@ -58,6 +58,7 @@ table.risorse th { font-size:10px; }
 table.risorse td.tag { width:26px; color:var(--tenue); font-size:10px; font-weight:600; }
 table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-size:11px;
                            word-break:break-all; }
+table.risorse .percorso { color:var(--tenue); font-size:10px; }
 .avviso { background:#fffbeb; border:1px solid #fde68a; border-radius:4px;
           padding:10px 14px; font-size:13px; margin:14px 0; }
 footer { margin-top:44px; padding-top:14px; border-top:1px solid var(--bordo);
@@ -180,6 +181,23 @@ def _risorse(righe: list) -> str:
             f'<th class="num">impatto</th></tr>{corpo}</table>')
 
 
+def _elementi(righe: list) -> str:
+    """Gli elementi del DOM indicati da Lighthouse: selettore, percorso, misura.
+
+    Vanno resi separati dalle risorse: un nodo non ha un'unita' di prima o terza
+    parte, e marcarlo "1P" sarebbe un'informazione inventata.
+    """
+    if not righe:
+        return ""
+    corpo = "".join(
+        f'<tr><td class="risorsa">{_e(riferimento)}'
+        f'{f"<br><span class=percorso>{_e(percorso)}</span>" if percorso else ""}</td>'
+        f'<td class="num">{_e(misura)}</td></tr>'
+        for riferimento, misura, percorso, _snippet in righe)
+    return (f'<table class="risorse"><tr><th>elemento nel DOM</th>'
+            f'<th class="num">impatto</th></tr>{corpo}</table>')
+
+
 def _problemi(problemi: list) -> str:
     if not problemi:
         return "<p>Nessun problema rilevato oltre soglia.</p>"
@@ -201,7 +219,8 @@ def _problemi(problemi: list) -> str:
             f'{_e(FONTE.get(p.get("fonte"), p.get("fonte")))}</p>'
             f'<ul class="evidenza">{evidenza}</ul>'
             f"<ul>{azioni}</ul>"
-            f'{_risorse(p.get("risorse") or [])}{nota}{doc}</div>')
+            f'{_risorse(p.get("risorse") or [])}'
+            f'{_elementi(p.get("elementi") or [])}{nota}{doc}</div>')
     return "".join(blocchi)
 
 

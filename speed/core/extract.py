@@ -46,7 +46,6 @@ class FattiPagina:
     lcp_fasi: dict = field(default_factory=dict)
     lcp_discovery: dict = field(default_factory=dict)
     lcp_discovery_label: dict = field(default_factory=dict)
-    risparmi: list = field(default_factory=list)
     opportunita: list = field(default_factory=list)
     richieste: list = field(default_factory=list)
     campo_psi: dict = field(default_factory=dict)
@@ -110,28 +109,6 @@ def estrai_discovery(psi: dict):
     return valori, etichette
 
 
-def estrai_risparmi(psi: dict) -> list:
-    """Tutti gli audit che dichiarano `metricSavings`, ordinati per risparmio LCP.
-
-    Volutamente generico: regge l'aggiunta di nuovi insight da parte di Lighthouse
-    senza dover mappare ogni singolo audit a mano.
-    """
-    out = []
-    for aid, a in _audits(psi).items():
-        ms = a.get("metricSavings") or {}
-        ms = {k: v for k, v in ms.items() if isinstance(v, (int, float)) and v > 0}
-        if not ms:
-            continue
-        out.append({
-            "audit": aid,
-            "titolo": a.get("title", aid),
-            "score": a.get("score"),
-            "display": a.get("displayValue", ""),
-            "risparmi": ms,
-        })
-    return sorted(out, key=lambda x: -x["risparmi"].get("LCP", 0))
-
-
 # --------------------------------------------------------------------------- #
 #  Opportunita': il testo delle raccomandazioni viene da Lighthouse, non da noi.
 #  Con locale=it arriva gia' in italiano, con il link alla documentazione Google.
@@ -145,11 +122,44 @@ class Risorsa:
     ms_sprecati: float = 0.0
     quota_sprecata: float = 0.0
     terza_parte: bool = False
+    motivo: str = ""      # testo di Lighthouse sul perche' (es. image-delivery)
 
     @property
     def spreco(self) -> float:
         """Metrica unica per ordinare: ms se ci sono, altrimenti byte."""
         return self.ms_sprecati or self.byte_sprecati
+
+
+@dataclass
+class Elemento:
+    """Un nodo del DOM che Lighthouse indica come responsabile.
+
+    Selettore, snippet e percorso sono la prima cosa che cerca chi deve mettere
+    mano al codice, quindi restano campi distinti e non una stringa da riparsare.
+    Senza di loro un audit sul CLS dice che la pagina balla ma non quale elemento.
+    """
+    selettore: str = ""
+    snippet: str = ""
+    percorso: str = ""      # path DOM: "1,HTML,1,BODY,0,DIV,..."
+    etichetta: str = ""     # nodeLabel: il testo visibile, utile a riconoscerlo
+    misura: float = 0.0
+    unita: str = ""         # dichiarata dall'audit, non dedotta
+
+    @property
+    def riferimento(self) -> str:
+        """Come lo si nomina in un report: il selettore se c'e', altrimenti il DOM."""
+        return self.selettore or self.etichetta or self.snippet[:80] or self.percorso
+
+
+@dataclass
+class Voce:
+    """Riga che non nomina ne' un URL ne' un nodo: un vendor, una sorgente di reflow.
+
+    E' il caso di `third-parties-insight`, dove la riga e' un'entita' con il suo
+    costo di main thread: informazione che non ha altro posto dove stare.
+    """
+    etichetta: str
+    misure: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -160,12 +170,34 @@ class Opportunita:
     documentazione: str    # URL estratto dalla descrizione
     display: str           # es. "Risparmio stimato di 508 KiB"
     score: float | None
-    risparmi: dict         # metricSavings: {LCP: ms, FCP: ms, TBT: ms, CLS: ...}
+    risparmi: dict         # metricSavings: {LCP: ms, FCP: ms, TBT: ms, CLS: adimensionale}
     risorse: list = field(default_factory=list)
+    elementi: list = field(default_factory=list)
+    voci: list = field(default_factory=list)
+    controlli: dict = field(default_factory=dict)      # nome -> (superato, etichetta)
 
     @property
     def risparmio_massimo(self) -> float:
         return max(self.risparmi.values()) if self.risparmi else 0.0
+
+    @property
+    def peso_relativo(self) -> float:
+        """Risparmio normalizzato sulla soglia della sua metrica.
+
+        Ordinare per valore grezzo confronterebbe 0,095 di CLS con 600 ms di TBT
+        e metterebbe ogni intervento sul CLS in fondo per pura questione di scala.
+        Normalizzando su cio' che Google considera accettabile, i due diventano
+        confrontabili: 0,095/0,10 = 0,95 contro 600/200 = 3,0.
+        """
+        from .soglie import SOGLIA_BUONA_LAB
+        pesi = [valore / SOGLIA_BUONA_LAB[metrica]
+                for metrica, valore in self.risparmi.items()
+                if metrica in SOGLIA_BUONA_LAB and SOGLIA_BUONA_LAB[metrica]]
+        return max(pesi) if pesi else 0.0
+
+    @property
+    def ha_contenuto(self) -> bool:
+        return bool(self.risorse or self.elementi or self.voci or self.controlli)
 
     @property
     def quota_terze_parti(self) -> float:
@@ -191,27 +223,254 @@ def _scomponi_descrizione(testo: str):
     return (pulito, link.group(2) if link else "")
 
 
-def _righe_con_url(audit: dict) -> list:
-    """Righe che nominano una risorsa, ovunque siano annidate nei details.
+# --------------------------------------------------------------------------- #
+#  Lettori per forma di `details`.
+#
+#  Lighthouse 13 incapsula le stesse informazioni in quattro modi diversi, e
+#  leggerne uno solo — come faceva la versione precedente, che cercava chiavi
+#  `url` scendendo di due livelli — butta via il materiale piu' utile: gli
+#  elementi che shiftano nel CLS, il costo di main thread per vendor, l'origine
+#  di un reflow forzato.
+# --------------------------------------------------------------------------- #
 
-    Lighthouse usa `type: opportunity` per le vecchie opportunita' e `type: table`
-    dentro `type: list` per gli insight nuovi: raccogliamo entrambe.
+# Chiavi numeriche che Lighthouse usa nelle righe, con l'unita' che gli compete.
+MISURE_NOTE = {
+    "wastedMs": "ms", "duration": "ms", "mainThreadTime": "ms", "blockingTime": "ms",
+    "reflowTime": "ms", "navStartToEndTime": "ms",
+    "transferSize": "byte", "wastedBytes": "byte",
+    "totalBytes": "byte", "resourceBytes": "byte", "unusedBytes": "byte",
+    "score": "",        # CLS: adimensionale
+}
+
+# Etichette possibili per una riga che non nomina un URL.
+ETICHETTE_RIGA = ("entity", "source", "origin", "name", "label", "groupLabel")
+
+
+def _tabelle(audit: dict):
+    """Ogni tabella dell'audit, ovunque sia annidata.
+
+    I tre incapsulamenti visti su risposte reali:
+      details.type == "table" | "opportunity"  -> righe in details.items
+      details.type == "list"   con items di type table
+      details.type == "list"   con items list-section il cui `value` e' una table
     """
-    righe = []
-    dettagli = audit.get("details", {}) or {}
-    for item in dettagli.get("items", []) or []:
+    dettagli = audit.get("details") or {}
+    if dettagli.get("type") in ("table", "opportunity"):
+        yield dettagli.get("items") or []
+    for item in dettagli.get("items") or []:
         if not isinstance(item, dict):
             continue
-        if "url" in item:
-            righe.append(item)
-        for annidato in item.get("items", []) or []:
-            if isinstance(annidato, dict) and "url" in annidato:
-                righe.append(annidato)
-    return righe
+        if item.get("type") == "table":
+            yield item.get("items") or []
+        valore = item.get("value")
+        if isinstance(valore, dict) and valore.get("type") == "table":
+            yield valore.get("items") or []
+
+
+def _sotto_righe(riga: dict) -> list:
+    """`subItems` e' un dict con dentro `items`, non una lista: e' li' che
+    `third-parties-insight` tiene il dettaglio per singolo file."""
+    sotto = riga.get("subItems")
+    if isinstance(sotto, dict):
+        return sotto.get("items") or []
+    return sotto if isinstance(sotto, list) else []
+
+
+def _testo(valore) -> str:
+    """Una cella puo' essere una stringa o un dict {type: text, value: ...}."""
+    if isinstance(valore, str):
+        return valore
+    if isinstance(valore, dict):
+        v = valore.get("text") or valore.get("value")
+        return v if isinstance(v, str) else ""
+    return ""
+
+
+def leggi_nodo(valore) -> "Elemento | None":
+    """Un `node` di Lighthouse -> Elemento, o None se non e' un nodo del DOM.
+
+    Le tabelle del CLS aprono con una riga di totale il cui `node` e'
+    `{type: text, value: "Totale"}`: e' un riepilogo, non un elemento, e va
+    scartato o finirebbe nel report come se fosse un selettore.
+    """
+    if not isinstance(valore, dict) or valore.get("type") == "text":
+        return None
+    if not any(valore.get(k) for k in ("selector", "snippet", "path")):
+        return None
+    return Elemento(
+        selettore=str(valore.get("selector") or ""),
+        snippet=str(valore.get("snippet") or ""),
+        percorso=str(valore.get("path") or ""),
+        etichetta=str(valore.get("nodeLabel") or ""),
+    )
+
+
+def leggi_checklist(audit: dict) -> dict:
+    """Ogni checklist dell'audit -> {nome: (superato, etichetta)}.
+
+    Generalizzata da `lcp-discovery-insight`: la forma e' la stessa ovunque, e le
+    etichette sono gia' istruzioni in italiano scritte da Lighthouse.
+    """
+    out = {}
+    for item in (audit.get("details") or {}).get("items") or []:
+        if isinstance(item, dict) and item.get("type") == "checklist":
+            for nome, controllo in (item.get("items") or {}).items():
+                out[nome] = (bool(controllo.get("value")), controllo.get("label", nome))
+    return out
+
+
+def leggi_treemap(audit: dict) -> list:
+    """`script-treemap-data` -> una Risorsa per file sorgente.
+
+    Si leggono solo i nodi radice: ognuno e' un file servito, che e' la
+    granularita' su cui si interviene. I figli sono i moduli interni del bundle
+    e sarebbero centinaia di righe che nessuno puo' cancellare singolarmente.
+    """
+    nodi = (audit.get("details") or {}).get("nodes") or []
+    out = []
+    for nodo in nodi:
+        if not isinstance(nodo, dict):
+            continue
+        nome = str(nodo.get("name") or "")
+        if not nome:
+            continue
+        out.append(Risorsa(
+            url=nome,
+            byte_totali=int(nodo.get("resourceBytes") or 0),
+            byte_sprecati=int(nodo.get("unusedBytes") or 0),
+        ))
+    return out
+
+
+def leggi_catena_rete(audit: dict) -> list:
+    """`network-dependency-tree-insight` -> le richieste della catena critica.
+
+    La catena non e' una tabella: e' un albero di nodi indicizzati per hash, con
+    i figli in un altro dizionario. Nessuno dei lettori per tabella la raggiunge,
+    ed e' il motivo per cui l'audit risultava senza contenuto pur essendo fallito.
+
+    Si restituisce come sequenza di voci perche' l'ordine e' l'informazione: sono
+    richieste che si aspettano l'una con l'altra prima che la pagina possa dipingere.
+    """
+    voci = []
+
+    def scendi(nodi: dict, profondita: int = 0):
+        for nodo in (nodi or {}).values():
+            if not isinstance(nodo, dict):
+                continue
+            url = nodo.get("url")
+            if isinstance(url, str) and url:
+                misure = {chiave: float(nodo[chiave])
+                          for chiave in ("navStartToEndTime", "transferSize")
+                          if isinstance(nodo.get(chiave), (int, float))}
+                if misure:
+                    voci.append(Voce(etichetta=("  " * profondita) + url, misure=misure))
+            scendi(nodo.get("children"), profondita + 1)
+
+    for item in (audit.get("details") or {}).get("items") or []:
+        valore = item.get("value") if isinstance(item, dict) else None
+        if isinstance(valore, dict) and valore.get("type") == "network-tree":
+            scendi(valore.get("chains"))
+    return voci
+
+
+def _classifica_riga(riga: dict, propri: set, e_prima_parte) -> tuple:
+    """Una riga -> (Risorsa | None, Elemento | None, Voce | None).
+
+    Una riga puo' dare piu' cose insieme: `image-delivery-insight` porta URL e
+    nodo nella stessa riga, e servono entrambi — l'uno per il peso, l'altro per
+    trovare l'immagine nel markup.
+    """
+    risorsa = elemento = voce = None
+
+    url = riga.get("url")
+    if isinstance(url, str) and url.startswith("http"):
+        motivi = [_testo(s.get("reason")) for s in _sotto_righe(riga) if s.get("reason")]
+        risorsa = Risorsa(
+            url=url,
+            byte_totali=int(riga.get("totalBytes") or riga.get("transferSize") or 0),
+            byte_sprecati=int(riga.get("wastedBytes") or 0),
+            ms_sprecati=float(riga.get("wastedMs") or riga.get("duration")
+                              or riga.get("mainThreadTime") or 0.0),
+            quota_sprecata=float(riga.get("wastedPercent") or 0.0),
+            terza_parte=bool(propri) and not e_prima_parte(urlparse(url).netloc, propri),
+            motivo=motivi[0] if motivi else "",
+        )
+
+    elemento = leggi_nodo(riga.get("node"))
+    if elemento is not None:
+        for chiave, unita in MISURE_NOTE.items():
+            if isinstance(riga.get(chiave), (int, float)):
+                elemento.misura = float(riga[chiave])
+                elemento.unita = unita
+                break
+
+    if risorsa is None and elemento is None:
+        etichetta = next((_testo(riga.get(k)) for k in ETICHETTE_RIGA if riga.get(k)), "")
+        misure = {k: float(v) for k, v in riga.items()
+                  if k in MISURE_NOTE and isinstance(v, (int, float))}
+        if etichetta and misure:
+            voce = Voce(etichetta=etichetta, misure=misure)
+
+    return (risorsa, elemento, voce)
+
+
+# Insight senza esito negativo ne' risparmio dichiarato, ma con il materiale piu'
+# concreto della risposta. Ammessi per nome: senza, due Core Web Vitals su tre
+# resterebbero senza diagnosi.
+# Artefatti di dati, non audit con una raccomandazione. La loro `description` e'
+# una nota interna di Lighthouse non localizzata ("Used for treemap app"): riportarla
+# come azione nel report al cliente sarebbe fedele ma incomprensibile.
+ARTEFATTI_DATI = frozenset({"script-treemap-data"})
+
+INSIGHT_INFORMATIVI = frozenset({
+    "cls-culprits-insight",             # gli elementi che fanno ballare la pagina
+    "third-parties-insight",            # costo di main thread per vendor
+    "script-treemap-data",              # byte inutilizzati per file sorgente
+    "forced-reflow-insight",            # origine del reflow forzato
+    "network-dependency-tree-insight",  # catena critica delle richieste
+})
+
+
+# Audit gia' consumati altrove: la fase LCP e la checklist di scopribilita' sono
+# il materiale di `classifica_lcp`. Ammetterli qui li farebbe comparire due volte
+# nello stesso report, con la seconda copia priva del contesto sul campo.
+GIA_CONSUMATI = frozenset({"lcp-breakdown-insight", "lcp-discovery-insight"})
+
+# Audit che riportano il valore di una metrica invece di un intervento:
+# `largest-contentful-paint`, `speed-index`, `interactive`... Hanno un punteggio,
+# spesso basso, ma niente su cui mettere le mani. Il valore della metrica lo
+# prendiamo dal campo, non da qui.
+def _e_audit_metrica(aid: str, ha_contenuto: bool, risparmi: dict) -> bool:
+    return not ha_contenuto and not risparmi
+
+
+def ammesso(aid: str, score, risparmi: dict, ha_contenuto: bool) -> bool:
+    """Un audit entra nel report per il suo ESITO, non per il risparmio dichiarato.
+
+    Il criterio precedente — solo `metricSavings > 0` — teneva fuori
+    `cls-culprits-insight` (savings CLS 0, ma con gli elementi che shiftano) e
+    `image-delivery-insight` (savings 0, ma "Risparmio stimato di 225 KiB" e otto
+    immagini nominate), e faceva entrare `layout-shifts` e `long-tasks` che su
+    quella pagina erano audit SUPERATI: interventi da fare su cose che gia'
+    funzionano.
+
+    Restano fuori, oltre ai superati, gli audit che non nominano nulla: senza
+    risorse, nodi, voci o checklist non c'e' un intervento da consegnare.
+    """
+    if aid in GIA_CONSUMATI:
+        return False
+    if aid in INSIGHT_INFORMATIVI:
+        return ha_contenuto
+    if _e_audit_metrica(aid, ha_contenuto, risparmi):
+        return False
+    if score is not None:
+        return score < 1          # superato = non e' un intervento
+    return bool(risparmi)         # audit senza esito: vale il risparmio
 
 
 def estrai_opportunita(psi: dict, dominio_sito: str = "", domini_propri=()) -> list:
-    """Audit falliti con risparmio dichiarato, con le risorse che li causano."""
+    """Audit da portare nel report, con le risorse, i nodi e le voci che li causano."""
     from .thirdparty import _propri, e_prima_parte   # import locale: evita il ciclo
 
     propri = _propri(dominio_sito, domini_propri) if dominio_sito else set()
@@ -219,35 +478,48 @@ def estrai_opportunita(psi: dict, dominio_sito: str = "", domini_propri=()) -> l
     for aid, audit in _audits(psi).items():
         risparmi = {k: float(v) for k, v in (audit.get("metricSavings") or {}).items()
                     if isinstance(v, (int, float)) and v > 0}
-        if not risparmi:
-            continue
-        descrizione, documentazione = _scomponi_descrizione(audit.get("description", ""))
-        risorse = []
-        for riga in _righe_con_url(audit):
-            url = riga.get("url")
-            if not isinstance(url, str) or not url.startswith("http"):
-                continue
-            host = urlparse(url).netloc
-            risorse.append(Risorsa(
-                url=url,
-                byte_totali=int(riga.get("totalBytes") or 0),
-                byte_sprecati=int(riga.get("wastedBytes") or 0),
-                ms_sprecati=float(riga.get("wastedMs") or riga.get("duration") or 0.0),
-                quota_sprecata=float(riga.get("wastedPercent") or 0.0),
-                terza_parte=bool(propri) and not e_prima_parte(host, propri),
-            ))
-        risorse.sort(key=lambda r: -r.spreco)
-        out.append(Opportunita(
+
+        risorse, elementi, voci = [], [], []
+        for righe in _tabelle(audit):
+            for riga in righe:
+                if not isinstance(riga, dict):
+                    continue
+                risorsa, elemento, voce = _classifica_riga(riga, propri, e_prima_parte)
+                if risorsa is not None:
+                    risorse.append(risorsa)
+                if elemento is not None:
+                    elementi.append(elemento)
+                if voce is not None:
+                    voci.append(voce)
+        if aid == "script-treemap-data":
+            risorse += leggi_treemap(audit)
+        if aid == "network-dependency-tree-insight":
+            voci += leggi_catena_rete(audit)
+        controlli = leggi_checklist(audit)
+
+        opportunita = Opportunita(
             audit=aid,
             titolo=audit.get("title", aid),
-            descrizione=descrizione,
-            documentazione=documentazione,
+            descrizione="",
+            documentazione="",
             display=audit.get("displayValue", ""),
             score=audit.get("score"),
             risparmi=risparmi,
-            risorse=risorse,
-        ))
-    return sorted(out, key=lambda o: -o.risparmio_massimo)
+            risorse=sorted(risorse, key=lambda r: -r.spreco),
+            elementi=sorted(elementi, key=lambda e: -e.misura),
+            voci=sorted(voci, key=lambda v: -max(v.misure.values(), default=0.0)),
+            controlli=controlli,
+        )
+        if not ammesso(aid, opportunita.score, risparmi, opportunita.ha_contenuto):
+            continue
+        if aid not in ARTEFATTI_DATI:
+            opportunita.descrizione, opportunita.documentazione = _scomponi_descrizione(
+                audit.get("description", ""))
+        out.append(opportunita)
+
+    # Il risparmio resta criterio di ordinamento, normalizzato per rendere
+    # confrontabili metriche con scale diverse.
+    return sorted(out, key=lambda o: -o.peso_relativo)
 
 
 def estrai_richieste(psi: dict) -> list:
@@ -288,7 +560,6 @@ def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagi
         lcp_fasi=estrai_fasi_lcp(psi),
         lcp_discovery=discovery,
         lcp_discovery_label=etichette,
-        risparmi=estrai_risparmi(psi),
         opportunita=estrai_opportunita(psi, url, domini_propri),
         richieste=estrai_richieste(psi),
         campo_psi=campo.get("metrics", {}) or {},

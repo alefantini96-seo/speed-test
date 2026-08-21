@@ -185,6 +185,32 @@ def _risorse(doc, righe: list):
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
+def _elementi(doc, righe: list):
+    """Elementi del DOM: separati dalle risorse perche' un nodo non e' ne' prima
+    ne' terza parte, e marcarlo sarebbe un'informazione inventata."""
+    if not righe:
+        return
+    tabella = doc.add_table(rows=1, cols=2)
+    tabella.style = "Table Grid"
+    for cella, testo in zip(tabella.rows[0].cells, ["Elemento nel DOM", "Impatto"]):
+        run = cella.paragraphs[0].add_run(testo)
+        run.bold = True
+        run.font.size = Pt(8)
+    for riferimento, misura, percorso, _snippet in righe:
+        celle = tabella.add_row().cells
+        run = celle[0].paragraphs[0].add_run(riferimento)
+        run.font.size = Pt(7.5)
+        if percorso:
+            sotto = celle[0].add_paragraph()
+            r2 = sotto.add_run(percorso)
+            r2.font.size = Pt(6.5)
+            r2.font.color.rgb = GRIGIO
+        run = celle[1].paragraphs[0].add_run(misura)
+        run.font.size = Pt(8)
+        celle[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+
 def _problemi(doc, problemi: list):
     _p(doc, "Interventi", size=10, grassetto=True, spazio_dopo=6)
     if not problemi:
@@ -203,6 +229,7 @@ def _problemi(doc, problemi: list):
         _elenco(doc, problema.get("evidenza", []), size=9, colore=GRIGIO)
         _elenco(doc, problema.get("azioni", []), size=10)
         _risorse(doc, problema.get("risorse") or [])
+        _elementi(doc, problema.get("elementi") or [])
         if problema.get("nota"):
             _p(doc, problema["nota"], size=8.5, colore=GRIGIO, corsivo=True, spazio_dopo=2)
         if problema.get("documentazione"):

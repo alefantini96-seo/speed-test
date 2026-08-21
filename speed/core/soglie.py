@@ -25,6 +25,44 @@ ETICHETTE = {
     "experimental_time_to_first_byte": "TTFB",
 }
 
+# Unita' dei `metricSavings` che Lighthouse dichiara sugli audit.
+#
+# Non sono tutti millisecondi: il CLS e' adimensionale. Dandolo per scontato il
+# report consegnato al cliente conteneva letteralmente "Stima Lighthouse: CLS 0 ms"
+# e "Lighthouse stima 0 ms di risparmio su CLS; il campo dice CLS 0.03 (buono)".
+# Chi legge non puo' capire se sia un errore di misura o di scrittura.
+UNITA_METRICA = {
+    "CLS": "",      # adimensionale: si scrive con tre decimali
+    "LCP": "ms",
+    "FCP": "ms",
+    "TBT": "ms",
+    "INP": "ms",
+    "SI": "ms",
+    "TTFB": "ms",
+}
+
+
+# Soglia di accettabilita' per ciascuna metrica di laboratorio dichiarata da
+# Lighthouse. Serve solo a normalizzare risparmi di metriche diverse quando vanno
+# ordinati fra loro: 0,095 di CLS non e' "meno" di 600 ms di TBT, e confrontare i
+# numeri grezzi metterebbe sistematicamente in fondo ogni intervento sul CLS.
+SOGLIA_BUONA_LAB = {
+    "LCP": 2500.0, "FCP": 1800.0, "CLS": 0.10,
+    "TBT": 200.0, "INP": 200.0, "TTFB": 800.0, "SI": 3400.0,
+}
+
+
+def formatta_risparmio(metrica: str, valore: float) -> str:
+    """Un valore di `metricSavings` con l'unita' giusta.
+
+    Le metriche sconosciute si trattano come millisecondi: e' l'unita' di gran
+    lunga piu' frequente, e se Lighthouse ne aggiunge una adimensionale sara' un
+    test a segnalarlo invece di un report sbagliato in mano al cliente.
+    """
+    if UNITA_METRICA.get(metrica, "ms") == "":
+        return f"{valore:.3f}"
+    return f"{valore:.0f} ms"
+
 # Le tre metriche che Google usa come Core Web Vitals.
 CWV = ("largest_contentful_paint", "interaction_to_next_paint", "cumulative_layout_shift")
 

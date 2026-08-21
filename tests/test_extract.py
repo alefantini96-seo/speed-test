@@ -71,14 +71,28 @@ def test_le_richieste_portano_l_entita_di_lighthouse(fatti):
 # --- opportunita': il testo viene da Lighthouse ----------------------------- #
 
 def test_opportunita_presenti_e_ordinate(fatti):
+    """L'ordinamento e' sul risparmio NORMALIZZATO, non su quello grezzo.
+
+    Prima questo test verificava l'ordine per `risparmio_massimo`. Confrontare i
+    valori grezzi mette pero' 0,095 di CLS sempre dietro a 600 ms di TBT per pura
+    questione di scala, cioe' spinge in fondo ogni intervento sul layout. Ora si
+    normalizza sulla soglia di ciascuna metrica.
+    """
     assert len(fatti.opportunita) >= 5
-    massimi = [o.risparmio_massimo for o in fatti.opportunita]
-    assert massimi == sorted(massimi, reverse=True)
+    pesi = [o.peso_relativo for o in fatti.opportunita]
+    assert pesi == sorted(pesi, reverse=True)
 
 
-def test_ogni_opportunita_ha_titolo_e_risparmio(fatti):
+def test_ogni_opportunita_ha_titolo_e_contenuto(fatti):
+    """Prima si pretendeva che ogni opportunita' avesse dei `metricSavings`.
+
+    Non e' piu' vero, ed e' il punto della modifica: `cls-culprits-insight` non
+    dichiara risparmi ma nomina gli elementi che fanno ballare la pagina. Cio' che
+    va preteso e' che ogni voce del report NOMINI qualcosa su cui intervenire.
+    """
     for o in fatti.opportunita:
-        assert o.titolo and o.risparmi
+        assert o.titolo, o.audit
+        assert o.ha_contenuto or o.risparmi, f"{o.audit} non nomina nulla"
         assert all(v > 0 for v in o.risparmi.values())
 
 

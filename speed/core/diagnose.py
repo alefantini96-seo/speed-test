@@ -23,7 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .extract import FASI_IT, FattiPagina
-from .soglie import CWV, ETICHETTE, fasi_dal_campo, formatta, giudizio
+from .soglie import (CWV, ETICHETTE, fasi_dal_campo, formatta,
+                     formatta_risparmio, giudizio)
 
 DEV, CMS, INFRA, MARKETING = "sviluppo", "cms/redazione", "infrastruttura", "marketing/tag"
 MISTO = "sviluppo + marketing/tag"
@@ -35,14 +36,52 @@ LAB_A_CAMPO = {
     "CLS": "cumulative_layout_shift",
     "INP": "interaction_to_next_paint",
     "TBT": "interaction_to_next_paint",   # proxy: dichiarato in nota
+    "SI": "largest_contentful_paint",     # Speed Index: nessun equivalente di campo,
+                                          # si calibra sull'LCP e si dichiara in nota
+    "TTFB": "experimental_time_to_first_byte",
+}
+
+# Metriche di laboratorio senza un corrispondente diretto nel campo: la priorita'
+# calcolata su di esse e' un'approssimazione e va detto.
+CALIBRAZIONE_APPROSSIMATA = {
+    "TBT": "TBT e' il proxy di laboratorio dell'INP: Lighthouse non misura "
+           "l'INP, quindi l'attribuzione qui e' meno precisa.",
+    "SI": "Lo Speed Index non ha un equivalente nel campo: la priorita' e' "
+          "calibrata sull'LCP, che e' la metrica reale piu' vicina.",
 }
 
 # Audit il cui rimedio richiede il controllo del server che serve la risorsa.
 # Se le risorse sono tutte di terze parti, l'intervento non e' nelle nostre mani.
 RICHIEDE_CONTROLLO_SERVER = ("cache", "compression", "server-response", "text-compression")
 
-# Audit la cui responsabilita' non dipende da chi possiede le risorse.
-RESPONSABILE_FISSO = {"server-response": INFRA, "cache": INFRA, "redirect": INFRA}
+# --- chi interviene: due regimi distinti, entrambi dichiarati ---------------- #
+#
+# 1. Per alcuni audit la responsabilita' NON dipende da chi possiede i file. Le
+#    immagini sono contenuto: le carica chi pubblica, ovunque siano ospitate. Un
+#    elemento che shifta e' markup. La cache la governa chi amministra il server.
+# 2. Per tutti gli altri — byte di JavaScript e CSS — decide la proprieta' delle
+#    risorse sprecate, che e' un dato misurato.
+#
+# Dove nessuno dei due regimi si applica, si dichiara invece di indovinare.
+RESPONSABILE_FISSO = {
+    "server-response": INFRA,
+    "cache": INFRA,
+    "redirect": INFRA,
+    "document-latency": INFRA,
+    "third-parties": MARKETING,          # sono terze parti per definizione dell'audit
+    "image-delivery": CMS,               # immagini: contenuto, non codice
+    "unsized-images": CMS,
+    "cls-culprits": DEV,                 # markup e CSS che fanno ballare la pagina
+    "layout-shift": DEV,
+    "forced-reflow": DEV,
+    "dom-size": DEV,
+    "non-composited-animations": DEV,
+    "viewport": DEV,
+    "network-dependency-tree": DEV,
+    "mainthread-work": DEV,
+}
+
+NON_DEDUCIBILE = "da assegnare"
 
 GRAVITA_DA_CAMPO = {"scarso": "alta", "da_migliorare": "media", "buono": "bassa",
                     "sconosciuto": "media"}
@@ -58,6 +97,7 @@ class Problema:
     evidenza: list = field(default_factory=list)
     azioni: list = field(default_factory=list)
     risorse: list = field(default_factory=list)   # (url, misura, terza_parte)
+    elementi: list = field(default_factory=list)  # (riferimento, misura, percorso, snippet)
     documentazione: str = ""
     nota: str = ""
     azionabile: bool = True
@@ -69,13 +109,19 @@ class Problema:
 # --------------------------------------------------------------------------- #
 
 def responsabile_per(opportunita) -> str:
-    """Chi mette mano, dedotto da chi possiede le risorse sprecate."""
+    """Chi mette mano.
+
+    Prima la natura dell'audit, quando determina la responsabilita' a prescindere
+    da dove sono ospitati i file; poi la proprieta' delle risorse sprecate, che e'
+    un dato misurato. Se non si applica nessuno dei due, si dichiara `da assegnare`
+    invece di attribuire il lavoro a intuito.
+    """
     for frammento, fisso in RESPONSABILE_FISSO.items():
         if frammento in opportunita.audit:
             return fisso
-    quota = opportunita.quota_terze_parti
     if not opportunita.risorse:
-        return DEV
+        return NON_DEDUCIBILE
+    quota = opportunita.quota_terze_parti
     if quota >= 0.7:
         return MARKETING
     if quota <= 0.25:
@@ -89,6 +135,20 @@ def azionabile(opportunita) -> bool:
     return not (tocca_server and opportunita.quota_terze_parti >= 0.95)
 
 
+# Metrica su cui calibrare la priorita' degli audit che NON dichiarano risparmi.
+# Senza questa mappa `cls-culprits-insight` — che nomina gli elementi che fanno
+# ballare la pagina — resterebbe a priorita' fissa "media" invece di seguire il
+# CLS reale degli utenti.
+METRICA_PER_AUDIT = {
+    "cls-culprits": "CLS", "layout-shift": "CLS", "unsized-images": "CLS",
+    "forced-reflow": "TBT", "third-parties": "TBT", "mainthread-work": "TBT",
+    "script-treemap": "LCP", "network-dependency-tree": "LCP",
+    "image-delivery": "LCP", "document-latency": "TTFB",
+}
+
+ORDINE_GIUDIZIO = {"scarso": 0, "da_migliorare": 1, "buono": 2, "sconosciuto": 3}
+
+
 def priorita_dal_campo(opportunita, campo: dict):
     """(gravita, spiegazione). La priorita' viene dal campo, non dal laboratorio."""
     verdetti = []
@@ -96,19 +156,32 @@ def priorita_dal_campo(opportunita, campo: dict):
         chiave = LAB_A_CAMPO.get(metrica_lab)
         if chiave and chiave in campo:
             verdetti.append((giudizio(chiave, campo[chiave]), chiave, metrica_lab))
+
+    dichiarato = bool(verdetti)
+    if not verdetti:
+        # Nessun risparmio dichiarato: si usa la metrica di cui l'audit si occupa.
+        metrica_lab = next((m for frammento, m in METRICA_PER_AUDIT.items()
+                            if frammento in opportunita.audit), None)
+        chiave = LAB_A_CAMPO.get(metrica_lab or "")
+        if chiave and chiave in campo:
+            verdetti = [(giudizio(chiave, campo[chiave]), chiave, metrica_lab)]
+
     if not verdetti:
         return ("media", "Priorita' non calibrata sul campo: per questo URL mancano "
                          "i dati CrUX sulle metriche interessate.")
 
-    ordine = {"scarso": 0, "da_migliorare": 1, "buono": 2, "sconosciuto": 3}
-    peggiore, chiave, metrica_lab = min(verdetti, key=lambda v: ordine[v[0]])
-    stima = opportunita.risparmi[metrica_lab]
-    nota = (f"Lighthouse stima {stima:.0f} ms di risparmio su {metrica_lab}; "
-            f"il campo dice {ETICHETTE[chiave]} {formatta(chiave, campo[chiave])} "
-            f"({peggiore.replace('_', ' ')}).")
-    if metrica_lab == "TBT":
-        nota += (" TBT e' il proxy di laboratorio dell'INP: Lighthouse non misura "
-                 "l'INP, quindi l'attribuzione qui e' meno precisa.")
+    peggiore, chiave, metrica_lab = min(verdetti, key=lambda v: ORDINE_GIUDIZIO[v[0]])
+    if dichiarato:
+        stima = formatta_risparmio(metrica_lab, opportunita.risparmi[metrica_lab])
+        nota = (f"Lighthouse stima {stima} di risparmio su {metrica_lab}; "
+                f"il campo dice {ETICHETTE[chiave]} {formatta(chiave, campo[chiave])} "
+                f"({peggiore.replace('_', ' ')}).")
+    else:
+        nota = (f"Lighthouse non dichiara un risparmio per questo audit: la priorita' "
+                f"segue la metrica di cui si occupa, {metrica_lab}, che nel campo vale "
+                f"{formatta(chiave, campo[chiave])} ({peggiore.replace('_', ' ')}).")
+    if metrica_lab in CALIBRAZIONE_APPROSSIMATA:
+        nota += " " + CALIBRAZIONE_APPROSSIMATA[metrica_lab]
     if peggiore == "buono":
         nota += " Per gli utenti reali questa metrica e' gia' a posto: priorita' bassa."
     return (GRAVITA_DA_CAMPO[peggiore], nota)
@@ -127,6 +200,30 @@ def _misura(risorsa) -> str:
     return ""
 
 
+def _misura_voce(voce) -> str:
+    """Le misure di una riga senza URL, ciascuna con la sua unita'."""
+    parti = []
+    for chiave, valore in voce.misure.items():
+        if chiave in ("transferSize", "wastedBytes", "totalBytes",
+                      "resourceBytes", "unusedBytes"):
+            parti.append(f"{valore / 1024:.0f} KB")
+        elif chiave == "score":
+            parti.append(f"{valore:.3f}")
+        else:
+            parti.append(f"{valore:.0f} ms")
+    return " · ".join(parti)
+
+
+def _misura_elemento(elemento) -> str:
+    if not elemento.misura:
+        return ""
+    if elemento.unita == "":
+        return f"{elemento.misura:.3f}"
+    if elemento.unita == "byte":
+        return f"{elemento.misura / 1024:.0f} KB"
+    return f"{elemento.misura:.0f} ms"
+
+
 def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Problema:
     gravita, spiegazione = priorita_dal_campo(opportunita, campo)
     puo_agire = azionabile(opportunita)
@@ -134,16 +231,41 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
     evidenza = []
     if opportunita.display:
         evidenza.append(opportunita.display)
-    evidenza.append("Stima Lighthouse: " + ", ".join(
-        f"{m} {v:.0f} ms" for m, v in opportunita.risparmi.items()))
+    if opportunita.risparmi:
+        evidenza.append("Stima Lighthouse: " + ", ".join(
+            f"{m} {formatta_risparmio(m, v)}" for m, v in opportunita.risparmi.items()))
     if opportunita.risorse:
         quota = opportunita.quota_terze_parti
         evidenza.append(f"{quota * 100:.0f}% dello spreco e' su risorse di terze parti")
+    # Le voci sono righe che non nominano ne' un file ne' un nodo: un vendor con il
+    # suo costo di main thread, una categoria di lavoro, l'origine di un reflow.
+    for voce in opportunita.voci[:massimo_risorse]:
+        misura = _misura_voce(voce)
+        if misura:
+            evidenza.append(f"{voce.etichetta}: {misura}")
+    # I motivi sono testo di Lighthouse, uno per tipo: si riportano una volta sola.
+    for motivo in dict.fromkeys(r.motivo for r in opportunita.risorse if r.motivo):
+        evidenza.append(motivo)
+
+    # Le voci fallite di una checklist sono gia' istruzioni scritte da Lighthouse.
+    azioni = [opportunita.descrizione] if opportunita.descrizione else []
+    azioni += [etichetta for _nome, (superato, etichetta)
+               in opportunita.controlli.items() if not superato]
 
     nota = spiegazione
+    if not opportunita.descrizione:
+        # Alcuni artefatti (script-treemap-data) non hanno un testo di
+        # raccomandazione: sono dati grezzi. Dichiararlo evita che il titolo
+        # tecnico di Lighthouse sembri un intervento mal scritto.
+        nota += (" Lighthouse non allega una raccomandazione a questo audit: sono "
+                 "dati di misura, riportati qui perche' nominano i file o gli "
+                 "elementi su cui intervenire.")
     if not puo_agire:
         nota += (" Tutte le risorse coinvolte sono di terze parti: l'intervento non e' "
                  "nelle vostre mani se non rimuovendo o sostituendo quegli script.")
+    if responsabile_per(opportunita) == NON_DEDUCIBILE:
+        nota += (" Chi debba intervenire non e' deducibile: l'audit non nomina risorse "
+                 "di cui si possa stabilire la proprieta'.")
 
     return Problema(
         codice=opportunita.audit,
@@ -152,13 +274,15 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
         responsabile=responsabile_per(opportunita),
         fonte="lighthouse",
         evidenza=evidenza,
-        azioni=[opportunita.descrizione] if opportunita.descrizione else [],
+        azioni=azioni,
         risorse=[(r.url, _misura(r), r.terza_parte)
                  for r in opportunita.risorse[:massimo_risorse] if _misura(r)],
+        elementi=[(e.riferimento, _misura_elemento(e), e.percorso, e.snippet[:160])
+                  for e in opportunita.elementi[:massimo_risorse]],
         documentazione=opportunita.documentazione,
         nota=nota,
         azionabile=puo_agire,
-        risparmio=opportunita.risparmio_massimo,
+        risparmio=opportunita.peso_relativo,
     )
 
 

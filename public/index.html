@@ -203,6 +203,12 @@ function problemi(lista) {
       ${p.risorse.map(([u,m,t]) => `<tr><td class="tag">${t?'3P':'1P'}</td>
         <td class="risorsa">${esc(u)}</td><td class="num">${esc(m)}</td></tr>`).join('')}
       </table>` : '';
+    const elementi = (p.elementi||[]).length ? `<table class="risorse">
+      <tr><th>elemento nel DOM</th><th class="num">impatto</th></tr>
+      ${p.elementi.map(([rif,mis,path]) => `<tr><td class="risorsa">${esc(rif)}
+        ${path ? `<br><span style="color:var(--tenue);font-size:10px">${esc(path)}</span>` : ''}
+        </td><td class="num">${esc(mis)}</td></tr>`).join('')}
+      </table>` : '';
     const doc = p.documentazione
       ? `<p class="nota"><a href="${esc(p.documentazione)}" target="_blank" rel="noopener">Documentazione Google</a></p>` : '';
     const marchio = p.azionabile === false
@@ -211,7 +217,7 @@ function problemi(lista) {
       <h4>${esc(p.titolo)}${marchio}</h4>
       <p class="meta">priorità ${esc(p.gravita)} · interviene: ${esc(p.responsabile)} ·
         ${esc(FONTE[p.fonte] || p.fonte)}</p>
-      <ul class="evidenza">${evidenza}</ul><ul>${azioni}</ul>${risorse}
+      <ul class="evidenza">${evidenza}</ul><ul>${azioni}</ul>${risorse}${elementi}
       ${p.nota ? `<p class="nota">${esc(p.nota)}</p>` : ''}${doc}</div>`;
   }).join('');
 }
