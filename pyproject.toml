@@ -22,6 +22,11 @@ dev = ["pytest>=8.0"]
 [project.scripts]
 speed = "speed.cli:main"
 
+[tool.vercel]
+# Senza questo Vercel non sa quale app caricare: il progetto ha un pyproject.toml,
+# quindi viene trattato come applicazione Python e cerca un entrypoint WSGI/ASGI.
+entrypoint = "app:app"
+
 [tool.setuptools.packages.find]
 include = ["speed*"]
 

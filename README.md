@@ -66,10 +66,16 @@ li manda **uno alla volta** e i risultati compaiono mano a mano. Una pagina rich
 gratuito, senza code né database.
 
 ```
+app.py               applicazione WSGI: instrada tutto, nessuna dipendenza
+speed/web.py         la logica, testabile senza alzare un server
 public/index.html    interfaccia
-api/analizza.py      POST {url, password} -> analisi di una singola pagina
-api/report.py        POST {pagine}         -> report Word da scaricare
 ```
+
+Vercel tratta il progetto come applicazione Python — c'è un `pyproject.toml` — e in
+quella modalità manda **tutte** le richieste a un unico entrypoint, dichiarato in
+`[tool.vercel]`. Non esiste l'instradamento file-per-file di `api/`: le due cose non
+convivono. Per provarla in locale, `python scripts/serve_locale.py` serve la stessa
+identica app.
 
 Due variabili d'ambiente sul progetto Vercel: `GOOGLE_API_KEY` (resta lato server, non
 passa mai dal browser) e `SPEED_PASSWORD` (senza, chiunque abbia il link consuma la

@@ -1,21 +1,21 @@
 """
-Server locale che imita l'instradamento di Vercel.
+Server locale: la stessa app WSGI che gira su Vercel, servita da wsgiref.
 
-Serve `public/` come sito statico e manda `/api/<nome>` all'handler in
-`api/<nome>.py`. Non e' usato in produzione: esiste per poter provare la versione
-web senza fare un deploy a ogni modifica.
+Esiste per provare la versione web senza fare un deploy a ogni modifica. Non c'e'
+nessuna simulazione dell'instradamento: Vercel manda tutte le richieste all'app,
+e qui succede lo stesso, quindi cio' che funziona in locale funziona online.
 
     python scripts/serve_locale.py           # http://localhost:8000
+    python scripts/serve_locale.py 8765      # su un'altra porta
 
 Legge .env dalla radice del progetto, come la CLI.
 """
 from __future__ import annotations
 
-import importlib.util
+import os
 import sys
-from functools import partial
-from http.server import HTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
+from wsgiref.simple_server import make_server
 
 RADICE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(RADICE))
@@ -24,60 +24,17 @@ from dotenv import load_dotenv  # noqa: E402
 
 load_dotenv(RADICE / ".env")
 
-
-def _carica_handler(nome: str):
-    percorso = RADICE / "api" / f"{nome}.py"
-    if not percorso.exists():
-        return None
-    spec = importlib.util.spec_from_file_location(f"api_{nome}", percorso)
-    modulo = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modulo)
-    return getattr(modulo, "handler", None)
-
-
-class Instradatore(SimpleHTTPRequestHandler):
-    """Statico da public/, dinamico da api/."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(RADICE / "public"), **kwargs)
-
-    def _delega(self, metodo: str) -> bool:
-        if not self.path.startswith("/api/"):
-            return False
-        nome = self.path[len("/api/"):].split("?")[0].strip("/")
-        handler = _carica_handler(nome)
-        if handler is None:
-            self.send_error(404, f"nessun endpoint {nome}")
-            return True
-        # Gli handler Vercel sono BaseHTTPRequestHandler: riusiamo la connessione
-        # gia' aperta invece di istanziarli, che farebbe rileggere la richiesta.
-        finto = handler.__new__(handler)
-        finto.rfile, finto.wfile = self.rfile, self.wfile
-        finto.headers, finto.path, finto.command = self.headers, self.path, self.command
-        finto.request_version, finto.client_address = self.request_version, self.client_address
-        finto.server, finto.connection = self.server, self.connection
-        finto.requestline = self.requestline
-        getattr(finto, f"do_{metodo}")()
-        return True
-
-    def do_POST(self):
-        if not self._delega("POST"):
-            self.send_error(405)
-
-    def do_GET(self):
-        if not self._delega("GET"):
-            super().do_GET()
-
-    def log_message(self, formato, *args):
-        print(f"  {self.command} {self.path} -> {args[1] if len(args) > 1 else ''}")
+from app import app  # noqa: E402
 
 
 def main(porta: int = 8000):
-    import os
     if not os.getenv("GOOGLE_API_KEY"):
         print("Attenzione: GOOGLE_API_KEY non impostata, le analisi falliranno.")
+    if not os.getenv("SPEED_PASSWORD"):
+        print("Attenzione: SPEED_PASSWORD non impostata, l'app resta senza protezione.")
     print(f"http://localhost:{porta}  (Ctrl+C per fermare)")
-    HTTPServer(("127.0.0.1", porta), partial(Instradatore)).serve_forever()
+    with make_server("127.0.0.1", porta, app) as server:
+        server.serve_forever()
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ indietro per generare il Word, e il corpo di una richiesta Vercel non puo' super
 i 4,5 MB. Se qualcuno aggiunge un campo al report senza aggiungerlo alla riduzione,
 il documento esce mutilo: questi test lo intercettano.
 """
-import importlib.util
+import io
 import json
 from datetime import date
 from pathlib import Path
@@ -16,6 +16,7 @@ from docx import Document
 
 from speed.core import consenso, diagnose, extract, thirdparty
 from speed.io import crux, render, render_docx
+from speed.web import fatti_essenziali, serializza, terze_essenziali, valida_url
 
 RADICE = Path(__file__).resolve().parent.parent
 FIXTURES = RADICE / "fixtures"
@@ -24,15 +25,7 @@ PROPRI = ["bbci.co.uk"]
 
 
 @pytest.fixture(scope="module")
-def api():
-    spec = importlib.util.spec_from_file_location("analizza", RADICE / "api" / "analizza.py")
-    modulo = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(modulo)
-    return modulo
-
-
-@pytest.fixture(scope="module")
-def pagina(api):
+def pagina():
     """Compone la risposta dell'endpoint dai fixture, senza toccare la rete."""
     misurazioni = [
         extract.estrai(json.loads((FIXTURES / nome).read_text(encoding="utf-8")),
@@ -49,16 +42,16 @@ def pagina(api):
 
     risposta = {
         "template": URL, "url": URL,
-        "fatti": api._fatti_essenziali(fatti),
+        "fatti": fatti_essenziali(fatti),
         "campo": {"livello": "url", "metriche": campo["metriche"],
                   "storico": {"url": URL} | storico},
-        "terze_parti": api._terze_essenziali(riepilogo),
+        "terze_parti": terze_essenziali(riepilogo),
         "problemi": problemi,
         "misurazioni": accordo.ripetizioni, "concordi": accordo.concordi,
         "consenso": accordo.descrizione,
     }
     # Come arriva al browser e come torna indietro: passata da JSON.
-    return json.loads(json.dumps(risposta, default=api._serializza, ensure_ascii=False))
+    return json.loads(json.dumps(risposta, default=serializza, ensure_ascii=False))
 
 
 def _esecuzione(pagina):
@@ -106,3 +99,82 @@ def test_il_word_si_genera_dal_payload_ridotto(pagina, tmp_path):
 def test_anche_l_html_si_genera_dal_payload_ridotto(pagina):
     h = render.html_report(_esecuzione(pagina))
     assert "<svg" in h and "testo di Lighthouse" in h
+
+
+# --- l'app WSGI: instradamento e protezione --------------------------------- #
+
+def _chiama(percorso, metodo="GET", corpo=None):
+    from app import app
+    dati = json.dumps(corpo or {}).encode("utf-8")
+    environ = {
+        "PATH_INFO": percorso, "REQUEST_METHOD": metodo,
+        "CONTENT_LENGTH": str(len(dati)), "wsgi.input": io.BytesIO(dati),
+    }
+    catturato = {}
+
+    def avvia(stato, intestazioni):
+        catturato["stato"] = stato
+        catturato["intestazioni"] = dict(intestazioni)
+
+    corpo_risposta = b"".join(app(environ, avvia))
+    return catturato["stato"], catturato["intestazioni"], corpo_risposta
+
+
+def test_la_pagina_viene_servita():
+    stato, intestazioni, corpo = _chiama("/")
+    assert stato.startswith("200")
+    assert "text/html" in intestazioni["Content-Type"]
+    assert b"Analisi velocit" in corpo
+
+
+def test_percorso_sconosciuto_da_404():
+    assert _chiama("/inesistente")[0].startswith("404")
+
+
+def test_gli_endpoint_rifiutano_il_get():
+    assert _chiama("/api/analizza")[0].startswith("405")
+
+
+def test_url_non_valido_riceve_il_rimedio(monkeypatch):
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    monkeypatch.setenv("GOOGLE_API_KEY", "finta")
+    stato, _, corpo = _chiama("/api/analizza", "POST", {"url": "non-un-url"})
+    assert stato.startswith("400")
+    assert "https://" in json.loads(corpo)["rimedio"]
+
+
+def test_la_password_protegge_entrambi_gli_endpoint(monkeypatch):
+    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
+    for percorso in ("/api/analizza", "/api/report"):
+        stato, _, corpo = _chiama(percorso, "POST", {"url": "https://x.it/", "password": "no"})
+        assert stato.startswith("401"), percorso
+        assert "Password" in json.loads(corpo)["errore"]
+
+
+def test_senza_password_configurata_l_app_resta_aperta(monkeypatch):
+    """Comportamento voluto, ma va scoperto dal test e non in produzione."""
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    stato, _, corpo = _chiama("/api/analizza", "POST", {"url": "https://x.it/"})
+    assert stato.startswith("500")
+    assert "GOOGLE_API_KEY" in json.loads(corpo)["errore"]
+
+
+def test_il_report_rifiuta_una_lista_vuota(monkeypatch):
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    stato, _, corpo = _chiama("/api/report", "POST", {"pagine": []})
+    assert stato.startswith("400")
+
+
+def test_il_report_scarica_un_docx(monkeypatch, pagina):
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    stato, intestazioni, corpo = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    assert stato.startswith("200")
+    assert "wordprocessingml" in intestazioni["Content-Type"]
+    assert intestazioni["Content-Disposition"].startswith("attachment")
+    assert corpo[:2] == b"PK", "un .docx e' uno zip"
+
+
+def test_url_valido_passa_la_validazione():
+    assert valida_url("https://www.esempio.it/") is None
+    assert valida_url("esempio.it") is not None
