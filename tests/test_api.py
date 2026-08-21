@@ -175,6 +175,29 @@ def test_il_report_scarica_un_docx(monkeypatch, pagina):
     assert corpo[:2] == b"PK", "un .docx e' uno zip"
 
 
+def test_lo_stato_dice_cosa_vede_il_server(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "AIza-finta-1234")
+    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+    stato, _, corpo = _chiama("/api/stato")
+    dati = json.loads(corpo)
+    assert stato.startswith("200")
+    assert "presente" in dati["GOOGLE_API_KEY"]
+    assert dati["SPEED_PASSWORD"] == "assente"
+    assert "aperta a chiunque" in dati["protezione"]
+
+
+def test_lo_stato_non_espone_i_valori(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "chiave-segretissima")
+    monkeypatch.setenv("SPEED_PASSWORD", "parola-segretissima")
+    corpo = _chiama("/api/stato")[2].decode("utf-8")
+    assert "segretissima" not in corpo, "lo stato non deve rivelare le credenziali"
+
+
+def test_lo_stato_riconosce_una_variabile_vuota(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "   ")
+    assert "vuota" in json.loads(_chiama("/api/stato")[2])["GOOGLE_API_KEY"]
+
+
 def test_url_valido_passa_la_validazione():
     assert valida_url("https://www.esempio.it/") is None
     assert valida_url("esempio.it") is not None

@@ -65,6 +65,32 @@ def _pagina(avvia):
     return [corpo]
 
 
+def _stato(avvia):
+    """Dice quali variabili d'ambiente il server vede davvero.
+
+    Serve a distinguere in un secondo fra "non l'ho impostata", "l'ho impostata
+    dopo il deploy e non e' stata iniettata" e "l'ho impostata sull'ambiente
+    sbagliato". Non espone alcun valore: solo presenza e lunghezza, che bastano
+    a smascherare un incollaggio troncato o una stringa vuota.
+    """
+    def descrivi(nome):
+        valore = os.getenv(nome)
+        if valore is None:
+            return "assente"
+        if not valore.strip():
+            return "presente ma vuota"
+        return f"presente ({len(valore)} caratteri)"
+
+    return _json(avvia, "200 OK", {
+        "GOOGLE_API_KEY": descrivi("GOOGLE_API_KEY"),
+        "SPEED_PASSWORD": descrivi("SPEED_PASSWORD"),
+        "protezione": "attiva" if os.getenv("SPEED_PASSWORD") else
+                      "ASSENTE: l'app e' aperta a chiunque abbia il link",
+        "nota": "Le variabili vengono iniettate al momento del deploy: se le hai "
+                "aggiunte dopo, serve un redeploy perche' arrivino.",
+    })
+
+
 def _analizza(avvia, richiesta: dict):
     if not _password_valida(richiesta):
         return _json(avvia, "401 Unauthorized", {"errore": "Password non valida."})
@@ -134,6 +160,8 @@ def app(environ, avvia):
 
     if percorso in ("/", "/index.html") and metodo == "GET":
         return _pagina(avvia)
+    if percorso == "/api/stato" and metodo == "GET":
+        return _stato(avvia)
     if percorso == "/api/analizza" and metodo == "POST":
         return _analizza(avvia, _leggi(environ))
     if percorso == "/api/report" and metodo == "POST":
