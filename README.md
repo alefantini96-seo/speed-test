@@ -185,6 +185,31 @@ Le regole che governano il contenuto:
 - **Un tab si crea solo se la lista serve a chi implementa**, con un tetto di cinque.
   Il crawl completo e le liste informative non sono tab.
 
+## Confronto fra due scansioni
+
+    python -m speed confronta "out/dati velocita 20062026.json"                               "out/dati velocita 21082026.json"
+
+Per ogni template: quali problemi sono spariti, quali sono comparsi, quali
+restano, e come si e' mosso il p75 di campo. Esce a terminale e come
+`confronto.html` accanto alla scansione piu' recente.
+
+Due avvertenze compaiono nell'output, non solo nel codice:
+
+- **il campo e' una media mobile a 28 giorni**: un intervento pubblicato oggi si
+  legge pulito solo dopo quattro settimane;
+- **i problemi confrontati vengono dal laboratorio, che oscilla fra run**: la
+  comparsa o la scomparsa di una singola opportunita' non e' di per se' un
+  risultato. Il movimento del p75 di campo si'.
+
+Quanto conti la seconda avvertenza si vede provando: due scansioni della stessa
+pagina a poche ore di distanza danno metriche di campo **identiche** — e' la stessa
+finestra di 28 giorni — mentre tre problemi compaiono o spariscono. Sono rumore.
+
+Il confronto si regge sugli URL e non sui nomi dei template, che possono cambiare
+fra una scansione e l'altra. E non richiede di accumulare nulla: CrUX History
+restituisce 40 settimane a ogni esecuzione, quindi l'andamento lungo sta gia'
+dentro ciascuna delle due scansioni.
+
 ## Decisioni architetturali
 
 Cinque decisioni non si cambiano senza aggiornare l'ADR corrispondente in

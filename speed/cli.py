@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 
 from . import config as cfg
 from .errori import ErroreSpeed
-from .core import consenso, diagnose, extract, masterplan, thirdparty
+from .core import confronto, consenso, diagnose, extract, masterplan, thirdparty
 from .core.soglie import fasi_dal_campo
 from .core.soglie import ETICHETTE, formatta, giudizio
 from .io import crux, psi
@@ -340,6 +340,58 @@ def _masterplan(percorso_json: str) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+#  confronta
+# --------------------------------------------------------------------------- #
+def _confronta(percorso_prima: str, percorso_dopo: str) -> int:
+    """Cosa e' cambiato fra due scansioni, con le avvertenze per leggerlo.
+
+    Non serve accumulare niente: CrUX History restituisce 40 settimane a ogni
+    esecuzione, quindi l'andamento lungo sta gia' dentro ciascuna scansione.
+    """
+    percorsi = []
+    for percorso in (percorso_prima, percorso_dopo):
+        file = Path(percorso)
+        if not file.exists():
+            raise ErroreSpeed(f"il file {percorso} non esiste.",
+                              "Servono i due JSON di scansione, quelli che "
+                              "`speed run` salva accanto ai report.")
+        percorsi.append(json.loads(file.read_text(encoding="utf-8")))
+
+    esito = confronto.confronta(*percorsi)
+    print(f"  {esito.data_prima} -> {esito.data_dopo}   "
+          f"{len(esito.template)} template confrontati")
+    for avvertenza in confronto.AVVERTENZE:
+        print(f"    · {avvertenza}")
+    if esito.solo_prima or esito.solo_dopo:
+        if esito.solo_prima:
+            print(f"    · solo nella prima: {', '.join(esito.solo_prima)}")
+        if esito.solo_dopo:
+            print(f"    · solo nella seconda: {', '.join(esito.solo_dopo)}")
+
+    for voce in esito.template:
+        print("")
+        print(f"  --- {voce.template} ---")
+        for movimento in voce.metriche:
+            print(f"    {movimento.descrivi()}")
+        if voce.spariti:
+            print(f"    spariti ({len(voce.spariti)}):")
+            for _codice, titolo in voce.spariti:
+                print(f"      - {titolo[:70]}")
+        if voce.comparsi:
+            print(f"    comparsi ({len(voce.comparsi)}):")
+            for _codice, titolo in voce.comparsi:
+                print(f"      + {titolo[:70]}")
+        print(f"    restati: {len(voce.restati)}")
+
+    from .io import render_confronto
+    destinazione = Path(percorso_dopo).parent / "confronto.html"
+    destinazione.write_text(render_confronto.html_confronto(esito), encoding="utf-8")
+    print("")
+    print(f"  sezione HTML: {destinazione}")
+    return 0
+
+
 def _stampa_template(nome, fatti, campo, riepilogo, problemi):
     print(f"\n  --- {nome} ---")
     if campo:
@@ -378,6 +430,10 @@ def main(argv=None) -> int:
                           help="frammento audit.json per lo script che impagina l'xlsx")
     p_mp.add_argument("json")
 
+    p_conf = sub.add_parser("confronta", help="cosa e' cambiato fra due scansioni")
+    p_conf.add_argument("prima")
+    p_conf.add_argument("dopo")
+
     p_rep = sub.add_parser("report", help="rigenera l'HTML da un run salvato")
     p_rep.add_argument("json")
     p_rep.add_argument("--formato", choices=("html", "docx", "entrambi"), default="entrambi")
@@ -390,6 +446,8 @@ def main(argv=None) -> int:
             return asyncio.run(_check(args.config))
         if args.comando == "masterplan":
             return _masterplan(args.json)
+        if args.comando == "confronta":
+            return _confronta(args.prima, args.dopo)
         if args.comando == "report":
             return _report(args.json, args.formato)
         return asyncio.run(_run(args.config, args.desktop, args.formato, args.ripetizioni))
