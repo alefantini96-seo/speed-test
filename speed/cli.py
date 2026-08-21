@@ -3,6 +3,8 @@ CLI del tool.
 
     python -m speed check-config clienti/x.yaml     verifica la copertura CrUX degli URL
     python -m speed run          clienti/x.yaml     scansione completa -> JSON + HTML + DOCX
+    python -m speed masterplan   "out/dati ....json"  frammento per lo script che fa l'xlsx
+    python -m speed confronta    vecchio.json nuovo.json   cosa e' cambiato fra due scansioni
 
 La scansione e' una tantum: non c'e' database e non c'e' storico da accumulare.
 La serie storica arriva da CrUX History a ogni esecuzione (ADR-002).
@@ -23,7 +25,7 @@ from dotenv import load_dotenv
 
 from . import config as cfg
 from .errori import ErroreSpeed
-from .core import consenso, diagnose, extract, thirdparty
+from .core import consenso, diagnose, extract, masterplan, thirdparty
 from .core.soglie import fasi_dal_campo
 from .core.soglie import ETICHETTE, formatta, giudizio
 from .io import crux, psi
@@ -296,6 +298,48 @@ def _report(percorso_json: str, formato: str) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------- #
+#  masterplan
+# --------------------------------------------------------------------------- #
+def _masterplan(percorso_json: str) -> int:
+    """Frammento audit.json per lo script che impagina l'xlsx.
+
+    Lo script vive fuori da questo repo: qui non si scrive nessun xlsx. Si parte
+    dalla forma JSON, quindi funziona anche su una scansione salvata mesi prima.
+    """
+    origine = Path(percorso_json)
+    if not origine.exists():
+        raise ErroreSpeed(f"il file {percorso_json} non esiste.",
+                          "Serve il JSON di una scansione, quello che `speed run` "
+                          "salva accanto ai report.")
+    esecuzione = json.loads(origine.read_text(encoding="utf-8"))
+    frammento, esclusi = masterplan.costruisci(esecuzione)
+
+    destinazione = origine.parent / "masterplan.json"
+    destinazione.write_text(
+        json.dumps(frammento, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    righe = frammento["masterplan"]
+    print(f"  {len(righe)} righe, {len(frammento['tab'])} tab -> {destinazione}")
+    print("")
+    for riga in righe:
+        tab = f"   [{riga['tab']}]" if riga["tab"] else ""
+        print(f"  {riga['id']:2d}. [{riga['priorita']:5s}] {riga['problema']}{tab}")
+        print(f"      {riga['intervento']}")
+
+    if esclusi:
+        print("")
+        print(f"  fuori master plan ({len(esclusi)}):")
+        for template, titolo, motivo in esclusi:
+            print(f"    {template} — {titolo[:46]:46s} {motivo}")
+    if not esecuzione.get("ordinamento_pesato"):
+        print("")
+        print("  Ordine non pesato sul traffico: senza `sessioni` o "
+              "`quota_traffico` nel YAML")
+        print("  tutti i template contano uguale.")
+    return 0
+
+
 def _stampa_template(nome, fatti, campo, riepilogo, problemi):
     print(f"\n  --- {nome} ---")
     if campo:
@@ -330,6 +374,10 @@ def main(argv=None) -> int:
                        help="misurazioni lab per URL; senza valore decide il tool: "
                             "1 se le fasi LCP arrivano dal campo, altrimenti 3")
 
+    p_mp = sub.add_parser("masterplan",
+                          help="frammento audit.json per lo script che impagina l'xlsx")
+    p_mp.add_argument("json")
+
     p_rep = sub.add_parser("report", help="rigenera l'HTML da un run salvato")
     p_rep.add_argument("json")
     p_rep.add_argument("--formato", choices=("html", "docx", "entrambi"), default="entrambi")
@@ -340,6 +388,8 @@ def main(argv=None) -> int:
     try:
         if args.comando == "check-config":
             return asyncio.run(_check(args.config))
+        if args.comando == "masterplan":
+            return _masterplan(args.json)
         if args.comando == "report":
             return _report(args.json, args.formato)
         return asyncio.run(_run(args.config, args.desktop, args.formato, args.ripetizioni))

@@ -107,6 +107,7 @@ class Problema:
     nota: str = ""
     azionabile: bool = True
     risparmio: float = 0.0
+    azione_breve: str = ""           # imperativo di Lighthouse, quando il titolo non lo e'
     metrica: str = ""                # metrica di campo su cui e' calibrata la priorita'
     peso: float = 1.0                # peso di traffico del template (1 = non pesato)
 
@@ -297,6 +298,7 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
         nota=nota,
         azionabile=puo_agire,
         risparmio=opportunita.peso_relativo,
+        azione_breve=opportunita.etichetta_azione,
         metrica=metrica,
     )
 

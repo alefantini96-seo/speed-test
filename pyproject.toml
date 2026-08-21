@@ -18,6 +18,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+# Solo se un giorno servisse un xlsx autonomo: va importata lazy dentro la
+# funzione che la usa, e NON in requirements.txt, da cui installa Vercel.
+# Oggi l'xlsx lo produce uno script esterno al repo, che consuma masterplan.json.
+xlsx = ["openpyxl>=3.1"]
 
 [project.scripts]
 speed = "speed.cli:main"

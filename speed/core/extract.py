@@ -171,6 +171,10 @@ class Opportunita:
     display: str           # es. "Risparmio stimato di 508 KiB"
     score: float | None
     risparmi: dict         # metricSavings: {LCP: ms, FCP: ms, TBT: ms, CLS: adimensionale}
+    # Etichetta del link nella descrizione: Lighthouse ci mette l'imperativo dove
+    # il titolo e' un sostantivo ("Terze parti" -> "Riduci e posticipa il
+    # caricamento del codice di terze parti").
+    etichetta_azione: str = ""
     risorse: list = field(default_factory=list)
     elementi: list = field(default_factory=list)
     voci: list = field(default_factory=list)
@@ -210,6 +214,18 @@ class Opportunita:
 
 
 _LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+
+
+def etichetta_documentazione(testo: str) -> str:
+    """L'etichetta del primo link markdown nella descrizione.
+
+    Serve perche' alcuni insight hanno un titolo descrittivo — "Terze parti",
+    "Albero delle dipendenze di rete" — mentre l'etichetta del link porta l'azione
+    all'imperativo: "Riduci e posticipa il caricamento del codice di terze parti".
+    E' testo di Lighthouse in entrambi i casi: si sceglie quale, non si riscrive.
+    """
+    trovato = _LINK.search(testo or "")
+    return trovato.group(1) if trovato else ""
 
 
 def _scomponi_descrizione(testo: str):
@@ -504,6 +520,7 @@ def estrai_opportunita(psi: dict, dominio_sito: str = "", domini_propri=()) -> l
             documentazione="",
             display=audit.get("displayValue", ""),
             score=audit.get("score"),
+            etichetta_azione=etichetta_documentazione(audit.get("description", "")),
             risparmi=risparmi,
             risorse=sorted(risorse, key=lambda r: -r.spreco),
             elementi=sorted(elementi, key=lambda e: -e.misura),

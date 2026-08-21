@@ -139,6 +139,52 @@ documentazione: Lighthouse 13 ha sostituito i vecchi audit diagnostici con gli
 "Insights" (`lcp-breakdown-insight`, `lcp-discovery-insight`). Quando cambieranno
 ancora, saranno i test su `fixtures/` a segnalarlo.
 
+## Master plan: il frammento per l'xlsx
+
+    python -m speed masterplan "out/dati velocita 21082026.json"
+
+Scrive `masterplan.json` accanto al JSON di scansione. **Il consumatore e' esterno
+a questo repo**: e' lo script che impagina l'xlsx dell'audit tecnico. Qui non si
+scrive nessun xlsx — se un giorno servisse autonomo, `openpyxl` sta in
+`[project.optional-dependencies]` e va importata lazy, mai in `requirements.txt`,
+da cui installa Vercel.
+
+```json
+{
+  "masterplan": [
+    {"id": 1, "problema": "LCP oltre soglia su 6 template su 9",
+     "priorita": "Alta",
+     "evidenza": "LCP p75 4.180 ms. Attesa prima del download 61% del tempo.",
+     "intervento": "Riduci il codice JavaScript inutilizzato",
+     "tab": "URL - LCP oltre soglia"}
+  ],
+  "tab": [
+    {"nome": "URL - LCP oltre soglia",
+     "intestazioni": ["Template", "URL", "LCP p75"],
+     "larghezze": [24, 74, 14],
+     "righe": [["Home", "https://…", "4.180 ms"]]}
+  ]
+}
+```
+
+Le regole che governano il contenuto:
+
+- **Si aggrega per sito**, non per template: una riga per tipo di intervento, con
+  quanti template ne sono toccati. N template per M problemi darebbero centinaia di
+  righe che nessuno legge.
+- **Ogni riga ha un intervento eseguibile.** Le righe non azionabili, le
+  constatazioni e gli artefatti di dati restano fuori, e il motivo compare a
+  terminale come «fuori master plan».
+- **`problema`** e' l'unica cella scritta da noi: una classificazione nella forma
+  «X su Y». **`evidenza`** sono solo numeri misurati. **`intervento`** e' testo di
+  Lighthouse verbatim — il titolo, o l'etichetta del link quando il titolo e' un
+  sostantivo ("Terze parti" -> "Riduci e posticipa il caricamento del codice di
+  terze parti").
+- **Registro telegrafico**: niente conseguenze, niente metodo o data, niente
+  confronto con misure precedenti, niente elenco di pagine quando c'e' gia' un tab.
+- **Un tab si crea solo se la lista serve a chi implementa**, con un tetto di cinque.
+  Il crawl completo e le liste informative non sono tab.
+
 ## Decisioni architetturali
 
 Cinque decisioni non si cambiano senza aggiornare l'ADR corrispondente in

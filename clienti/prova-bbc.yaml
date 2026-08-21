@@ -1,0 +1,16 @@
+cliente: Prova BBC
+sito: https://www.bbc.com
+form_factor: PHONE
+output: ""
+domini_propri:
+  - bbci.co.uk
+template:
+  - nome: Home
+    url: https://www.bbc.com/
+    sessioni: 82000
+  - nome: News
+    url: https://www.bbc.com/news
+    sessioni: 41000
+  - nome: Sport
+    url: https://www.bbc.com/sport
+    sessioni: 9000
