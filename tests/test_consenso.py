@@ -86,6 +86,16 @@ def test_maggioranza_decide_la_fase_dominante():
     assert c.attendibile is True
 
 
+def test_combina_non_muta_le_misurazioni_ricevute():
+    """Era l'unica funzione del core dichiarata pura che modificava un oggetto
+    ricevuto: chi passava le sue misurazioni se le ritrovava cambiate."""
+    misurazioni = [_fatti(ATTESA_A, timestamp="a"), _fatti(ATTESA_B, timestamp="b"),
+                   _fatti(RENDERING, timestamp="c")]
+    prima = [dict(m.lcp_fasi) for m in misurazioni]
+    consenso.combina(misurazioni)
+    assert [dict(m.lcp_fasi) for m in misurazioni] == prima
+
+
 def test_le_fasi_riportate_sono_le_mediane():
     c = consenso.combina([_fatti(ATTESA_A), _fatti(ATTESA_B), _fatti(RENDERING)])
     assert c.fasi_mediane["resourceLoadDelay"] == 3050    # mediana di 3134, 3050, 259

@@ -31,7 +31,7 @@ Funzioni pure.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from statistics import median
 
 from .extract import FASI_LCP, FattiPagina
@@ -134,8 +134,11 @@ def combina(misurazioni: list) -> Consenso:
 
     candidate = [m for m in con_fasi if _dominante(m.lcp_fasi) == dominante] or con_fasi
     candidate.sort(key=lambda m: sum(m.lcp_fasi.values()))
-    rappresentativa = candidate[len(candidate) // 2]
-    rappresentativa.lcp_fasi = dict(mediane)
+    # Copia con le fasi sostituite dalle mediane, non mutazione dell'originale:
+    # era l'unica funzione del core dichiarata pura che modificava un oggetto
+    # ricevuto in ingresso, e chi passava le sue misurazioni se le ritrovava
+    # cambiate sotto i piedi.
+    rappresentativa = replace(candidate[len(candidate) // 2], lcp_fasi=dict(mediane))
 
     elementi = {m.lcp_elemento_snippet for m in distinte if m.lcp_elemento_snippet}
     checklist = {tuple(sorted(m.lcp_discovery.items())) for m in distinte if m.lcp_discovery}
