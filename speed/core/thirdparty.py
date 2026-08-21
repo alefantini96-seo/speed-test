@@ -158,6 +158,19 @@ def riepiloga(richieste: list, url_pagina: str, domini_propri=()) -> RiepilogoTe
     )
 
 
+# Tipi di risorsa come li nomina Lighthouse -> italiano. Sono categorie misurate,
+# non giudizi: tradurne l'etichetta non aggiunge interpretazione.
+TIPI_IT = {
+    "Script": "JavaScript", "Stylesheet": "CSS", "Image": "Immagini",
+    "Font": "Font", "Document": "HTML", "Media": "Media", "Fetch": "Chiamate XHR",
+    "XHR": "Chiamate XHR", "Other": "Altro", "Manifest": "Manifest",
+}
+
+
+def etichetta_tipo(tipo: str) -> str:
+    return TIPI_IT.get(tipo, tipo)
+
+
 def peso_per_tipo(richieste: list) -> dict:
     out: dict = {}
     for richiesta in richieste:

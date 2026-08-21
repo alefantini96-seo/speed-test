@@ -134,6 +134,10 @@ const FONTE = {
   campo:'classificazione su dati di campo',
 };
 const COLORE = { buono:'var(--buono)', da_migliorare:'var(--medio)', scarso:'var(--scarso)' };
+// Tipi di risorsa come li nomina Lighthouse. Sono categorie misurate, non giudizi.
+const TIPI = { Script:'JavaScript', Stylesheet:'CSS', Image:'Immagini', Font:'Font',
+               Document:'HTML', Media:'Media', Fetch:'Chiamate XHR', XHR:'Chiamate XHR',
+               Other:'Altro', Manifest:'Manifest' };
 
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, c =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -238,6 +242,9 @@ function disegna(pagina) {
     <p>${Math.round((terze.byte_totali||0)/1024)} KB su ${terze.richieste_totali||0} richieste,
        di cui <strong>${Math.round((terze.byte_terzi||0)/1024)} KB di terze parti
        (${Math.round(quota*100)}%)</strong>.</p>
+    ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
+      Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
+        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
     <h3>Interventi</h3>${problemi(pagina.problemi)}`;
   $('risultati').appendChild(div);
 }

@@ -17,6 +17,7 @@ from docx.shared import Pt, RGBColor
 
 from ..core.extract import FASI_IT
 from ..core.soglie import ETICHETTE, SOGLIE, formatta, giudizio
+from ..core.thirdparty import etichetta_tipo
 
 GRIGIO = RGBColor(0x6B, 0x72, 0x80)
 NERO = RGBColor(0x1F, 0x23, 0x28)
@@ -305,7 +306,12 @@ def docx_report(esecuzione: dict, percorso):
         _p(doc, f"{terze.get('byte_totali', 0) / 1024:.0f} KB su "
                f"{terze.get('richieste_totali', 0)} richieste, di cui "
                f"{terze.get('byte_terzi', 0) / 1024:.0f} KB di terze parti "
-               f"({quota * 100:.0f}%).", size=10, spazio_dopo=10)
+               f"({quota * 100:.0f}%).", size=10, spazio_dopo=2)
+        per_tipo = pagina.get("peso_per_tipo") or {}
+        if per_tipo:
+            _p(doc, " · ".join(f"{etichetta_tipo(t)} {b / 1024:.0f} KB"
+                               for t, b in list(per_tipo.items())[:6] if b),
+               size=8.5, colore=GRIGIO, spazio_dopo=10)
 
         _problemi(doc, pagina.get("problemi") or [])
 

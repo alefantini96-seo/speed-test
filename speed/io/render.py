@@ -12,6 +12,7 @@ from html import escape
 
 from ..core.extract import FASI_IT
 from ..core.soglie import ETICHETTE, SOGLIE, formatta, giudizio
+from ..core.thirdparty import etichetta_tipo
 
 COLORI = {"buono": "#1a7f4b", "da_migliorare": "#a16207", "scarso": "#b42318", "sconosciuto": "#6b7280"}
 PAROLA = {"buono": "buono", "da_migliorare": "da migliorare", "scarso": "scarso", "sconosciuto": "n/d"}
@@ -198,6 +199,16 @@ def _elementi(righe: list) -> str:
             f'<th class="num">impatto</th></tr>{corpo}</table>')
 
 
+def _peso_per_tipo(per_tipo: dict) -> str:
+    """Di che tipo e' il peso: dice quale intervento serve, dove il riepilogo
+    terze parti dice a chi tocca. Sono complementari."""
+    if not per_tipo:
+        return ""
+    voci = " &middot; ".join(f"{_e(etichetta_tipo(tipo))} {byte / 1024:.0f} KB"
+                             for tipo, byte in list(per_tipo.items())[:6] if byte)
+    return f'<p class="meta">{voci}</p>' if voci else ""
+
+
 def _problemi(problemi: list) -> str:
     if not problemi:
         return "<p>Nessun problema rilevato oltre soglia.</p>"
@@ -268,6 +279,7 @@ def html_report(esecuzione: dict) -> str:
             f"{terze.get('richieste_totali', 0)} richieste, di cui "
             f"<strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB di terze parti "
             f"({quota * 100:.0f}%)</strong>.</p>"
+            f"{_peso_per_tipo(p.get('peso_per_tipo') or {})}"
             f"<h3>Interventi</h3>{_problemi(p.get('problemi') or [])}")
 
     vetrina = ", ".join(
