@@ -141,8 +141,22 @@ ancora, saranno i test su `fixtures/` a segnalarlo.
 
 ## Cosa mostra la pagina
 
-Per ogni URL: i Core Web Vitals reali con l'andamento, e gli interventi in ordine
-di priorita'. Ogni intervento dice tre cose e basta:
+**Per ogni URL: i Core Web Vitals reali con l'andamento e il peso della pagina.**
+Restano per template perche' sono numeri diversi per pagina, ed e' tutto il motivo
+per cui si misurano i template invece del solo dominio.
+
+**Gli interventi stanno invece in una lista sola per il sito.** Misurato su una
+scansione reale a tre template: 10 interventi su 13 comparivano su tutti e tre,
+cioe' 20 schede su 37 erano ripetizioni dello stesso titolo. I file su cui agire
+pero' quasi non coincidono — dal 43% allo 0% di sovrapposizione, perche' il codice
+e' splittato per rotta e le immagini sono contenuto della pagina.
+
+Quindi il titolo si dice una volta, e i bersagli si raggruppano per template. I
+file presenti su **tutti** i template si isolano in cima: sono il bundle condiviso,
+e sistemarli una volta vale per tutto il sito, mentre gli altri sono lavoro per
+pagina. Su un run reale le schede passano da 36 a 15.
+
+Ogni intervento dice tre cose e basta:
 
 - **cosa fare** — il titolo di Lighthouse, che e' gia' un'istruzione;
 - **su cosa** — i file, i selettori DOM col percorso, o i vendor. Su una pagina

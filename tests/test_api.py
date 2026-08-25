@@ -317,6 +317,34 @@ def test_il_download_resta_possibile_con_pagine_fallite():
     assert "$('scarica').disabled = risultati.length === 0;" in sorgente
 
 
+# --- la lista degli interventi e' una sola per il sito ----------------------- #
+
+def test_l_interfaccia_raggruppa_gli_interventi_per_tipo():
+    """Su tre template, 10 interventi su 13 comparivano su tutti e tre: 20 schede
+    su 37 erano ripetizioni del titolo. Il controllo e' sul sorgente perche' e'
+    JavaScript e non c'e' un browser nei test."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "function raggruppa(" in sorgente
+    assert "function disegnaInterventi(" in sorgente
+    assert "disegnaInterventi();" in sorgente, "va richiamata dopo ogni pagina"
+
+
+def test_l_interfaccia_isola_i_bersagli_comuni_a_tutti_i_template():
+    """I file presenti su ogni template sono il bundle condiviso: sistemarli una
+    volta vale per tutto il sito, ed e' una informazione diversa dalle altre."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "function elencoBersagli(" in sorgente
+    assert "su tutti i ${gruppo.quanti} template" in sorgente
+
+
+def test_la_scheda_di_pagina_non_ripete_piu_gli_interventi():
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    inizio = sorgente.index("function disegna(pagina)")
+    fine = sorgente.index("function disegnaFallita(pagina)")
+    scheda = sorgente[inizio:fine]
+    assert "problemi(pagina.problemi" not in scheda,         "gli interventi stanno in una sezione sola, non ripetuti per pagina"
+
+
 def test_url_valido_passa_la_validazione():
     assert valida_url("https://www.esempio.it/") is None
     assert valida_url("esempio.it") is not None

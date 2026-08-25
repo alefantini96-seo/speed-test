@@ -217,6 +217,80 @@ function fasiLcp(fatti) {
   return `<h3>Dove si perde il tempo dell'LCP</h3>${barre}${snippet}`;
 }
 
+// Un intervento per TIPO, non per template.
+//
+// Misurato su un sito reale a tre template: 10 interventi su 13 comparivano su
+// tutti e tre, cioe' 20 schede su 37 erano ripetizioni del titolo. Ma i FILE su
+// cui agire quasi non coincidono — dal 43% al 0% di sovrapposizione — perche' il
+// codice e' splittato per rotta e le immagini sono contenuto della pagina.
+//
+// Quindi: il titolo si dice una volta, i bersagli si raggruppano per template. E
+// i file presenti su TUTTI i template si marcano: sono il bundle comune, e
+// sistemarli una volta vale per tutto il sito.
+function raggruppa(pagine) {
+  const gruppi = new Map();
+  for (const pagina of pagine) {
+    const template = nomeTemplate(pagina.url);
+    for (const p of pagina.problemi || []) {
+      if (!gruppi.has(p.codice)) gruppi.set(p.codice, { ...p, template: [] });
+      const gruppo = gruppi.get(p.codice);
+      gruppo.template.push({ nome: template, bersagli: p.bersagli || [] });
+      // Fra due template si tiene il guadagno piu' alto e la gravita' peggiore.
+      if (ORDINE_GRAVITA[p.gravita] < ORDINE_GRAVITA[gruppo.gravita]) {
+        gruppo.gravita = p.gravita;
+      }
+      if (!gruppo.guadagno && p.guadagno) {
+        gruppo.guadagno = p.guadagno; gruppo.guadagno_tipo = p.guadagno_tipo;
+      }
+    }
+  }
+
+  const totale = pagine.length;
+  const lista = [...gruppi.values()].map(g => {
+    // I bersagli che compaiono su ogni template dove l'intervento c'e'.
+    const insiemi = g.template.map(t => new Set(t.bersagli.map(b => b[0])));
+    const comuni = insiemi.length
+      ? [...insiemi[0]].filter(nome => insiemi.every(i => i.has(nome)))
+      : [];
+    return { ...g, comuni: new Set(comuni), quanti: g.template.length, totale };
+  });
+
+  lista.sort((a, b) =>
+    (ORDINE_GRAVITA[a.gravita] - ORDINE_GRAVITA[b.gravita])
+    || (b.quanti - a.quanti)
+    || (b.guadagno || '').localeCompare(a.guadagno || ''));
+  return lista;
+}
+
+const ORDINE_GRAVITA = { alta: 0, media: 1, bassa: 2 };
+
+function elencoBersagli(gruppo) {
+  const righe = [];
+  const comuni = [...gruppo.comuni];
+  if (comuni.length && gruppo.quanti > 1) {
+    const misure = new Map(gruppo.template[0].bersagli.map(b => [b[0], b]));
+    righe.push(`<li class="gruppo">su tutti i ${gruppo.quanti} template</li>`);
+    for (const nome of comuni.slice(0, 3)) {
+      const [, misura, dettaglio] = misure.get(nome) || ['', '', ''];
+      righe.push(voceBersaglio(nome, misura, dettaglio));
+    }
+  }
+  for (const t of gruppo.template) {
+    const propri = t.bersagli.filter(b => !gruppo.comuni.has(b[0]) || gruppo.quanti === 1);
+    if (!propri.length) continue;
+    righe.push(`<li class="gruppo">${esc(t.nome)}</li>`);
+    for (const [nome, misura, dettaglio] of propri.slice(0, 3)) {
+      righe.push(voceBersaglio(nome, misura, dettaglio));
+    }
+  }
+  return righe.length ? `<ul class="bersagli">${righe.join('')}</ul>` : '';
+}
+
+function voceBersaglio(nome, misura, dettaglio) {
+  return `<li><span class="nome" title="${esc(dettaglio || '')}">${esc(nome)}</span>
+    ${misura ? `<span class="misura">${esc(misura)}</span>` : ''}</li>`;
+}
+
 function scheda(p, indice) {
   const colore = { alta:'var(--scarso)', media:'var(--medio)' }[p.gravita] || 'var(--tenue)';
   // Il guadagno e' il numero che fa decidere: sta accanto al titolo, non sepolto.
@@ -224,11 +298,10 @@ function scheda(p, indice) {
     ? `<span class="guadagno ${p.guadagno_tipo === 'tempo' ? 'tempo' : ''}">${
         p.guadagno_tipo === 'tempo' ? '−' : ''}${esc(p.guadagno)}</span>`
     : '';
-  // Su cosa si mette mano: file, selettori DOM, entita'. Prima stava in fondo.
-  const bersagli = (p.bersagli || []).length ? `<ul class="bersagli">${
-    p.bersagli.map(([nome, misura, dettaglio]) => `<li>
-      <span class="nome" title="${esc(dettaglio || '')}">${esc(nome)}</span>
-      ${misura ? `<span class="misura">${esc(misura)}</span>` : ''}</li>`).join('')}</ul>` : '';
+  // Su cosa si mette mano, raggruppato per template. Prima stava in fondo.
+  const bersagli = elencoBersagli(p);
+  const quanti = p.totale > 1
+    ? `<span class="quanti">su ${p.quanti} template su ${p.totale}</span>` : '';
 
   // Tutto il resto — evidenza, testo di Lighthouse, note metodologiche, provenienza —
   // sta dietro un "perche'": serve a difendere il dato, non a decidere cosa fare.
@@ -243,7 +316,7 @@ function scheda(p, indice) {
     <div class="testa">
       <h4>${esc(p.titolo)}${marchio}</h4>${guadagno}
     </div>
-    <p class="chi">${esc(p.responsabile)}</p>
+    <p class="chi">${quanti}${quanti ? ' · ' : ''}${esc(p.responsabile)}</p>
     ${bersagli}
     <details class="perche">
       <summary>perché</summary>
@@ -272,6 +345,22 @@ function problemi(lista, idPagina) {
       Mostra gli altri ${lista.length - VISIBILI} interventi</button>`;
 }
 
+function disegnaInterventi() {
+  const vecchia = document.getElementById('interventi');
+  if (vecchia) vecchia.remove();
+  if (!risultati.length) return;
+
+  const lista = raggruppa(risultati);
+  const div = document.createElement('div');
+  div.className = 'riquadro';
+  div.id = 'interventi';
+  div.innerHTML = `<h2>Interventi</h2>
+    <p class="meta">${lista.length} interventi per il sito ·
+      i file su cui agire sono raggruppati per template</p>
+    ${problemi(lista, 'sito')}`;
+  $('risultati').appendChild(div);
+}
+
 function disegnaFallita(pagina) {
   // Una pagina mancata resta visibile al suo posto: sparire darebbe l'idea che
   // il report sia completo quando non lo e'.
@@ -295,7 +384,7 @@ function disegna(pagina) {
   const div = document.createElement('div');
   div.className = 'riquadro';
   div.innerHTML = `
-    <h2>${esc(new URL(pagina.url).pathname === '/' ? 'Home' : new URL(pagina.url).pathname)}</h2>
+    <h2>${esc(nomeTemplate(pagina.url))}</h2>
     <p class="url">${esc(pagina.url)}</p>
     <p class="meta">${pagina.misurazioni} misurazioni di laboratorio${
       pagina.consenso ? ' · ' + esc(pagina.consenso) : ''}</p>
@@ -307,8 +396,7 @@ function disegna(pagina) {
        (${Math.round(quota*100)}%)</strong>.</p>
     ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
       Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
-        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
-    <h3>Interventi</h3>${problemi(pagina.problemi, indicePagina)}`;
+        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}`;
   $('risultati').appendChild(div);
 }
 
@@ -369,6 +457,7 @@ async function avvia() {
       } else {
         risultati.push(dati);
         disegna(dati);
+        disegnaInterventi();
       }
     } catch (e) {
       const fallita = { template: nomeTemplate(urls[i]), url: urls[i],

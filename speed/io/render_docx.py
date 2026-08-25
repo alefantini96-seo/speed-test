@@ -17,6 +17,7 @@ from docx.shared import Pt, RGBColor
 
 from ..core.extract import FASI_IT
 from ..core.soglie import ETICHETTE, SOGLIE, formatta, giudizio
+from ..core.aggregazione import raggruppa
 from ..core.thirdparty import etichetta_tipo
 
 GRIGIO = RGBColor(0x6B, 0x72, 0x80)
@@ -212,6 +213,73 @@ def _elementi(doc, righe: list):
     doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
 
+def _interventi(doc, esecuzione: dict):
+    """Un intervento per tipo, non ripetuto per ogni template.
+
+    Su una scansione reale a tre template le voci passano da 37 a 14: il titolo
+    era lo stesso, cambiavano solo i file — e quelli restano, raggruppati, con i
+    comuni isolati perche' sistemarli una volta vale per tutto il sito.
+    """
+    lista = raggruppa(esecuzione)
+    if not lista:
+        return
+    doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+    doc.add_heading("Interventi", level=1)
+    _p(doc, f"{len(lista)} interventi per il sito, con i file su cui agire "
+           f"raggruppati per template.", size=9, colore=GRIGIO, spazio_dopo=10)
+
+    for intervento in lista:
+        titolo = intervento.titolo
+        if not intervento.azionabile:
+            titolo += "  [non azionabile direttamente]"
+        _p(doc, titolo, size=11, grassetto=True,
+           colore=GRAVITA.get(intervento.gravita, GRIGIO), spazio_dopo=1)
+        quanti = (f"su {intervento.quanti} template su {intervento.totale_template} · "
+                  if intervento.totale_template > 1 else "")
+        guadagno = f" · {intervento.guadagno}" if intervento.guadagno else ""
+        fonte = FONTE.get(intervento.fonte, intervento.fonte)
+        _p(doc, f"{quanti}interviene: {intervento.responsabile}{guadagno} · {fonte}",
+           size=8.5, colore=GRIGIO, spazio_dopo=4)
+        _elenco(doc, intervento.evidenza, size=9, colore=GRIGIO)
+        _elenco(doc, intervento.azioni, size=10)
+        _bersagli_raggruppati(doc, intervento)
+        if intervento.nota:
+            _p(doc, intervento.nota, size=8.5, colore=GRIGIO, corsivo=True, spazio_dopo=2)
+        if intervento.documentazione:
+            _p(doc, f"Documentazione: {intervento.documentazione}",
+               size=8, colore=GRIGIO, spazio_dopo=10)
+        else:
+            _p(doc, "", size=4, spazio_dopo=6)
+
+
+def _bersagli_raggruppati(doc, intervento):
+    """I file su cui agire: prima i comuni a tutti i template, poi i propri."""
+    righe = []
+    for nome in intervento.comuni[:4]:
+        _n, misura, _d = intervento.misura_di(nome)
+        righe.append(("tutti", nome, misura))
+    for template in intervento.template:
+        for nome, misura, _d in intervento.propri_di(template)[:4]:
+            righe.append((template.nome[:12], nome, misura))
+    if not righe:
+        return
+    tabella = doc.add_table(rows=1, cols=3)
+    tabella.style = "Table Grid"
+    for cella, testo in zip(tabella.rows[0].cells, ["Dove", "Su cosa agire", "Impatto"]):
+        run = cella.paragraphs[0].add_run(testo)
+        run.bold = True
+        run.font.size = Pt(8)
+    for dove, nome, misura in righe:
+        celle = tabella.add_row().cells
+        for indice, testo in enumerate([dove, nome, misura]):
+            run = celle[indice].paragraphs[0].add_run(str(testo))
+            run.font.size = Pt(7.5 if indice == 1 else 8)
+            if indice == 0:
+                run.font.color.rgb = GRIGIO
+        celle[2].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+
 def _problemi(doc, problemi: list):
     _p(doc, "Interventi", size=10, grassetto=True, spazio_dopo=6)
     if not problemi:
@@ -316,7 +384,9 @@ def docx_report(esecuzione: dict, percorso):
                                for t, b in list(per_tipo.items())[:6] if b),
                size=8.5, colore=GRIGIO, spazio_dopo=10)
 
-        _problemi(doc, pagina.get("problemi") or [])
+
+
+    _interventi(doc, esecuzione)
 
     doc.add_paragraph()
     vetrina = ", ".join(

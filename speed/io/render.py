@@ -12,6 +12,7 @@ from html import escape
 
 from ..core.extract import FASI_IT
 from ..core.soglie import ETICHETTE, SOGLIE, formatta, giudizio
+from ..core.aggregazione import raggruppa
 from ..core.thirdparty import etichetta_tipo
 
 COLORI = {"buono": "#1a7f4b", "da_migliorare": "#a16207", "scarso": "#b42318", "sconosciuto": "#6b7280"}
@@ -51,6 +52,8 @@ li { margin:3px 0; }
 .evidenza li { color:var(--tenue); font-size:13px; }
 .nota { font-size:12px; color:var(--tenue); font-style:italic; margin-top:8px; }
 .nota a { color:var(--tenue); }
+.guadagno { float:right; font-size:13px; font-weight:600; color:#b42318;
+            font-variant-numeric:tabular-nums; }
 .marchio { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:9px;
            font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.04em;
            color:#6b7280; border:1px solid #d1d5db; vertical-align:middle; }
@@ -209,6 +212,67 @@ def _peso_per_tipo(per_tipo: dict) -> str:
     return f'<p class="meta">{voci}</p>' if voci else ""
 
 
+def _bersagli_raggruppati(intervento) -> str:
+    """I file su cui agire, raggruppati per template.
+
+    I comuni si isolano in cima: sono il bundle condiviso, e sistemarli una volta
+    vale per tutto il sito. Gli altri sono lavoro per pagina.
+    """
+    righe = []
+    for nome in intervento.comuni[:4]:
+        _n, misura, dettaglio = intervento.misura_di(nome)
+        righe.append(f'<tr><td class="tag">tutti</td>'
+                     f'<td class="risorsa" title="{_e(dettaglio)}">{_e(nome)}</td>'
+                     f'<td class="num">{_e(misura)}</td></tr>')
+    for template in intervento.template:
+        propri = intervento.propri_di(template)[:4]
+        for nome, misura, dettaglio in propri:
+            righe.append(f'<tr><td class="tag">{_e(template.nome[:10])}</td>'
+                         f'<td class="risorsa" title="{_e(dettaglio)}">{_e(nome)}</td>'
+                         f'<td class="num">{_e(misura)}</td></tr>')
+    if not righe:
+        return ""
+    return (f'<table class="risorse"><tr><th>dove</th><th>su cosa agire</th>'
+            f'<th class="num">impatto</th></tr>{"".join(righe)}</table>')
+
+
+def _interventi(esecuzione: dict) -> str:
+    """Un intervento per tipo, non ripetuto per ogni template.
+
+    Su una scansione reale a tre template le schede passano da 37 a 14: il titolo
+    era lo stesso, cambiavano solo i file — e quelli restano, raggruppati.
+    """
+    lista = raggruppa(esecuzione)
+    if not lista:
+        return ""
+    blocchi = []
+    for intervento in lista:
+        colore = GRAVITA.get(intervento.gravita, "#6b7280")
+        guadagno = (f'<span class="guadagno">{_e(intervento.guadagno)}</span>'
+                    if intervento.guadagno else "")
+        quanti = (f"su {intervento.quanti} template su {intervento.totale_template}"
+                  if intervento.totale_template > 1 else "")
+        marchio = ("" if intervento.azionabile else
+                   '<span class="marchio">non azionabile direttamente</span>')
+        evidenza = "".join(f"<li>{_e(x)}</li>" for x in intervento.evidenza)
+        azioni = "".join(f"<li>{_e(x)}</li>" for x in intervento.azioni)
+        doc = (f'<p class="nota"><a href="{_e(intervento.documentazione)}">'
+               f"Documentazione Google</a></p>" if intervento.documentazione else "")
+        blocchi.append(
+            f'<div class="problema" style="border-left-color:{colore}">'
+            f'<h4>{_e(intervento.titolo)}{marchio}{guadagno}</h4>'
+            f'<p class="meta">{_e(quanti)}{" &middot; " if quanti else ""}'
+            f'interviene: {_e(intervento.responsabile)} &middot; '
+            f'{_e(FONTE.get(intervento.fonte, intervento.fonte))}</p>'
+            f'<ul class="evidenza">{evidenza}</ul><ul>{azioni}</ul>'
+            f'{_bersagli_raggruppati(intervento)}'
+            f'{f"<p class=nota>{_e(intervento.nota)}</p>" if intervento.nota else ""}'
+            f"{doc}</div>")
+    return (f'<h2>Interventi</h2><p class="meta">{len(lista)} interventi per il sito, '
+            f"con i file su cui agire raggruppati per template</p>"
+            f"{''.join(blocchi)}")
+
+
 def _problemi(problemi: list) -> str:
     if not problemi:
         return "<p>Nessun problema rilevato oltre soglia.</p>"
@@ -289,7 +353,7 @@ def html_report(esecuzione: dict) -> str:
             f"<strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB di terze parti "
             f"({quota * 100:.0f}%)</strong>.</p>"
             f"{_peso_per_tipo(p.get('peso_per_tipo') or {})}"
-            f"<h3>Interventi</h3>{_problemi(p.get('problemi') or [])}")
+            )
 
     vetrina = ", ".join(
         f"{_e(p['template'])} {(p.get('fatti') or {}).get('performance_score')}"
@@ -313,6 +377,7 @@ messo online oggi entra in questi numeri gradualmente e si legge pulito solo dop
 quattro settimane. I fatti diagnostici (elemento LCP, fasi, peso) vengono invece da
 una misurazione di laboratorio, che serve a capire <em>perche'</em>, non <em>quanto</em>.</div>
 {"".join(sezioni)}
+{_interventi(esecuzione)}
 <footer>Punteggi PageSpeed Insights al momento della rilevazione: {vetrina or 'n/d'}.
 Sono riportati solo come riferimento — variano fra due misurazioni identiche e non
 vengono usati per nessuna valutazione in questo documento.<br>
