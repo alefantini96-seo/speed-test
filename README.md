@@ -139,6 +139,28 @@ documentazione: Lighthouse 13 ha sostituito i vecchi audit diagnostici con gli
 "Insights" (`lcp-breakdown-insight`, `lcp-discovery-insight`). Quando cambieranno
 ancora, saranno i test su `fixtures/` a segnalarlo.
 
+## Cosa mostra la pagina
+
+Per ogni URL: i Core Web Vitals reali con l'andamento, e gli interventi in ordine
+di priorita'. Ogni intervento dice tre cose e basta:
+
+- **cosa fare** — il titolo di Lighthouse, che e' gia' un'istruzione;
+- **su cosa** — i file, i selettori DOM col percorso, o i vendor. Su una pagina
+  reale sono nominati per tutti e quattordici gli interventi;
+- **quanto vale** — i millisecondi che Lighthouse stima di risparmiare.
+
+Sul terzo punto vale una precisazione, perche' e' un limite del dato e non del
+tool: **Lighthouse dichiara un tempo solo per una parte degli interventi** — su
+quattordici di una pagina reale erano sei. Per altri da' un peso in KB. Per i
+restanti non da' niente, e li' non compare nessun numero: convertire byte in
+secondi con una regola nostra sarebbe inventare. Ed e' comunque una stima di
+laboratorio, in millisecondi simulati: non il tempo che gli utenti recuperano.
+
+Tutto il resto — evidenza, provenienza del testo, note metodologiche — sta dietro
+un «perche'» richiudibile. Serve a difendere il dato davanti a un cliente, non a
+decidere cosa fare. I primi cinque interventi sono visibili, gli altri dietro un
+bottone: sotto il quinto nessuno agisce subito.
+
 ## Master plan: il frammento per l'xlsx
 
     python -m speed masterplan "out/dati velocita 21082026.json"

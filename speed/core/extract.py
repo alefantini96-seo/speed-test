@@ -253,6 +253,8 @@ def _scomponi_descrizione(testo: str):
 MISURE_NOTE = {
     "wastedMs": "ms", "duration": "ms", "mainThreadTime": "ms", "blockingTime": "ms",
     "reflowTime": "ms", "navStartToEndTime": "ms",
+    # bootup-time misura il costo CPU per script con chiavi tutte sue.
+    "total": "ms", "scripting": "ms", "scriptParseCompile": "ms",
     "transferSize": "byte", "wastedBytes": "byte",
     "totalBytes": "byte", "resourceBytes": "byte", "unusedBytes": "byte",
     "score": "",        # CLS: adimensionale
@@ -406,8 +408,10 @@ def _classifica_riga(riga: dict, propri: set, e_prima_parte) -> tuple:
             url=url,
             byte_totali=int(riga.get("totalBytes") or riga.get("transferSize") or 0),
             byte_sprecati=int(riga.get("wastedBytes") or 0),
+            # `total` e' la chiave di bootup-time: il costo CPU per script. Senza,
+            # quell'intervento nominava i file senza dire quanto costano.
             ms_sprecati=float(riga.get("wastedMs") or riga.get("duration")
-                              or riga.get("mainThreadTime") or 0.0),
+                              or riga.get("mainThreadTime") or riga.get("total") or 0.0),
             quota_sprecata=float(riga.get("wastedPercent") or 0.0),
             terza_parte=bool(propri) and not e_prima_parte(urlparse(url).netloc, propri),
             motivo=motivi[0] if motivi else "",

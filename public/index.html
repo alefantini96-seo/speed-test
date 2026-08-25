@@ -52,9 +52,29 @@ h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(-
 .fase .barra { height:9px; background:#dbe1e8; border-radius:2px; }
 .fase .barra.dom { background:var(--scarso); }
 .fase .pc { width:44px; text-align:right; font-variant-numeric:tabular-nums; }
-.problema { border:1px solid var(--bordo); border-left:3px solid var(--tenue);
-            border-radius:6px; padding:12px 14px; margin:10px 0; }
-.problema h4 { margin:0 0 2px; font-size:15px; }
+.intervento { border:1px solid var(--bordo); border-left:3px solid var(--tenue);
+              border-radius:6px; padding:12px 14px; margin:10px 0; }
+.intervento .testa { display:flex; align-items:baseline; gap:12px;
+                     justify-content:space-between; }
+.intervento h4 { margin:0; font-size:15px; font-weight:600; }
+.guadagno { flex:none; font-size:13px; font-weight:600; color:var(--tenue);
+            font-variant-numeric:tabular-nums; white-space:nowrap; }
+.guadagno.tempo { color:var(--scarso); }
+.chi { margin:2px 0 0; font-size:11px; text-transform:uppercase;
+       letter-spacing:.04em; color:var(--tenue); }
+ul.bersagli { list-style:none; margin:10px 0 0; padding:0; }
+ul.bersagli li { display:flex; justify-content:space-between; gap:12px;
+                 font-size:12px; padding:3px 0; border-bottom:1px solid var(--bordo); }
+ul.bersagli .nome { font-family:ui-monospace,Consolas,monospace; word-break:break-all; }
+ul.bersagli .misura { flex:none; color:var(--tenue); font-variant-numeric:tabular-nums; }
+details.perche { margin-top:10px; }
+details.perche > summary { font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+                           color:var(--tenue); cursor:pointer; list-style:none; }
+details.perche > summary::before { content:"▸ "; }
+details.perche[open] > summary::before { content:"▾ "; }
+button.ancora { width:100%; margin-top:10px; background:transparent; color:var(--testo);
+                border:1px dashed var(--bordo); font-weight:600; }
+button.ancora:hover { border-color:var(--testo); }
 ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
 li { margin:3px 0; }
 .evidenza li { color:var(--tenue); font-size:13px; }
@@ -197,34 +217,59 @@ function fasiLcp(fatti) {
   return `<h3>Dove si perde il tempo dell'LCP</h3>${barre}${snippet}`;
 }
 
-function problemi(lista) {
+function scheda(p, indice) {
+  const colore = { alta:'var(--scarso)', media:'var(--medio)' }[p.gravita] || 'var(--tenue)';
+  // Il guadagno e' il numero che fa decidere: sta accanto al titolo, non sepolto.
+  const guadagno = p.guadagno
+    ? `<span class="guadagno ${p.guadagno_tipo === 'tempo' ? 'tempo' : ''}">${
+        p.guadagno_tipo === 'tempo' ? '−' : ''}${esc(p.guadagno)}</span>`
+    : '';
+  // Su cosa si mette mano: file, selettori DOM, entita'. Prima stava in fondo.
+  const bersagli = (p.bersagli || []).length ? `<ul class="bersagli">${
+    p.bersagli.map(([nome, misura, dettaglio]) => `<li>
+      <span class="nome" title="${esc(dettaglio || '')}">${esc(nome)}</span>
+      ${misura ? `<span class="misura">${esc(misura)}</span>` : ''}</li>`).join('')}</ul>` : '';
+
+  // Tutto il resto — evidenza, testo di Lighthouse, note metodologiche, provenienza —
+  // sta dietro un "perche'": serve a difendere il dato, non a decidere cosa fare.
+  const evidenza = (p.evidenza||[]).map(e => `<li>${esc(e)}</li>`).join('');
+  const azioni = (p.azioni||[]).map(a => `<li>${esc(a)}</li>`).join('');
+  const doc = p.documentazione
+    ? `<p><a href="${esc(p.documentazione)}" target="_blank" rel="noopener">Documentazione Google</a></p>` : '';
+  const marchio = p.azionabile === false
+    ? '<span class="marchio">non azionabile</span>' : '';
+
+  return `<div class="intervento" style="border-left-color:${colore}" data-indice="${indice}">
+    <div class="testa">
+      <h4>${esc(p.titolo)}${marchio}</h4>${guadagno}
+    </div>
+    <p class="chi">${esc(p.responsabile)}</p>
+    ${bersagli}
+    <details class="perche">
+      <summary>perché</summary>
+      <ul class="evidenza">${evidenza}</ul>
+      ${azioni ? `<ul>${azioni}</ul>` : ''}
+      ${p.nota ? `<p class="nota">${esc(p.nota)}</p>` : ''}
+      <p class="nota">Fonte: ${esc(FONTE[p.fonte] || p.fonte)}.</p>
+      ${doc}
+    </details>
+  </div>`;
+}
+
+const VISIBILI = 5;
+
+function problemi(lista, idPagina) {
   if (!lista?.length) return '<p class="attesa">Nessun problema rilevato oltre soglia.</p>';
-  return lista.map(p => {
-    const colore = { alta:'var(--scarso)', media:'var(--medio)' }[p.gravita] || 'var(--tenue)';
-    const evidenza = (p.evidenza||[]).map(e => `<li>${esc(e)}</li>`).join('');
-    const azioni = (p.azioni||[]).map(a => `<li>${esc(a)}</li>`).join('');
-    const risorse = (p.risorse||[]).length ? `<table class="risorse">
-      <tr><th></th><th>risorsa</th><th class="num">impatto</th></tr>
-      ${p.risorse.map(([u,m,t]) => `<tr><td class="tag">${t?'3P':'1P'}</td>
-        <td class="risorsa">${esc(u)}</td><td class="num">${esc(m)}</td></tr>`).join('')}
-      </table>` : '';
-    const elementi = (p.elementi||[]).length ? `<table class="risorse">
-      <tr><th>elemento nel DOM</th><th class="num">impatto</th></tr>
-      ${p.elementi.map(([rif,mis,path]) => `<tr><td class="risorsa">${esc(rif)}
-        ${path ? `<br><span style="color:var(--tenue);font-size:10px">${esc(path)}</span>` : ''}
-        </td><td class="num">${esc(mis)}</td></tr>`).join('')}
-      </table>` : '';
-    const doc = p.documentazione
-      ? `<p class="nota"><a href="${esc(p.documentazione)}" target="_blank" rel="noopener">Documentazione Google</a></p>` : '';
-    const marchio = p.azionabile === false
-      ? '<span class="marchio">non azionabile direttamente</span>' : '';
-    return `<div class="problema" style="border-left-color:${colore}">
-      <h4>${esc(p.titolo)}${marchio}</h4>
-      <p class="meta">priorità ${esc(p.gravita)} · interviene: ${esc(p.responsabile)} ·
-        ${esc(FONTE[p.fonte] || p.fonte)}</p>
-      <ul class="evidenza">${evidenza}</ul><ul>${azioni}</ul>${risorse}${elementi}
-      ${p.nota ? `<p class="nota">${esc(p.nota)}</p>` : ''}${doc}</div>`;
-  }).join('');
+  const primi = lista.slice(0, VISIBILI).map(scheda).join('');
+  if (lista.length <= VISIBILI) return primi;
+  // Sotto il quinto nessuno agisce subito: il resto sta dietro un bottone, non
+  // sparisce.
+  const resto = lista.slice(VISIBILI).map(scheda).join('');
+  return `${primi}
+    <div class="altri" id="altri-${idPagina}" hidden>${resto}</div>
+    <button class="ancora" data-pagina="${idPagina}"
+            data-quanti="${lista.length - VISIBILI}">
+      Mostra gli altri ${lista.length - VISIBILI} interventi</button>`;
 }
 
 function disegnaFallita(pagina) {
@@ -241,7 +286,10 @@ function disegnaFallita(pagina) {
   $('risultati').appendChild(div);
 }
 
+let indicePagina = 0;
+
 function disegna(pagina) {
+  indicePagina += 1;
   const terze = pagina.terze_parti || {};
   const quota = terze.byte_totali ? terze.byte_terzi / terze.byte_totali : 0;
   const div = document.createElement('div');
@@ -260,7 +308,7 @@ function disegna(pagina) {
     ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
       Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
         .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
-    <h3>Interventi</h3>${problemi(pagina.problemi)}`;
+    <h3>Interventi</h3>${problemi(pagina.problemi, indicePagina)}`;
   $('risultati').appendChild(div);
 }
 
@@ -372,6 +420,13 @@ async function scarica() {
   }
   $('scarica').disabled = false;
 }
+
+$('risultati').addEventListener('click', (evento) => {
+  const bottone = evento.target.closest('.ancora');
+  if (!bottone) return;
+  document.getElementById(`altri-${bottone.dataset.pagina}`).hidden = false;
+  bottone.remove();
+});
 
 $('avvia').addEventListener('click', avvia);
 $('scarica').addEventListener('click', scarica);

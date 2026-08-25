@@ -108,6 +108,9 @@ class Problema:
     azionabile: bool = True
     risparmio: float = 0.0
     azione_breve: str = ""           # imperativo di Lighthouse, quando il titolo non lo e'
+    guadagno: str = ""               # "1.950 ms su TBT" | "521 KB" | ""
+    guadagno_tipo: str = ""          # tempo | peso | "" — l'unita' va dichiarata
+    bersagli: list = field(default_factory=list)   # (etichetta, misura, dettaglio)
     metrica: str = ""                # metrica di campo su cui e' calibrata la priorita'
     peso: float = 1.0                # peso di traffico del template (1 = non pesato)
 
@@ -229,6 +232,51 @@ def _misura_voce(voce) -> str:
     return " · ".join(parti)
 
 
+# Metriche di laboratorio che sono davvero un tempo. Il CLS non lo e'.
+METRICHE_TEMPO = ("LCP", "FCP", "TBT", "INP", "SI", "TTFB")
+
+
+def guadagno_di(opportunita) -> tuple:
+    """(testo, tipo). Quanto vale l'intervento, con l'unita' che Lighthouse gli da'.
+
+    Il tempo si mostra solo dove Lighthouse lo dichiara: su tredici interventi di
+    una pagina reale erano cinque. Per gli altri c'e' un peso in KB, o niente —
+    e in quel caso non si scrive nulla, invece di convertire byte in secondi con
+    una regola inventata.
+
+    E' comunque una stima di LABORATORIO, in millisecondi simulati con throttling:
+    non e' il tempo che gli utenti reali recuperano. L'interfaccia lo dichiara.
+    """
+    tempi = {m: v for m, v in (opportunita.risparmi or {}).items()
+             if m in METRICHE_TEMPO and v > 0}
+    if tempi:
+        metrica = max(tempi, key=tempi.get)
+        valore = tempi[metrica]
+        return (f"{valore:,.0f}".replace(",", ".") + f" ms su {metrica}", "tempo")
+
+    display = (opportunita.display or "").strip()
+    if display and any(c.isdigit() for c in display):
+        return (display, "peso")
+    return ("", "")
+
+
+def bersagli_di(opportunita, massimo: int = 3) -> list:
+    """Su cosa si mette mano: i file, i nodi del DOM, o le entita' nominate.
+
+    Una lista sola e corta: e' la prima cosa che serve a chi implementa, e stava
+    in fondo alla scheda dove nessuno arrivava.
+    """
+    fuori = []
+    for elemento in opportunita.elementi[:massimo]:
+        fuori.append((elemento.riferimento, _misura_elemento(elemento), elemento.percorso))
+    for risorsa in opportunita.risorse[:massimo - len(fuori)]:
+        nome = risorsa.url.split("?")[0].rsplit("/", 1)[-1] or risorsa.url
+        fuori.append((nome, _misura(risorsa), risorsa.url))
+    for voce in opportunita.voci[:massimo - len(fuori)]:
+        fuori.append((voce.etichetta.strip(), _misura_voce(voce), ""))
+    return fuori[:massimo]
+
+
 def _misura_elemento(elemento) -> str:
     if not elemento.misura:
         return ""
@@ -242,6 +290,7 @@ def _misura_elemento(elemento) -> str:
 def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Problema:
     gravita, spiegazione, metrica = priorita_dal_campo(opportunita, campo)
     puo_agire = azionabile(opportunita)
+    guadagno = guadagno_di(opportunita)
 
     evidenza = []
     if opportunita.display:
@@ -299,6 +348,9 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
         azionabile=puo_agire,
         risparmio=opportunita.peso_relativo,
         azione_breve=opportunita.etichetta_azione,
+        guadagno=guadagno[0],
+        guadagno_tipo=guadagno[1],
+        bersagli=bersagli_di(opportunita),
         metrica=metrica,
     )
 
@@ -391,6 +443,10 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
         azioni=azioni,
         nota=nota,
         metrica="largest_contentful_paint",
+        bersagli=([(fatti.lcp_elemento_selettore or "elemento LCP",
+                    f"{quota * 100:.0f}% del tempo LCP",
+                    fatti.lcp_elemento_snippet[:160])]
+                  if fatti.lcp_elemento_snippet else []),
     )
 
 

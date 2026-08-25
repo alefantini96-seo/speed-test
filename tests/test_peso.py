@@ -128,3 +128,70 @@ def test_diagnostica_applica_il_peso_a_tutti_i_problemi():
     fatti = FattiPagina(url="https://x.it/", form_factor="PHONE")
     problemi = diagnose.diagnostica(fatti, {}, None, None, peso=0.25)
     assert all(p.peso == 0.25 for p in problemi)
+
+
+# --- quanto vale un intervento e su cosa agisce ------------------------------ #
+
+def _opportunita(**kwargs):
+    from speed.core.extract import Opportunita
+    base = dict(audit="x", titolo="T", descrizione="", documentazione="", display="",
+                score=0, risparmi={})
+    base.update(kwargs)
+    return Opportunita(**base)
+
+
+def test_il_guadagno_e_un_tempo_quando_lighthouse_lo_da():
+    testo, tipo = diagnose.guadagno_di(_opportunita(risparmi={"LCP": 1350.0}))
+    assert (testo, tipo) == ("1.350 ms su LCP", "tempo")
+
+
+def test_fra_piu_metriche_vince_il_risparmio_maggiore():
+    testo, _ = diagnose.guadagno_di(_opportunita(risparmi={"LCP": 600.0, "FCP": 1100.0}))
+    assert "1.100 ms su FCP" == testo
+
+
+def test_il_cls_non_e_un_tempo():
+    """Il CLS e' adimensionale: non puo' finire in una casella che dice millisecondi."""
+    testo, tipo = diagnose.guadagno_di(_opportunita(risparmi={"CLS": 0.095},
+                                                   display="Risparmio di 0,095"))
+    assert tipo == "peso", "senza metriche di tempo si ripiega sul displayValue"
+
+
+def test_senza_tempo_si_mostra_il_peso():
+    testo, tipo = diagnose.guadagno_di(
+        _opportunita(display="Risparmio stimato di 521 KiB"))
+    assert (testo, tipo) == ("Risparmio stimato di 521 KiB", "peso")
+
+
+def test_senza_niente_non_si_inventa_un_numero():
+    """Per otto interventi su tredici Lighthouse non da' un tempo: convertire byte
+    in secondi con una regola nostra sarebbe inventare."""
+    assert diagnose.guadagno_di(_opportunita()) == ("", "")
+    assert diagnose.guadagno_di(_opportunita(display="Nessun problema")) == ("", "")
+
+
+def test_i_bersagli_mettono_prima_i_nodi_del_dom():
+    from speed.core.extract import Elemento, Risorsa
+    opportunita = _opportunita(
+        elementi=[Elemento(selettore="div.hero", misura=0.09)],
+        risorse=[Risorsa(url="https://x.it/a.js", byte_sprecati=51200)])
+    bersagli = diagnose.bersagli_di(opportunita)
+    assert bersagli[0][0] == "div.hero", "il selettore e' cio' che si cerca per primo"
+    assert bersagli[1][0] == "a.js", "il file si nomina senza il percorso completo"
+
+
+def test_i_bersagli_sono_pochi():
+    from speed.core.extract import Risorsa
+    opportunita = _opportunita(
+        risorse=[Risorsa(url=f"https://x.it/{i}.js", byte_sprecati=1000) for i in range(9)])
+    assert len(diagnose.bersagli_di(opportunita)) == 3
+
+
+def test_il_bersaglio_porta_il_dettaglio_per_esteso():
+    """Il nome breve sta nella scheda, l'URL intero nel titolo al passaggio del mouse."""
+    from speed.core.extract import Risorsa
+    bersagli = diagnose.bersagli_di(
+        _opportunita(risorse=[Risorsa(url="https://x.it/lungo/percorso/a.js",
+                                      byte_sprecati=1000)]))
+    assert bersagli[0][0] == "a.js"
+    assert bersagli[0][2] == "https://x.it/lungo/percorso/a.js"
