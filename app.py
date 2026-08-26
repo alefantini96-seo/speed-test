@@ -9,13 +9,12 @@ Nessuna dipendenza: WSGI e' nella libreria standard. La logica vera sta in
 `speed/web.py`, che e' testabile senza alzare un server.
 
     /                  la pagina
-    POST /api/analizza {url, password} -> analisi di una singola pagina
-    POST /api/report   {pagine}        -> report Word da scaricare
+    POST /api/analizza {url}    -> analisi di una singola pagina
+    POST /api/report   {pagine} -> report Word da scaricare
 """
 from __future__ import annotations
 
 import asyncio
-import hmac
 import json
 import os
 import tempfile
@@ -53,27 +52,13 @@ def _leggi(environ) -> dict:
         return {}
 
 
-def _password_valida(richiesta: dict) -> bool:
-    """Senza SPEED_PASSWORD impostata l'app resta aperta: e' una scelta esplicita
-    di chi la installa, non un default che nascondiamo.
-
-    Il confronto usa compare_digest: `==` esce al primo carattere diverso, e il
-    tempo di risposta lascia indovinare la password un carattere alla volta.
-    """
-    attesa = os.getenv("SPEED_PASSWORD")
-    if not attesa:
-        return True
-    fornita = richiesta.get("password")
-    if not isinstance(fornita, str):
-        return False
-    return hmac.compare_digest(fornita.encode("utf-8"), attesa.encode("utf-8"))
-
-
 # --------------------------------------------------------------------------- #
 #  Limite di richieste
 #
-#  Senza SPEED_PASSWORD chiunque abbia il link consuma le 25.000 richieste PSI
-#  giornaliere del progetto Google di chi ospita l'app.
+#  L'app non ha autenticazione: chiunque abbia il link consuma le 25.000
+#  richieste PSI giornaliere del progetto Google di chi la ospita. Questo limite
+#  e' l'unico freno lato applicazione; se serve una barriera vera, si mette
+#  davanti (Deployment Protection di Vercel), non qui dentro.
 #
 #  LIMITE DICHIARATO: il contatore vive nella memoria dell'istanza. Su una
 #  piattaforma serverless le istanze sono piu' d'una e vengono ricreate, quindi
@@ -119,52 +104,34 @@ def _pagina(avvia):
     return [corpo]
 
 
-def _stato(avvia, richiesta: dict):
+def _stato(avvia):
     """Dice quali variabili d'ambiente il server vede davvero.
 
     Serve a distinguere in un secondo fra "non l'ho impostata", "l'ho impostata
     dopo il deploy e non e' stata iniettata" e "l'ho impostata sull'ambiente
-    sbagliato". Non espone MAI un valore: al massimo la lunghezza, che basta a
-    smascherare un incollaggio troncato o una stringa vuota.
+    sbagliato".
 
-    Con la password configurata la richiede, come gli altri endpoint. Senza,
-    risponde in forma ridotta — solo presenza, niente lunghezze — perche' altrimenti
-    annuncerebbe a chiunque abbia il link che l'app e' senza protezione, insieme a
-    quanto e' lunga la chiave. La diagnosi resta possibile proprio nel caso in cui
-    serve: quando la password non e' arrivata al server.
+    L'endpoint e' aperto come il resto dell'app, quindi non dice ne' il valore
+    ne' la lunghezza della chiave: solo se il server la vede. La lunghezza
+    smaschererebbe un incollaggio troncato, ma la direbbe a chiunque abbia il
+    link, e per quel caso basta cancellare e reincollare la variabile.
     """
-    protetta = bool(os.getenv("SPEED_PASSWORD"))
-    if protetta and not _password_valida(richiesta):
-        return _json(avvia, "401 Unauthorized", {
-            "errore": "Password non valida.",
-            "rimedio": 'Lo stato e protetto: chiamalo in POST con {"password": "..."}.'})
+    valore = os.getenv("GOOGLE_API_KEY")
+    if valore is None:
+        chiave = "assente"
+    elif not valore.strip():
+        chiave = "presente ma vuota"
+    else:
+        chiave = "presente"
 
-    def descrivi(nome, con_lunghezza):
-        valore = os.getenv(nome)
-        if valore is None:
-            return "assente"
-        if not valore.strip():
-            return "presente ma vuota"
-        return f"presente ({len(valore)} caratteri)" if con_lunghezza else "presente"
-
-    risposta = {
-        "GOOGLE_API_KEY": descrivi("GOOGLE_API_KEY", protetta),
-        "SPEED_PASSWORD": descrivi("SPEED_PASSWORD", protetta),
+    return _json(avvia, "200 OK", {
+        "GOOGLE_API_KEY": chiave,
         "nota": "Le variabili vengono iniettate al momento del deploy: se le hai "
                 "aggiunte dopo, serve un redeploy perche' arrivino.",
-    }
-    if protetta:
-        risposta["protezione"] = "attiva"
-    else:
-        risposta["protezione"] = ("assente: imposta SPEED_PASSWORD, altrimenti "
-                                  "chiunque abbia il link consuma la tua quota Google")
-    return _json(avvia, "200 OK", risposta)
+    })
 
 
 def _analizza(avvia, richiesta: dict, environ):
-    if not _password_valida(richiesta):
-        return _json(avvia, "401 Unauthorized", {"errore": "Password non valida."})
-
     if _oltre_il_limite(environ):
         return _json(avvia, "429 Too Many Requests", {
             "errore": f"Troppe analisi: il limite e' {LIMITE_RICHIESTE} all'ora.",
@@ -196,9 +163,6 @@ def _analizza(avvia, richiesta: dict, environ):
 
 
 def _report(avvia, richiesta: dict):
-    if not _password_valida(richiesta):
-        return _json(avvia, "401 Unauthorized", {"errore": "Password non valida."})
-
     pagine = richiesta.get("pagine") or []
     if not pagine:
         return _json(avvia, "400 Bad Request", {"errore": "Nessuna pagina da impaginare."})
@@ -240,7 +204,7 @@ def app(environ, avvia):
     if percorso in ("/", "/index.html") and metodo == "GET":
         return _pagina(avvia)
     if percorso == "/api/stato" and metodo in ("GET", "POST"):
-        return _stato(avvia, _leggi(environ) if metodo == "POST" else {})
+        return _stato(avvia)
     if percorso == "/api/analizza" and metodo == "POST":
         return _analizza(avvia, _leggi(environ), environ)
     if percorso == "/api/report" and metodo == "POST":

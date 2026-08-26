@@ -136,24 +136,16 @@ def test_gli_endpoint_rifiutano_il_get():
 
 
 def test_url_non_valido_riceve_il_rimedio(monkeypatch):
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     monkeypatch.setenv("GOOGLE_API_KEY", "finta")
     stato, _, corpo = _chiama("/api/analizza", "POST", {"url": "non-un-url"})
     assert stato.startswith("400")
     assert "https://" in json.loads(corpo)["rimedio"]
 
 
-def test_la_password_protegge_entrambi_gli_endpoint(monkeypatch):
-    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
-    for percorso in ("/api/analizza", "/api/report"):
-        stato, _, corpo = _chiama(percorso, "POST", {"url": "https://x.it/", "password": "no"})
-        assert stato.startswith("401"), percorso
-        assert "Password" in json.loads(corpo)["errore"]
-
-
-def test_senza_password_configurata_l_app_resta_aperta(monkeypatch):
-    """Comportamento voluto, ma va scoperto dal test e non in produzione."""
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
+def test_l_app_non_chiede_autenticazione(monkeypatch):
+    """Non c'e' password: chiunque abbia il link analizza, e l'unico freno e' il
+    limite di richieste per origine. E' una scelta esplicita, e va scoperta da un
+    test e non in produzione. Qui l'unico rifiuto e' la chiave Google mancante."""
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     stato, _, corpo = _chiama("/api/analizza", "POST", {"url": "https://x.it/"})
     assert stato.startswith("500")
@@ -161,13 +153,11 @@ def test_senza_password_configurata_l_app_resta_aperta(monkeypatch):
 
 
 def test_il_report_rifiuta_una_lista_vuota(monkeypatch):
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     stato, _, corpo = _chiama("/api/report", "POST", {"pagine": []})
     assert stato.startswith("400")
 
 
 def test_il_report_scarica_un_docx(monkeypatch, pagina):
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     stato, intestazioni, corpo = _chiama("/api/report", "POST", {"pagine": [pagina]})
     assert stato.startswith("200")
     assert "wordprocessingml" in intestazioni["Content-Type"]
@@ -176,60 +166,36 @@ def test_il_report_scarica_un_docx(monkeypatch, pagina):
 
 
 def test_lo_stato_dice_cosa_vede_il_server(monkeypatch):
-    """Senza password configurata risponde, ma in forma ridotta: la diagnosi resta
-    possibile proprio nel caso in cui serve."""
+    """Serve a distinguere 'non l'ho impostata' da 'non e' stata iniettata'."""
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-finta-1234")
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     stato, _, corpo = _chiama("/api/stato")
     dati = json.loads(corpo)
     assert stato.startswith("200")
-    assert dati["GOOGLE_API_KEY"] == "presente", "senza password niente lunghezze"
-    assert dati["SPEED_PASSWORD"] == "assente"
-    assert "consuma la tua quota" in dati["protezione"]
+    assert dati["GOOGLE_API_KEY"] == "presente"
 
 
-def test_lo_stato_e_protetto_quando_la_password_c_e(monkeypatch):
-    """Prima rispondeva a chiunque annunciando 'protezione ASSENTE' e le lunghezze."""
+def test_lo_stato_non_dice_quanto_e_lunga_la_chiave(monkeypatch):
+    """L'endpoint e' aperto come il resto dell'app: la lunghezza smaschererebbe un
+    incollaggio troncato, ma la direbbe a chiunque abbia il link."""
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-finta-1234")
-    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
-    assert _chiama("/api/stato")[0].startswith("401")
-    stato, _, corpo = _chiama("/api/stato", "POST", {"password": "segreta"})
-    assert stato.startswith("200")
-    assert "caratteri" in json.loads(corpo)["GOOGLE_API_KEY"], "autenticati, il dettaglio c'e'"
+    assert "caratteri" not in _chiama("/api/stato")[2].decode("utf-8")
 
 
-def test_lo_stato_non_espone_mai_i_valori(monkeypatch):
+def test_lo_stato_non_espone_mai_il_valore_della_chiave(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "chiave-segretissima")
-    monkeypatch.setenv("SPEED_PASSWORD", "parola-segretissima")
-    for chiamata in (_chiama("/api/stato"),
-                     _chiama("/api/stato", "POST", {"password": "parola-segretissima"})):
+    for chiamata in (_chiama("/api/stato"), _chiama("/api/stato", "POST", {})):
         assert "segretissima" not in chiamata[2].decode("utf-8")
 
 
 def test_lo_stato_riconosce_una_variabile_vuota(monkeypatch):
     monkeypatch.setenv("GOOGLE_API_KEY", "   ")
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     assert "vuota" in json.loads(_chiama("/api/stato")[2])["GOOGLE_API_KEY"]
 
 
 # --- protezione della quota -------------------------------------------------- #
 
-def test_confronto_password_a_tempo_costante(monkeypatch):
-    """`==` esce al primo carattere diverso: il tempo di risposta lascia indovinare
-    la password un carattere alla volta."""
-    import inspect
-    import app as applicazione
-    monkeypatch.setenv("SPEED_PASSWORD", "segreta")
-    assert "compare_digest" in inspect.getsource(applicazione._password_valida)
-    assert applicazione._password_valida({"password": "segreta"}) is True
-    assert applicazione._password_valida({"password": "sbagliata"}) is False
-    assert applicazione._password_valida({"password": None}) is False
-    assert applicazione._password_valida({}) is False
-
-
 def test_il_limite_di_richieste_scatta(monkeypatch):
     import app as applicazione
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     monkeypatch.setattr(applicazione, "_conteggio", {})
     monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 3)
     environ = {"REMOTE_ADDR": "1.2.3.4"}
@@ -264,7 +230,6 @@ def test_l_origine_viene_dal_proxy():
 
 def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
     import app as applicazione
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     monkeypatch.setenv("GOOGLE_API_KEY", "finta")
     monkeypatch.setattr(applicazione, "_conteggio", {})
     monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 0)
@@ -278,7 +243,6 @@ def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
 def test_il_report_accetta_pagine_riuscite_e_fallite(monkeypatch, pagina, tmp_path):
     """Il browser manda anche le pagine mancate: il report deve dichiararle invece
     di presentare una lista piu' corta come se fosse completa."""
-    monkeypatch.delenv("SPEED_PASSWORD", raising=False)
     fallita = {"template": "/news", "url": "https://www.bbc.com/news",
                "errore": "PageSpeed Insights: non e' riuscito ad analizzare la pagina."}
     stato, _, corpo = _chiama("/api/report", "POST", {"pagine": [pagina, fallita]})
@@ -435,7 +399,7 @@ def test_il_ritento_non_duplica_la_pagina_fra_i_falliti():
     assert "falliti.splice" in corpo
 
 
-# --- memoria e password ------------------------------------------------------ #
+# --- memoria della pagina ----------------------------------------------------- #
 
 def test_la_pagina_ricorda_gli_url_fra_una_sessione_e_l_altra():
     sorgente = _sorgente()
@@ -443,31 +407,13 @@ def test_la_pagina_ricorda_gli_url_fra_una_sessione_e_l_altra():
     assert "localStorage" in sorgente
 
 
-def test_il_campo_password_sparisce_se_il_server_non_ne_ha_una():
-    """Chiedere una password che non esiste e' il primo ostacolo per chi apre il
-    tool: /api/stato dice se serve."""
-    sorgente = _sorgente()
-    assert "async function preparaPassword(" in sorgente
-    assert "'/api/stato'" in sorgente
-
-
-def test_il_campo_password_resta_se_il_server_e_protetto():
-    """Con SPEED_PASSWORD impostata /api/stato risponde 401 e il corpo NON contiene
-    le chiavi di stato. Leggere quelle chiavi nasconderebbe il campo proprio nella
-    configurazione consigliata, rendendo il tool inutilizzabile. Provato su due
-    server veri, uno protetto e uno aperto."""
-    corpo = _sorgente()
-    corpo = corpo[corpo.index("async function preparaPassword("):]
-    corpo = corpo[:corpo.index("function ripristina(")]
-    assert "risposta.status === 401" in corpo, "il 401 significa che la password serve"
-    assert "startsWith('assente')" in corpo, "solo 'protezione: assente' nasconde il campo"
-
-
-def test_la_pagina_non_scrive_la_password_nel_localstorage_in_chiaro_senza_dirlo():
-    """Sta nel browser di chi la usa, non viene mandata altrove: ma il codice deve
-    restare esplicito su cosa salva."""
-    sorgente = _sorgente()
-    assert "speed_password" in sorgente
+def test_la_pagina_non_chiede_nessuna_password():
+    """Il tool non ha autenticazione: un campo password sarebbe un ostacolo che non
+    protegge niente, e una password salvata nel browser sarebbe un segreto in piu'
+    da custodire per zero beneficio."""
+    sorgente = _sorgente().lower()
+    for traccia in ("password", "sessionstorage"):
+        assert traccia not in sorgente, f"la pagina nomina ancora '{traccia}'"
 
 
 # --- il raggruppamento dei bersagli deve essere visibile --------------------- #

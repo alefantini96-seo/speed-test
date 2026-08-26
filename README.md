@@ -77,9 +77,15 @@ quella modalità manda **tutte** le richieste a un unico entrypoint, dichiarato 
 convivono. Per provarla in locale, `python scripts/serve_locale.py` serve la stessa
 identica app.
 
-Due variabili d'ambiente sul progetto Vercel: `GOOGLE_API_KEY` (resta lato server, non
-passa mai dal browser) e `SPEED_PASSWORD` (senza, chiunque abbia il link consuma la
-tua quota).
+Una sola variabile d'ambiente sul progetto Vercel: `GOOGLE_API_KEY`, che resta lato
+server e non passa mai dal browser.
+
+L'app **non ha autenticazione**: chiunque abbia il link analizza, e ogni analisi
+consuma la quota Google di chi la ospita (25.000 richieste PSI al giorno). L'unico
+freno lato applicazione è il limite di 40 analisi all'ora per indirizzo, che vive
+nella memoria della singola istanza e quindi argina un abuso da una sola sorgente,
+non uno distribuito. Se serve una barriera vera, si mette **davanti** all'app —
+Deployment Protection di Vercel — non nel codice.
 
 Lo storico non si accumula: CrUX History restituisce dieci mesi a ogni esecuzione,
 quindi anche la prima scansione contiene già l'andamento.
@@ -248,7 +254,7 @@ dentro ciascuna delle due scansioni.
 
 ## Decisioni architetturali
 
-Cinque decisioni non si cambiano senza aggiornare l'ADR corrispondente in
+Sei decisioni non si cambiano senza aggiornare l'ADR corrispondente in
 `docs/adr/`. Sono citate dai docstring dei moduli che le applicano.
 
 | # | Decisione |
@@ -258,6 +264,7 @@ Cinque decisioni non si cambiano senza aggiornare l'ADR corrispondente in
 | 3 | Nessun database: lo storico arriva da CrUX History a ogni esecuzione |
 | 4 | Il testo delle raccomandazioni viene da Lighthouse verbatim, il tool non ne scrive |
 | 5 | La ripartizione dell'LCP si prende dal campo, il laboratorio e' il ripiego |
+| 6 | Nessuna autenticazione nell'app: se serve una barriera si mette davanti, non nel codice |
 
 ## Limiti dichiarati
 

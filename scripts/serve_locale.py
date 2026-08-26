@@ -30,8 +30,6 @@ from app import app  # noqa: E402
 def main(porta: int = 8000):
     if not os.getenv("GOOGLE_API_KEY"):
         print("Attenzione: GOOGLE_API_KEY non impostata, le analisi falliranno.")
-    if not os.getenv("SPEED_PASSWORD"):
-        print("Attenzione: SPEED_PASSWORD non impostata, l'app resta senza protezione.")
     print(f"http://localhost:{porta}  (Ctrl+C per fermare)")
     with make_server("127.0.0.1", porta, app) as server:
         server.serve_forever()

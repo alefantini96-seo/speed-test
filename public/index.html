@@ -21,7 +21,7 @@ h1 { font-size:26px; margin:0 0 4px; }
 .riquadro { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
             padding:20px; margin-bottom:18px; }
 label { display:block; font-size:13px; font-weight:600; color:var(--testo); margin:0 0 6px; }
-textarea, input[type=text], input[type=password] {
+textarea, input[type=text] {
   width:100%; font-family:ui-monospace,Consolas,monospace; font-size:13px;
   padding:10px 12px; border:1px solid var(--bordo); border-radius:6px;
   background:var(--sfondo); color:var(--testo); }
@@ -157,11 +157,6 @@ li { margin:3px 0; }
   </div>
 
   <div class="riquadro" id="modulo">
-    <div id="riquadro-password" hidden>
-      <label for="password">Password</label>
-      <input type="password" id="password" autocomplete="current-password">
-    </div>
-
     <div id="campo-urls">
       <label for="urls">URL da analizzare</label>
       <textarea id="urls" placeholder="https://www.esempio.it/&#10;https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
@@ -593,7 +588,7 @@ function espandiModulo() {
 
 function ricorda() {
   // Chi usa il tool torna sugli stessi template: reincollarli ogni volta e' lavoro
-  // inutile. La password resta in sessionStorage, che si svuota chiudendo il browser.
+  // inutile. Restano nel browser di chi la usa, non vengono mandati da nessuna parte.
   try {
     localStorage.setItem('speed_urls', $('urls').value);
     localStorage.setItem('speed_domini', $('domini').value);
@@ -653,11 +648,11 @@ function riepilogo() {
   return parti.join(', ') + '.';
 }
 
-async function analizzaUna(url, password, desktop, domini) {
+async function analizzaUna(url, desktop, domini) {
   const risposta = await fetch('/api/analizza', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, password, desktop, domini_propri: domini }),
+    body: JSON.stringify({ url, desktop, domini_propri: domini }),
   });
   const dati = await risposta.json();
   if (!risposta.ok) {
@@ -669,7 +664,6 @@ async function analizzaUna(url, password, desktop, domini) {
 }
 
 async function avvia() {
-  const password = $('password').value;
   const urls = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
   const domini = $('domini').value.split(',').map(s => s.trim()).filter(Boolean);
   const desktop = $('desktop').checked;
@@ -684,7 +678,6 @@ async function avvia() {
   $('scarica').disabled = true;
 
   if (!urls.length) return mostraErrore('Inserisci almeno un URL.');
-  sessionStorage.setItem('speed_password', password);
   ricorda();
   $('avvia').disabled = true;
 
@@ -702,7 +695,7 @@ async function avvia() {
     stati[i].avvio = Date.now();
     disegnaAvanzamento();
     try {
-      const dati = await analizzaUna(urls[i], password, desktop, domini);
+      const dati = await analizzaUna(urls[i], desktop, domini);
       stati[i].stato = 'fatto';
       risultati.push(dati);
       disegna(dati);
@@ -739,8 +732,7 @@ async function riprova(url) {
   const indice = falliti.findIndex(f => f.url === url);
   try {
     const dati = await analizzaUna(
-      url, sessionStorage.getItem('speed_password') || '',
-      $('desktop').checked,
+      url, $('desktop').checked,
       $('domini').value.split(',').map(s => s.trim()).filter(Boolean));
     if (indice >= 0) falliti.splice(indice, 1);
     if (scheda) scheda.remove();
@@ -768,7 +760,6 @@ async function scarica() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        password: sessionStorage.getItem('speed_password') || '',
         // Anche le pagine mancate: il report deve dire quali sono, non
         // presentare una lista piu' corta come se fosse completa.
         pagine: [...risultati, ...falliti],
@@ -796,26 +787,6 @@ async function scarica() {
 }
 
 // --- avvio ------------------------------------------------------------------ //
-
-async function preparaPassword() {
-  // Se il server non ha SPEED_PASSWORD il campo non serve, e chiederlo sarebbe
-  // un ostacolo inventato. /api/stato lo dice senza esporre nessun valore.
-  try {
-    const risposta = await fetch('/api/stato');
-    const stato = await risposta.json().catch(() => ({}));
-    // 401: il server e' protetto e non gli abbiamo dato niente, quindi la
-    // password serve — e il corpo dell'errore non contiene le chiavi di stato.
-    // 200 con protezione "assente": non c'e' niente da chiedere.
-    // Qualsiasi altro caso si comporta come se servisse: nascondere il campo a
-    // un server protetto renderebbe il tool inutilizzabile.
-    const serve = risposta.status === 401 ||
-                  !String(stato.protezione || '').startsWith('assente');
-    $('riquadro-password').hidden = !serve;
-    if (serve) $('password').value = sessionStorage.getItem('speed_password') || '';
-  } catch (e) {
-    $('riquadro-password').hidden = false;   // nel dubbio si chiede
-  }
-}
 
 function ripristina() {
   try {
@@ -854,7 +825,6 @@ $('rianalizza').addEventListener('click', avvia);
 $('modifica').addEventListener('click', espandiModulo);
 $('urls').addEventListener('input', stimaDurata);
 ripristina();
-preparaPassword();
 </script>
 </body>
 </html>
