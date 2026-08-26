@@ -300,7 +300,7 @@ def test_il_ciclo_dell_interfaccia_non_si_ferma_alla_prima_pagina_fallita():
     """
     sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
     inizio = sorgente.index("for (let i = 0; i < urls.length; i++)")
-    fine = sorgente.index("$('avanzamento').textContent = riepilogo()")
+    fine = sorgente.index("$('avvia').disabled = false;")
     ciclo = sorgente[inizio:fine]
     assert "break" not in ciclo, "una pagina fallita non deve fermare le altre"
     assert "falliti.push" in ciclo, "la pagina fallita va accumulata, non persa"
@@ -348,3 +348,170 @@ def test_la_scheda_di_pagina_non_ripete_piu_gli_interventi():
 def test_url_valido_passa_la_validazione():
     assert valida_url("https://www.esempio.it/") is None
     assert valida_url("esempio.it") is not None
+
+
+# --- l'attesa: la pagina deve dire che sta lavorando ------------------------- #
+
+def _sorgente():
+    return (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+
+
+def test_l_avanzamento_ha_una_riga_per_ogni_url():
+    """Prima l'unico segno di vita era una riga di testo che cambiava una volta
+    per URL: stava ferma fino a un minuto su un'analisi che ne richiede 20-60.
+    Ora ogni URL ha il suo stato."""
+    sorgente = _sorgente()
+    assert "function disegnaAvanzamento(" in sorgente
+    for stato in ("coda", "corso", "fatto", "errore"):
+        assert f"{stato}:" in sorgente, f"manca lo stato '{stato}'"
+
+
+def test_il_contatore_dei_secondi_scorre_durante_l_attesa():
+    """Un numero che cambia ogni secondo e' cio' che distingue 'sta lavorando' da
+    'si e' piantato'. Senza l'intervallo la riga resterebbe ferma."""
+    sorgente = _sorgente()
+    assert "setInterval(disegnaAvanzamento, 1000)" in sorgente
+    assert "clearInterval(orologio)" in sorgente, "l'orologio va fermato a fine analisi"
+
+
+def test_l_orologio_si_ferma_anche_quando_una_pagina_fallisce():
+    """fermaOrologio() sta dopo il ciclo, non dentro il ramo riuscito: un errore
+    sull'ultima pagina non deve lasciare un intervallo che gira per sempre."""
+    sorgente = _sorgente()
+    ciclo = sorgente[sorgente.index("for (let i = 0; i < urls.length; i++)"):]
+    assert ciclo.index("fermaOrologio();") < ciclo.index("$('scarica').disabled")
+
+
+# --- la sintesi in cima ------------------------------------------------------ #
+
+def test_la_sintesi_conta_i_template_fuori_soglia_per_metrica():
+    """Con cinque template la pagina supera i cinquemila pixel: senza una sintesi
+    in cima bisogna scorrere tutto per sapere se qualcosa e' fuori soglia."""
+    sorgente = _sorgente()
+    assert "function disegnaVerdetto(" in sorgente
+    assert "disegnaVerdetto();" in sorgente, "va richiamata dopo ogni pagina"
+    assert "fuori soglia" in sorgente
+
+
+def test_la_sintesi_non_usa_il_punteggio_psi():
+    """ADR-001: il punteggio non entra in nessun giudizio. La sintesi giudica
+    guardando le soglie dei Core Web Vitals, non lo score."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("function disegnaVerdetto(")
+    corpo = sorgente[inizio:sorgente.index("function disegnaAvanzamento(")]
+    assert "punteggio" not in corpo and "score" not in corpo
+
+
+def test_la_sintesi_indicizza_i_template():
+    sorgente = _sorgente()
+    assert 'href="#interventi"' in sorgente
+    assert 'href="#template-' in sorgente
+
+
+# --- il modulo si toglie di mezzo quando ci sono risultati ------------------- #
+
+def test_il_modulo_si_comprime_a_fine_analisi():
+    """Misurato: a risultati pronti il modulo occupava ancora tutto il primo
+    schermo, e i dati cominciavano sotto la piega."""
+    sorgente = _sorgente()
+    assert "function comprimiModulo(" in sorgente
+    assert "function espandiModulo(" in sorgente
+    assert "comprimiModulo();" in sorgente
+
+
+def test_una_pagina_fallita_si_puo_ritentare_da_sola():
+    """Rifare tutte le pagine per una caduta costa altri minuti di attesa."""
+    sorgente = _sorgente()
+    assert "async function riprova(" in sorgente
+    assert "riprova(" in sorgente[sorgente.index("function disegnaFallita("):]
+
+
+def test_il_ritento_non_duplica_la_pagina_fra_i_falliti():
+    """Se riesce, la pagina deve uscire dall'elenco degli errori: altrimenti il
+    report la dichiarerebbe mancata pur avendone i dati."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("async function riprova("):
+                     sorgente.index("async function scarica(")]
+    assert "falliti.splice" in corpo
+
+
+# --- memoria e password ------------------------------------------------------ #
+
+def test_la_pagina_ricorda_gli_url_fra_una_sessione_e_l_altra():
+    sorgente = _sorgente()
+    assert "function ricorda(" in sorgente and "function ripristina(" in sorgente
+    assert "localStorage" in sorgente
+
+
+def test_il_campo_password_sparisce_se_il_server_non_ne_ha_una():
+    """Chiedere una password che non esiste e' il primo ostacolo per chi apre il
+    tool: /api/stato dice se serve."""
+    sorgente = _sorgente()
+    assert "async function preparaPassword(" in sorgente
+    assert "'/api/stato'" in sorgente
+
+
+def test_il_campo_password_resta_se_il_server_e_protetto():
+    """Con SPEED_PASSWORD impostata /api/stato risponde 401 e il corpo NON contiene
+    le chiavi di stato. Leggere quelle chiavi nasconderebbe il campo proprio nella
+    configurazione consigliata, rendendo il tool inutilizzabile. Provato su due
+    server veri, uno protetto e uno aperto."""
+    corpo = _sorgente()
+    corpo = corpo[corpo.index("async function preparaPassword("):]
+    corpo = corpo[:corpo.index("function ripristina(")]
+    assert "risposta.status === 401" in corpo, "il 401 significa che la password serve"
+    assert "startsWith('assente')" in corpo, "solo 'protezione: assente' nasconde il campo"
+
+
+def test_la_pagina_non_scrive_la_password_nel_localstorage_in_chiaro_senza_dirlo():
+    """Sta nel browser di chi la usa, non viene mandata altrove: ma il codice deve
+    restare esplicito su cosa salva."""
+    sorgente = _sorgente()
+    assert "speed_password" in sorgente
+
+
+# --- il raggruppamento dei bersagli deve essere visibile --------------------- #
+
+def test_il_raggruppamento_per_template_ha_una_regola_css():
+    """Misurato: 'li.gruppo' non aveva nessuna regola, quindi l'intestazione del
+    template era indistinguibile dalla riga di un file."""
+    sorgente = _sorgente()
+    assert ".gruppo" in sorgente[:sorgente.index("<body")], "la regola manca nel CSS"
+
+
+# --- difetti visti negli screenshot, non dedotti ---------------------------- #
+
+def test_hidden_vince_sulle_regole_con_display():
+    """Visto a schermo: la barra compatta compariva a pagina vuota, con dentro
+    'Rianalizza' e 'Scarica il report'. `[hidden]` e' display:none solo nel foglio
+    del browser, e `.barra{display:flex}` lo scavalcava."""
+    sorgente = _sorgente()
+    assert "[hidden] { display:none !important; }" in sorgente
+
+
+def test_il_modulo_si_chiude_all_avvio_non_alla_fine():
+    """Misurato a 390px: con il modulo aperto l'elenco di avanzamento cominciava
+    a 950px, cioe' fuori dal primo schermo per tutti i minuti in cui e' l'unica
+    cosa che si muove. Le pagine misurate hanno richiesto 24, 66 e 89 secondi."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("async function avvia()"):]
+    corpo = corpo[:corpo.index("async function riprova(")]
+    assert corpo.index("comprimiModulo();") < corpo.index("avviaOrologio();")
+
+
+def test_durante_l_analisi_non_si_puo_avviarne_una_seconda():
+    """Il modulo e' chiuso ma i suoi comandi restano nella barra: senza questo,
+    'Rianalizza' partirebbe sopra l'analisi in corso."""
+    sorgente = _sorgente()
+    assert "function comandiAttivi(" in sorgente
+    assert "comandiAttivi(false);" in sorgente and "comandiAttivi(true);" in sorgente
+
+
+def test_errore_e_consiglio_stanno_fuori_dal_modulo():
+    """Chiuso il modulo sparirebbero anche loro, e il consiglio sui domini propri
+    compare proprio a meta' analisi, dopo la prima pagina."""
+    sorgente = _sorgente()
+    modulo = sorgente[sorgente.index('<div class="riquadro" id="modulo">'):
+                      sorgente.index('<!-- Fuori dal modulo')]
+    assert 'id="errore"' not in modulo and 'id="consiglio"' not in modulo
+    assert 'id="errore"' in sorgente and 'id="consiglio"' in sorgente

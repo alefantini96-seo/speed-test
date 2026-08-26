@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Analisi velocità</title>
 <style>
-:root { --testo:#1f2328; --tenue:#6b7280; --bordo:#e5e7eb; --sfondo:#fff; --tela:#f6f7f9;
+:root { --testo:#1f2328; --tenue:#5c6370; --bordo:#e5e7eb; --sfondo:#fff; --tela:#f6f7f9;
         --buono:#1a7f4b; --medio:#a16207; --scarso:#b42318; }
 * { box-sizing:border-box; }
+/* [hidden] e' display:none solo nel foglio del browser: qualsiasi regola
+   d'autore che imposta display lo scavalca. Con .barra{display:flex} la barra
+   restava visibile a pagina vuota, con dentro 'Rianalizza' e 'Scarica'. */
+[hidden] { display:none !important; }
 body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
        color:var(--testo); background:var(--tela); margin:0; padding:28px 20px 80px;
        line-height:1.5; }
@@ -16,60 +20,112 @@ h1 { font-size:26px; margin:0 0 4px; }
 .sottotitolo { color:var(--tenue); margin:0 0 26px; font-size:14px; }
 .riquadro { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
             padding:20px; margin-bottom:18px; }
-label { display:block; font-size:12px; font-weight:600; text-transform:uppercase;
-        letter-spacing:.04em; color:var(--tenue); margin:0 0 6px; }
+label { display:block; font-size:13px; font-weight:600; color:var(--testo); margin:0 0 6px; }
 textarea, input[type=text], input[type=password] {
   width:100%; font-family:ui-monospace,Consolas,monospace; font-size:13px;
   padding:10px 12px; border:1px solid var(--bordo); border-radius:6px;
   background:var(--sfondo); color:var(--testo); }
 textarea { min-height:120px; resize:vertical; }
-.aiuto { font-size:12px; color:var(--tenue); margin:6px 0 0; }
+:focus-visible { outline:2px solid var(--testo); outline-offset:2px; }
+.aiuto { font-size:12.5px; color:var(--tenue); margin:6px 0 0; }
 .riga { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; }
 .riga > div { flex:1 1 220px; }
-.comandi { display:flex; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap; }
+.comandi { display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap; }
 button { font:inherit; font-weight:600; padding:10px 20px; border-radius:6px;
          border:1px solid var(--testo); background:var(--testo); color:#fff; cursor:pointer; }
 button.secondario { background:transparent; color:var(--testo); }
+button.minuto { padding:5px 12px; font-size:13px; font-weight:500;
+                border-color:var(--bordo); background:transparent; color:var(--testo); }
+button.minuto:hover { border-color:var(--testo); }
 button:disabled { opacity:.45; cursor:default; }
-.avanzamento { font-size:13px; color:var(--tenue); }
 .errore { background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
           padding:10px 14px; border-radius:6px; font-size:13px; margin-top:14px; }
-.errore .rimedio { color:#7f1d1d; opacity:.85; margin-top:4px; }
+.errore .rimedio { color:#7f1d1d; margin-top:4px; }
 h2 { font-size:18px; margin:0 0 2px; }
 .url { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--tenue);
        word-break:break-all; margin:0 0 4px; }
-.meta { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
+.meta { font-size:12px; color:var(--tenue); margin:0; }
 table { width:100%; border-collapse:collapse; font-size:14px; margin:12px 0 4px; }
 th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--bordo); }
-th { font-size:10px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
+th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
 td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px;
+.pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px;
         font-weight:600; border:1px solid currentColor; }
-h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue);
-     margin:22px 0 8px; }
+h3 { font-size:13px; color:var(--tenue); margin:22px 0 8px; font-weight:600; }
+
+/* --- barra compatta: dopo l'analisi il modulo si toglie di mezzo ----------- */
+.barra { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+         background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
+         padding:12px 16px; margin-bottom:18px; }
+.barra .cosa { font-size:14px; font-weight:600; margin-right:auto; }
+.barra .cosa span { font-weight:400; color:var(--tenue); }
+
+/* --- avanzamento: una riga per URL, con lo stato di ciascuna --------------- */
+.avanzamento { margin-top:16px; }
+.avanzamento ol { list-style:none; margin:0; padding:0; }
+.avanzamento li { display:flex; align-items:baseline; gap:10px; font-size:13px;
+                  padding:5px 0; border-bottom:1px solid var(--bordo); }
+.avanzamento li:last-child { border-bottom:none; }
+.avanzamento .segno { flex:none; width:18px; text-align:center; font-weight:700; }
+.avanzamento .indirizzo { font-family:ui-monospace,Consolas,monospace; font-size:12px;
+                          word-break:break-all; }
+.avanzamento .tempo { margin-left:auto; flex:none; color:var(--tenue);
+                      font-variant-numeric:tabular-nums; font-size:12px; }
+.avanzamento li.coda { color:var(--tenue); }
+.avanzamento li.corso .segno { color:var(--testo); }
+.avanzamento li.fatto .segno { color:var(--buono); }
+.avanzamento li.errore-riga .segno { color:var(--scarso); }
+@keyframes pulsa { 0%,100% { opacity:1 } 50% { opacity:.25 } }
+.avanzamento li.corso .segno { animation:pulsa 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion:reduce) { .avanzamento li.corso .segno { animation:none } }
+
+/* --- verdetto: la risposta prima del dettaglio ---------------------------- */
+.verdetto { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
+            padding:20px; margin-bottom:18px; }
+.verdetto h2 { margin-bottom:10px; }
+.verdetto ul { list-style:none; margin:0; padding:0; }
+.verdetto li { display:flex; align-items:baseline; gap:10px; padding:4px 0; font-size:15px; }
+.verdetto .et { font-weight:700; width:52px; flex:none; }
+.verdetto .fuori { color:var(--scarso); font-weight:600; }
+.verdetto .dentro { color:var(--buono); font-weight:600; }
+.indice { margin-top:14px; font-size:13px; }
+.indice a { color:var(--tenue); text-decoration:none; border-bottom:1px solid var(--bordo); }
+.indice a:hover { color:var(--testo); border-color:var(--testo); }
+
+/* --- suggerimento sui domini propri --------------------------------------- */
+.consiglio { background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
+             padding:12px 14px; font-size:13px; margin-top:14px; }
+.consiglio button { margin-top:8px; }
+
 .fase { display:flex; align-items:center; gap:10px; font-size:13px; margin:3px 0; }
-.fase .et { width:210px; color:var(--tenue); }
-.fase .barra { height:9px; background:#dbe1e8; border-radius:2px; }
-.fase .barra.dom { background:var(--scarso); }
-.fase .pc { width:44px; text-align:right; font-variant-numeric:tabular-nums; }
+.fase .et { flex:1 1 auto; min-width:0; color:var(--tenue); }
+.fase .barra-fase { flex:none; height:9px; background:#dbe1e8; border-radius:2px; }
+.fase .barra-fase.dom { background:var(--scarso); }
+.fase .pc { flex:none; width:44px; text-align:right; font-variant-numeric:tabular-nums; }
 .intervento { border:1px solid var(--bordo); border-left:3px solid var(--tenue);
               border-radius:6px; padding:12px 14px; margin:10px 0; }
 .intervento .testa { display:flex; align-items:baseline; gap:12px;
-                     justify-content:space-between; }
+                     justify-content:space-between; flex-wrap:wrap; }
 .intervento h4 { margin:0; font-size:15px; font-weight:600; }
 .guadagno { flex:none; font-size:13px; font-weight:600; color:var(--tenue);
             font-variant-numeric:tabular-nums; white-space:nowrap; }
 .guadagno.tempo { color:var(--scarso); }
-.chi { margin:2px 0 0; font-size:11px; text-transform:uppercase;
-       letter-spacing:.04em; color:var(--tenue); }
+.chi { margin:2px 0 0; font-size:12px; color:var(--tenue); }
 ul.bersagli { list-style:none; margin:10px 0 0; padding:0; }
 ul.bersagli li { display:flex; justify-content:space-between; gap:12px;
                  font-size:12px; padding:3px 0; border-bottom:1px solid var(--bordo); }
-ul.bersagli .nome { font-family:ui-monospace,Consolas,monospace; word-break:break-all; }
+/* L'intestazione di gruppo deve distinguersi dalle righe: senza, il
+   raggruppamento per template e' invisibile e la lista sembra un elenco piatto. */
+ul.bersagli li.gruppo { display:block; border-bottom:none; padding:10px 0 2px;
+                        font-size:11px; text-transform:uppercase; letter-spacing:.04em;
+                        font-weight:600; color:var(--tenue); }
+ul.bersagli li.gruppo:first-child { padding-top:0; }
+ul.bersagli .nome { font-family:ui-monospace,Consolas,monospace;
+                    overflow-wrap:anywhere; min-width:0; }
 ul.bersagli .misura { flex:none; color:var(--tenue); font-variant-numeric:tabular-nums; }
 details.perche { margin-top:10px; }
-details.perche > summary { font-size:11px; text-transform:uppercase; letter-spacing:.04em;
-                           color:var(--tenue); cursor:pointer; list-style:none; }
+details.perche > summary { font-size:12px; color:var(--tenue); cursor:pointer;
+                           list-style:none; padding:2px 0; }
 details.perche > summary::before { content:"▸ "; }
 details.perche[open] > summary::before { content:"▾ "; }
 button.ancora { width:100%; margin-top:10px; background:transparent; color:var(--testo);
@@ -78,13 +134,10 @@ button.ancora:hover { border-color:var(--testo); }
 ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
 li { margin:3px 0; }
 .evidenza li { color:var(--tenue); font-size:13px; }
-.nota { font-size:12px; color:var(--tenue); font-style:italic; margin-top:8px; }
+.nota { font-size:12.5px; color:var(--tenue); font-style:italic; margin-top:8px; }
 .marchio { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:9px;
-           font-size:10px; font-weight:600; text-transform:uppercase;
-           color:var(--tenue); border:1px solid #d1d5db; vertical-align:middle; }
-table.risorse td.tag { width:26px; font-size:10px; font-weight:600; color:var(--tenue); }
-table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-size:11px;
-                           word-break:break-all; }
+           font-size:11px; font-weight:600; color:var(--tenue); border:1px solid #d1d5db;
+           vertical-align:middle; }
 .attesa { color:var(--tenue); font-size:13px; font-style:italic; }
 </style>
 </head>
@@ -94,40 +147,64 @@ table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-siz
   <p class="sottotitolo">Incolla gli URL da analizzare, uno per riga. Ogni pagina viene
     misurata sui dati di campo reali e diagnosticata in laboratorio.</p>
 
-  <div class="riquadro">
-    <label for="password">Password</label>
-    <input type="password" id="password" autocomplete="current-password">
+  <!-- Barra compatta: compare al posto del modulo quando ci sono risultati, cosi'
+       la prima schermata mostra i numeri e non piu' il modulo gia' compilato. -->
+  <div class="barra" id="barra" hidden>
+    <span class="cosa" id="barra-cosa"></span>
+    <button class="minuto" id="modifica">Modifica gli URL</button>
+    <button class="minuto" id="rianalizza">Rianalizza</button>
+    <button class="secondario" id="scarica" disabled>Scarica il report</button>
+  </div>
 
-    <div style="margin-top:16px">
+  <div class="riquadro" id="modulo">
+    <div id="riquadro-password" hidden>
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+    </div>
+
+    <div id="campo-urls">
       <label for="urls">URL da analizzare</label>
       <textarea id="urls" placeholder="https://www.esempio.it/&#10;https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
-      <p class="aiuto">Uno per riga. Conviene una pagina per template, la più trafficata
-        del suo gruppo: sotto una certa soglia di traffico i dati di campo non esistono.</p>
+      <p class="aiuto">Uno per riga, da tre a sei: una pagina per template, la più
+        trafficata del suo gruppo. Sotto una certa soglia di traffico i dati di campo
+        non esistono, e resta la sola diagnosi di laboratorio.</p>
     </div>
 
     <div class="riga">
       <div>
-        <label for="domini">Domini propri (opzionale)</label>
+        <label for="domini">Domini propri <span style="font-weight:400">(opzionale)</span></label>
         <input type="text" id="domini" placeholder="cdn-esempio.net, static.esempio.com">
         <p class="aiuto">CDN o domini fratelli del cliente. Senza, vengono scambiati
-          per terze parti e l'intervento finisce assegnato alla squadra sbagliata.</p>
+          per terze parti e l'intervento finisce assegnato alla squadra sbagliata.
+          Se serve, il tool te lo segnala dopo la prima pagina.</p>
       </div>
       <div>
-        <label>Dispositivo</label>
-        <label style="text-transform:none;font-weight:400;font-size:14px;color:var(--testo)">
+        <label for="desktop">Dispositivo</label>
+        <label for="desktop" style="font-weight:400;font-size:14px;color:var(--testo)">
           <input type="checkbox" id="desktop"> misura desktop invece di mobile
         </label>
+        <p class="aiuto">Di default mobile: è quello che Google usa per il ranking,
+          ed è dove stanno quasi sempre i problemi.</p>
       </div>
     </div>
 
     <div class="comandi">
       <button id="avvia">Analizza</button>
-      <button id="scarica" class="secondario" disabled>Scarica report Word</button>
-      <span class="avanzamento" id="avanzamento"></span>
+      <span class="attesa" id="stima"></span>
     </div>
-    <div id="errore"></div>
   </div>
 
+  <!-- Fuori dal modulo: il modulo si chiude durante l'analisi, e questi due
+       devono restare leggibili proprio in quel momento. -->
+  <div id="errore"></div>
+  <div id="consiglio"></div>
+
+  <!-- Avanzamento: una riga per URL con il suo stato. Prima c'era una sola riga di
+       testo che cambiava, ed era l'elemento meno visibile della pagina mentre era
+       l'unico segno che il tool fosse vivo. -->
+  <div class="riquadro avanzamento" id="avanzamento" hidden></div>
+
+  <div id="verdetto"></div>
   <div id="risultati"></div>
 </main>
 
@@ -135,6 +212,7 @@ table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-siz
 const $ = (id) => document.getElementById(id);
 const risultati = [];
 const falliti = [];
+const stati = [];        // {url, stato: coda|corso|fatto|errore, avvio, secondi}
 
 const SOGLIE = {
   largest_contentful_paint:  { et:'LCP',  buono:2500, scarso:4000 },
@@ -143,6 +221,7 @@ const SOGLIE = {
   first_contentful_paint:    { et:'FCP',  buono:1800, scarso:3000 },
   experimental_time_to_first_byte: { et:'TTFB', buono:800, scarso:1800 },
 };
+const CWV = ['largest_contentful_paint','interaction_to_next_paint','cumulative_layout_shift'];
 const FASI = {
   timeToFirstByte:'Risposta del server (TTFB)',
   resourceLoadDelay:'Attesa prima del download',
@@ -162,6 +241,8 @@ const TIPI = { Script:'JavaScript', Stylesheet:'CSS', Image:'Immagini', Font:'Fo
 
 const esc = (t) => String(t ?? '').replace(/[&<>"]/g, c =>
   ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+const plurale = (n, uno, molti) => `${n} ${n === 1 ? uno : molti}`;
 
 function giudizio(metrica, valore) {
   const s = SOGLIE[metrica];
@@ -206,10 +287,12 @@ function fasiLcp(fatti) {
   if (!chiavi.length) return '';
   const totale = chiavi.reduce((a,k) => a + fasi[k], 0) || 1;
   const dom = chiavi.reduce((a,b) => fasi[a] > fasi[b] ? a : b);
+  // La larghezza in percentuale e non in pixel: a 390px una barra da 260px fissi
+  // costringeva l'etichetta a comprimersi.
   const barre = chiavi.map(k => {
     const q = fasi[k] / totale;
     return `<div class="fase"><span class="et">${FASI[k] || k}</span>
-      <span class="barra ${k === dom ? 'dom' : ''}" style="width:${Math.round(q*260)}px"></span>
+      <span class="barra-fase ${k === dom ? 'dom' : ''}" style="width:${Math.round(q*40)}%"></span>
       <span class="pc">${Math.round(q*100)}%</span></div>`;
   }).join('');
   const snippet = fatti.lcp_elemento_snippet
@@ -355,7 +438,7 @@ function disegnaInterventi() {
   div.className = 'riquadro';
   div.id = 'interventi';
   div.innerHTML = `<h2>Interventi</h2>
-    <p class="meta">${lista.length} interventi per il sito ·
+    <p class="meta">${plurale(lista.length, 'intervento', 'interventi')} per il sito ·
       i file su cui agire sono raggruppati per template</p>
     ${problemi(lista, 'sito')}`;
   $('risultati').appendChild(div);
@@ -363,14 +446,19 @@ function disegnaInterventi() {
 
 function disegnaFallita(pagina) {
   // Una pagina mancata resta visibile al suo posto: sparire darebbe l'idea che
-  // il report sia completo quando non lo e'.
+  // il report sia completo quando non lo e'. E si puo' riprovare da sola, senza
+  // rifare l'intera lista.
   const div = document.createElement('div');
   div.className = 'riquadro';
+  div.dataset.fallita = pagina.url;
   div.innerHTML = `<h2>${esc(pagina.template)}</h2>
     <p class="url">${esc(pagina.url)}</p>
     <div class="errore">Misurazione fallita: ${esc(pagina.errore)}
       ${pagina.rimedio ? `<div class="rimedio">${esc(pagina.rimedio)}</div>` : ''}
       <div class="rimedio">Le altre pagine sono state analizzate lo stesso.</div>
+    </div>
+    <div class="comandi">
+      <button class="minuto riprova" data-url="${esc(pagina.url)}">Riprova questa pagina</button>
     </div>`;
   $('risultati').appendChild(div);
 }
@@ -383,11 +471,11 @@ function disegna(pagina) {
   const quota = terze.byte_totali ? terze.byte_terzi / terze.byte_totali : 0;
   const div = document.createElement('div');
   div.className = 'riquadro';
+  div.id = `template-${indicePagina}`;
+  div.dataset.url = pagina.url;
   div.innerHTML = `
     <h2>${esc(nomeTemplate(pagina.url))}</h2>
     <p class="url">${esc(pagina.url)}</p>
-    <p class="meta">${pagina.misurazioni} misurazioni di laboratorio${
-      pagina.consenso ? ' · ' + esc(pagina.consenso) : ''}</p>
     ${tabellaCampo(pagina.campo)}
     ${fasiLcp(pagina.fatti)}
     <h3>Peso della pagina</h3>
@@ -396,8 +484,154 @@ function disegna(pagina) {
        (${Math.round(quota*100)}%)</strong>.</p>
     ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
       Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
-        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}`;
+        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
+    <details class="perche">
+      <summary>come è stata misurata</summary>
+      <p class="nota">${plurale(pagina.misurazioni || 1, 'misurazione', 'misurazioni')}
+        di laboratorio. ${esc(pagina.consenso || '')}</p>
+    </details>`;
   $('risultati').appendChild(div);
+}
+
+// --- il verdetto: la risposta prima del dettaglio --------------------------- //
+
+function disegnaVerdetto() {
+  const vecchio = $('verdetto');
+  vecchio.innerHTML = '';
+  if (!risultati.length) return;
+
+  const righe = CWV.map(metrica => {
+    const misurati = risultati.filter(p => (p.campo?.metriche || {})[metrica] != null);
+    if (!misurati.length) {
+      return `<li><span class="et">${SOGLIE[metrica].et}</span>
+        <span class="attesa">nessun dato di campo</span></li>`;
+    }
+    const fuori = misurati.filter(p =>
+      giudizio(metrica, p.campo.metriche[metrica]) !== 'buono');
+    const stato = fuori.length
+      ? `<span class="fuori">${fuori.length} su ${misurati.length} fuori soglia</span>
+         <span class="attesa">${fuori.map(p => esc(nomeTemplate(p.url))).join(', ')}</span>`
+      : `<span class="dentro">a posto su ${plurale(misurati.length, 'template', 'template')}</span>`;
+    return `<li><span class="et">${SOGLIE[metrica].et}</span>${stato}</li>`;
+  }).join('');
+
+  // Un indice: con cinque template la pagina supera i cinquemila pixel e gli
+  // interventi, che sono la parte che si usa, stanno in fondo.
+  const salti = risultati.map((p, i) =>
+    `<a href="#template-${i+1}">${esc(nomeTemplate(p.url))}</a>`).join(' · ');
+
+  vecchio.className = 'verdetto';
+  vecchio.innerHTML = `<h2>In sintesi</h2><ul>${righe}</ul>
+    <p class="indice"><a href="#interventi"><strong>Vai agli interventi</strong></a>
+      · ${salti}</p>`;
+}
+
+// --- avanzamento ------------------------------------------------------------ //
+
+let orologio = null;
+
+function disegnaAvanzamento() {
+  if (!stati.length) { $('avanzamento').hidden = true; return; }
+  const SEGNO = { coda: '·', corso: '●', fatto: '✓', errore: '✕' };
+  const CLASSE = { coda: 'coda', corso: 'corso', fatto: 'fatto', errore: 'errore-riga' };
+  const fatti = stati.filter(s => s.stato === 'fatto' || s.stato === 'errore').length;
+  const righe = stati.map(s => {
+    const secondi = s.stato === 'corso' && s.avvio
+      ? Math.round((Date.now() - s.avvio) / 1000)
+      : s.secondi;
+    return `<li class="${CLASSE[s.stato]}">
+      <span class="segno">${SEGNO[s.stato]}</span>
+      <span class="indirizzo">${esc(s.url)}</span>
+      <span class="tempo">${secondi != null ? secondi + 's' : ''}</span></li>`;
+  }).join('');
+  $('avanzamento').hidden = false;
+  $('avanzamento').innerHTML =
+    `<p class="meta">${fatti} di ${stati.length} pagine · una pagina richiede
+      20-60 secondi, e vengono misurate una alla volta</p><ol>${righe}</ol>`;
+}
+
+function avviaOrologio() {
+  fermaOrologio();
+  // Il contatore che scorre e' cio' che dice "non e' bloccato": prima l'unico
+  // segno di vita era una riga di testo che cambiava una volta per URL, cioe'
+  // stava ferma fino a un minuto.
+  orologio = setInterval(disegnaAvanzamento, 1000);
+}
+function fermaOrologio() {
+  if (orologio) { clearInterval(orologio); orologio = null; }
+}
+
+// --- modulo e barra --------------------------------------------------------- //
+
+function comprimiModulo() {
+  const primo = risultati[0]?.url || stati[0]?.url || '';
+  const dominio = primo ? new URL(primo).hostname : '';
+  const finite = risultati.length + falliti.length;
+  // In corso il conteggio delle pagine riuscite direbbe poco e cambierebbe sotto
+  // gli occhi: lo stato per URL sta gia' nell'elenco di avanzamento.
+  const dettaglio = stati.length && finite < stati.length
+    ? 'analisi in corso'
+    : `${plurale(risultati.length, 'pagina analizzata', 'pagine analizzate')}${
+        falliti.length ? ', ' + plurale(falliti.length, 'non riuscita', 'non riuscite') : ''}`;
+  $('barra-cosa').innerHTML = `${esc(dominio)} <span>· ${dettaglio}</span>`;
+  $('barra').hidden = false;
+  $('modulo').hidden = true;
+}
+
+// Durante l'analisi il modulo e' chiuso ma i suoi comandi restano nella barra:
+// senza questo, "Rianalizza" avvia una seconda corsa sopra la prima.
+function comandiAttivi(attivi) {
+  $('rianalizza').disabled = !attivi;
+  $('modifica').disabled = !attivi;
+}
+
+function espandiModulo() {
+  $('modulo').hidden = false;
+  $('barra').hidden = true;
+  $('urls').focus();
+}
+
+function ricorda() {
+  // Chi usa il tool torna sugli stessi template: reincollarli ogni volta e' lavoro
+  // inutile. La password resta in sessionStorage, che si svuota chiudendo il browser.
+  try {
+    localStorage.setItem('speed_urls', $('urls').value);
+    localStorage.setItem('speed_domini', $('domini').value);
+    localStorage.setItem('speed_desktop', $('desktop').checked ? '1' : '');
+  } catch (e) { /* modalita' privata: si perde la memoria, non l'analisi */ }
+}
+
+function stimaDurata() {
+  const quante = $('urls').value.split('\n').filter(s => s.trim()).length;
+  $('stima').textContent = quante
+    ? `${plurale(quante, 'pagina', 'pagine')} · circa ${Math.ceil(quante * 40 / 60)} minuti`
+    : '';
+}
+
+// --- suggerimento sui domini propri ----------------------------------------- //
+
+function suggerisciDomini(pagina) {
+  if ($('domini').value.trim()) return;
+  const terze = pagina.terze_parti || {};
+  const quota = terze.byte_totali ? terze.byte_terzi / terze.byte_totali : 0;
+  if (quota < 0.7) return;
+
+  // Un dominio "fratello": condivide la prima parola del dominio analizzato.
+  // E' il caso di bbc.com che serve gli asset da bbci.co.uk.
+  const radice = new URL(pagina.url).hostname.replace(/^www\./, '').split('.')[0];
+  const candidato = (terze.entita || [])
+    .filter(e => e.terza_parte && e.nome && e.nome.split('.')[0].startsWith(radice.slice(0, 4)))
+    .sort((a, b) => b.byte - a.byte)[0];
+  if (!candidato) return;
+
+  $('consiglio').innerHTML = `<div class="consiglio">
+    Il ${Math.round(quota*100)}% del peso risulta di terze parti, e la fetta più grossa
+    è <strong>${esc(candidato.nome)}</strong> — che assomiglia al dominio analizzato.
+    Se è un CDN del cliente va dichiarato, altrimenti gli interventi finiscono
+    assegnati a marketing invece che a sviluppo.
+    <div><button class="minuto" id="applica-dominio"
+      data-dominio="${esc(candidato.nome)}">Aggiungi ${esc(candidato.nome)} e rianalizza</button></div>
+  </div>`;
 }
 
 function mostraErrore(messaggio, rimedio) {
@@ -414,9 +648,24 @@ function nomeTemplate(url) {
 
 function riepilogo() {
   if (!risultati.length && !falliti.length) return '';
-  const parti = [`${risultati.length} pagine analizzate`];
-  if (falliti.length) parti.push(`${falliti.length} non riuscite`);
+  const parti = [plurale(risultati.length, 'pagina analizzata', 'pagine analizzate')];
+  if (falliti.length) parti.push(plurale(falliti.length, 'non riuscita', 'non riuscite'));
   return parti.join(', ') + '.';
+}
+
+async function analizzaUna(url, password, desktop, domini) {
+  const risposta = await fetch('/api/analizza', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, password, desktop, domini_propri: domini }),
+  });
+  const dati = await risposta.json();
+  if (!risposta.ok) {
+    const errore = new Error(dati.errore || `Errore ${risposta.status}`);
+    errore.rimedio = dati.rimedio || '';
+    throw errore;
+  }
+  return dati;
 }
 
 async function avvia() {
@@ -426,57 +675,94 @@ async function avvia() {
   const desktop = $('desktop').checked;
 
   $('errore').innerHTML = '';
+  $('consiglio').innerHTML = '';
   $('risultati').innerHTML = '';
+  $('verdetto').innerHTML = '';
   risultati.length = 0;
   falliti.length = 0;
+  stati.length = 0;
   $('scarica').disabled = true;
 
   if (!urls.length) return mostraErrore('Inserisci almeno un URL.');
   sessionStorage.setItem('speed_password', password);
+  ricorda();
   $('avvia').disabled = true;
 
+  for (const url of urls) stati.push({ url, stato: 'coda', secondi: null });
+  // Si comprime ORA, non a fine analisi: misurato a 390px, con il modulo aperto
+  // l'elenco di avanzamento cominciava a 950px, cioe' fuori dal primo schermo
+  // per tutti i minuti in cui e' l'unica cosa che si muove.
+  comprimiModulo();
+  comandiAttivi(false);
+  disegnaAvanzamento();
+  avviaOrologio();
+
   for (let i = 0; i < urls.length; i++) {
-    $('avanzamento').textContent =
-      `${i+1} di ${urls.length} — ${urls[i]} (può richiedere un minuto)`;
+    stati[i].stato = 'corso';
+    stati[i].avvio = Date.now();
+    disegnaAvanzamento();
     try {
-      const risposta = await fetch('/api/analizza', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: urls[i], password, desktop, domini_propri: domini }),
-      });
-      const dati = await risposta.json();
-      if (!risposta.ok) {
-        // Una pagina che fallisce non ferma le altre: e' gia' la logica della CLI,
-        // che accumula l'errore e prosegue. Fermarsi qui perderebbe il lavoro
-        // fatto e tutte le pagine successive.
-        const fallita = { template: nomeTemplate(urls[i]), url: urls[i],
-                          errore: dati.errore || `Errore ${risposta.status}`,
-                          rimedio: dati.rimedio || '' };
-        falliti.push(fallita);
-        disegnaFallita(fallita);
-      } else {
-        risultati.push(dati);
-        disegna(dati);
-        disegnaInterventi();
-      }
+      const dati = await analizzaUna(urls[i], password, desktop, domini);
+      stati[i].stato = 'fatto';
+      risultati.push(dati);
+      disegna(dati);
+      disegnaInterventi();
+      disegnaVerdetto();
+      if (risultati.length === 1) suggerisciDomini(dati);
     } catch (e) {
+      // Una pagina che fallisce non ferma le altre: e' gia' la logica della CLI,
+      // che accumula l'errore e prosegue. Fermarsi qui perderebbe il lavoro
+      // fatto e tutte le pagine successive.
+      stati[i].stato = 'errore';
       const fallita = { template: nomeTemplate(urls[i]), url: urls[i],
-                        errore: e.message };
+                        errore: e.message, rimedio: e.rimedio || '' };
       falliti.push(fallita);
       disegnaFallita(fallita);
     }
+    stati[i].secondi = Math.round((Date.now() - stati[i].avvio) / 1000);
+    disegnaAvanzamento();
   }
 
-  $('avanzamento').textContent = riepilogo();
+  fermaOrologio();
+  disegnaAvanzamento();
   $('avvia').disabled = false;
   // Il download resta possibile sulle pagine riuscite: il report dichiara quali
   // sono mancate invece di far finta che la lista fosse piu' corta.
   $('scarica').disabled = risultati.length === 0;
+  comprimiModulo();
+  comandiAttivi(true);
+}
+
+async function riprova(url) {
+  const scheda = document.querySelector(`[data-fallita="${CSS.escape(url)}"]`);
+  if (scheda) scheda.innerHTML = `<p class="attesa">Riprovo ${esc(url)}…</p>`;
+  const indice = falliti.findIndex(f => f.url === url);
+  try {
+    const dati = await analizzaUna(
+      url, sessionStorage.getItem('speed_password') || '',
+      $('desktop').checked,
+      $('domini').value.split(',').map(s => s.trim()).filter(Boolean));
+    if (indice >= 0) falliti.splice(indice, 1);
+    if (scheda) scheda.remove();
+    risultati.push(dati);
+    disegna(dati);
+    disegnaInterventi();
+    disegnaVerdetto();
+    comprimiModulo();
+    $('scarica').disabled = risultati.length === 0;
+  } catch (e) {
+    if (scheda) scheda.remove();
+    const fallita = { template: nomeTemplate(url), url,
+                      errore: e.message, rimedio: e.rimedio || '' };
+    if (indice >= 0) falliti[indice] = fallita; else falliti.push(fallita);
+    disegnaFallita(fallita);
+  }
 }
 
 async function scarica() {
   $('scarica').disabled = true;
-  $('avanzamento').textContent = 'preparo il documento...';
+  const etichetta = $('scarica').textContent;
+  $('scarica').textContent = 'preparo il documento…';
   try {
     const risposta = await fetch('/api/report', {
       method: 'POST',
@@ -502,24 +788,73 @@ async function scarica() {
     a.download = `Report velocità ${gg}${mm}${oggi.getFullYear()}.docx`;
     a.click();
     URL.revokeObjectURL(a.href);
-    $('avanzamento').textContent = `${risultati.length} pagine analizzate.`;
   } catch (e) {
     mostraErrore(e.message);
-    $('avanzamento').textContent = '';
   }
+  $('scarica').textContent = etichetta;
   $('scarica').disabled = false;
+}
+
+// --- avvio ------------------------------------------------------------------ //
+
+async function preparaPassword() {
+  // Se il server non ha SPEED_PASSWORD il campo non serve, e chiederlo sarebbe
+  // un ostacolo inventato. /api/stato lo dice senza esporre nessun valore.
+  try {
+    const risposta = await fetch('/api/stato');
+    const stato = await risposta.json().catch(() => ({}));
+    // 401: il server e' protetto e non gli abbiamo dato niente, quindi la
+    // password serve — e il corpo dell'errore non contiene le chiavi di stato.
+    // 200 con protezione "assente": non c'e' niente da chiedere.
+    // Qualsiasi altro caso si comporta come se servisse: nascondere il campo a
+    // un server protetto renderebbe il tool inutilizzabile.
+    const serve = risposta.status === 401 ||
+                  !String(stato.protezione || '').startsWith('assente');
+    $('riquadro-password').hidden = !serve;
+    if (serve) $('password').value = sessionStorage.getItem('speed_password') || '';
+  } catch (e) {
+    $('riquadro-password').hidden = false;   // nel dubbio si chiede
+  }
+}
+
+function ripristina() {
+  try {
+    $('urls').value = localStorage.getItem('speed_urls') || '';
+    $('domini').value = localStorage.getItem('speed_domini') || '';
+    $('desktop').checked = !!localStorage.getItem('speed_desktop');
+  } catch (e) { /* modalita' privata */ }
+  stimaDurata();
 }
 
 $('risultati').addEventListener('click', (evento) => {
   const bottone = evento.target.closest('.ancora');
+  if (bottone) {
+    document.getElementById(`altri-${bottone.dataset.pagina}`).hidden = false;
+    bottone.remove();
+    return;
+  }
+  const ritenta = evento.target.closest('.riprova');
+  if (ritenta) riprova(ritenta.dataset.url);
+});
+
+$('consiglio').addEventListener('click', (evento) => {
+  const bottone = evento.target.closest('#applica-dominio');
   if (!bottone) return;
-  document.getElementById(`altri-${bottone.dataset.pagina}`).hidden = false;
-  bottone.remove();
+  const attuali = $('domini').value.split(',').map(s => s.trim()).filter(Boolean);
+  attuali.push(bottone.dataset.dominio);
+  $('domini').value = [...new Set(attuali)].join(', ');
+  ricorda();
+  espandiModulo();
+  avvia();
 });
 
 $('avvia').addEventListener('click', avvia);
 $('scarica').addEventListener('click', scarica);
-$('password').value = sessionStorage.getItem('speed_password') || '';
+$('rianalizza').addEventListener('click', avvia);
+$('modifica').addEventListener('click', espandiModulo);
+$('urls').addEventListener('input', stimaDurata);
+ripristina();
+preparaPassword();
 </script>
 </body>
 </html>
