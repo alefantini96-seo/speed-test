@@ -21,48 +21,27 @@ import asyncio
 import httpx
 
 from ..errori import da_risposta_google
+from .google import richiedi
 
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
-
-# Codici su cui vale la pena riprovare: sono transitori. PSI risponde "Unable to
-# process" con regolarita', e su venti template una risposta persa e' un buco
-# silenzioso nel report — un template che non compare, senza che nessuno lo noti.
-CODICI_RIPROVABILI = (429, 500, 502, 503, 504)
-
-
-def _json_sicuro(risposta) -> dict | None:
-    """Il corpo come dizionario, o None se non e' JSON.
-
-    Un 502 del gateway o una pagina di quota tornano HTML: chiamare `.json()`
-    alla cieca faceva esplodere JSONDecodeError, che non dice niente a nessuno.
-    """
-    try:
-        dati = risposta.json()
-    except ValueError:
-        return None
-    return dati if isinstance(dati, dict) else None
+# Timeout di una singola chiamata. Una misurazione impiega 30-60 secondi: la CLI
+# puo' permettersi di aspettare, il percorso web no e passa il suo (vedi web.py).
+TIMEOUT = 120.0
 
 
 async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
                    strategy: str = "mobile", locale: str = "it",
-                   tentativi: int = 3, attesa_iniziale: float = 2.0) -> dict:
+                   tentativi: int = 3, attesa_iniziale: float = 2.0,
+                   timeout: float = TIMEOUT) -> dict:
     """Una misurazione di laboratorio, con riprova sui codici transitori."""
-    risposta = None
-    for tentativo in range(1, tentativi + 1):
-        risposta = await client.get(ENDPOINT, params={
-            "url": url,
-            "strategy": strategy,
-            "category": "performance",
-            "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
-            "key": api_key,
-        }, timeout=120)
-        if risposta.status_code not in CODICI_RIPROVABILI or tentativo == tentativi:
-            break
-        # Backoff esponenziale: 2s, 4s. Su 429 riprovare subito peggiora le cose.
-        await asyncio.sleep(attesa_iniziale * 2 ** (tentativo - 1))
-
-    dati = _json_sicuro(risposta)
+    risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
+        "url": url,
+        "strategy": strategy,
+        "category": "performance",
+        "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
+        "key": api_key,
+    }, timeout=timeout), tentativi, attesa_iniziale)
     if dati is not None and "error" in dati:
         err = dati["error"]
         raise da_risposta_google("PageSpeed Insights", err.get("code"),
