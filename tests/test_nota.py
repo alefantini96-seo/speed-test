@@ -87,9 +87,9 @@ def test_il_peso_del_tema_e_il_massimo_non_la_somma(esecuzione):
     for pagina in esecuzione["pagine"]:
         if pagina.get("errore"):
             continue
-        for opportunita in pagina["fatti"]["opportunita"]:
-            if opportunita["audit"] in tema.audit:
-                massimi.append(nota._spreco(opportunita)[1])
+        for problema in pagina["problemi"]:
+            if problema["codice"] in tema.audit:
+                massimi.append(nota._spreco(problema)[1])
     assert tema.ms_sprecati == pytest.approx(max(massimi))
     assert tema.ms_sprecati < sum(massimi), "sommare conterebbe due volte"
 

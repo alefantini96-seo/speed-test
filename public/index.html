@@ -154,6 +154,7 @@ li { margin:3px 0; }
     <button class="minuto" id="modifica">Modifica gli URL</button>
     <button class="minuto" id="rianalizza">Rianalizza</button>
     <button class="secondario" id="scarica" disabled>Scarica il report</button>
+    <button class="secondario" id="scarica-nota" disabled>Scarica la nota tecnica</button>
   </div>
 
   <div class="riquadro" id="modulo">
@@ -722,6 +723,7 @@ async function avvia() {
   falliti.length = 0;
   stati.length = 0;
   $('scarica').disabled = true;
+  $('scarica-nota').disabled = true;
 
   if (!urls.length) return mostraErrore('Inserisci almeno un URL.');
   ricorda();
@@ -768,6 +770,7 @@ async function avvia() {
   // Il download resta possibile sulle pagine riuscite: il report dichiara quali
   // sono mancate invece di far finta che la lista fosse piu' corta.
   $('scarica').disabled = risultati.length === 0;
+  $('scarica-nota').disabled = risultati.length === 0;
   comprimiModulo();
   comandiAttivi(true);
 }
@@ -788,6 +791,7 @@ async function riprova(url) {
     disegnaVerdetto();
     comprimiModulo();
     $('scarica').disabled = risultati.length === 0;
+    $('scarica-nota').disabled = risultati.length === 0;
   } catch (e) {
     if (scheda) scheda.remove();
     const fallita = { template: nomeTemplate(url), url,
@@ -797,19 +801,29 @@ async function riprova(url) {
   }
 }
 
-async function scarica() {
-  $('scarica').disabled = true;
-  const etichetta = $('scarica').textContent;
-  $('scarica').textContent = 'preparo il documento…';
+// Due documenti, non due vesti dello stesso: il report risponde a "il sito e'
+// lento e quanto costa", la nota a "cosa mettiamo a piano e in che ordine".
+const DOCUMENTI = {
+  cliente: { bottone: 'scarica',      nome: 'Report velocità' },
+  nota:    { bottone: 'scarica-nota', nome: 'Interventi Performance' },
+};
+
+async function scarica(formato = 'cliente') {
+  const { bottone, nome } = DOCUMENTI[formato];
+  const tasto = $(bottone);
+  tasto.disabled = true;
+  const etichetta = tasto.textContent;
+  tasto.textContent = 'preparo il documento…';
   try {
     const risposta = await fetch('/api/report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // Anche le pagine mancate: il report deve dire quali sono, non
+        // Anche le pagine mancate: il documento deve dire quali sono, non
         // presentare una lista piu' corta come se fosse completa.
         pagine: [...risultati, ...falliti],
         desktop: $('desktop').checked,
+        formato,
       }),
     });
     if (!risposta.ok) {
@@ -822,14 +836,14 @@ async function scarica() {
     const oggi = new Date();
     const gg = String(oggi.getDate()).padStart(2,'0');
     const mm = String(oggi.getMonth()+1).padStart(2,'0');
-    a.download = `Report velocità ${gg}${mm}${oggi.getFullYear()}.docx`;
+    a.download = `${nome} ${gg}${mm}${oggi.getFullYear()}.docx`;
     a.click();
     URL.revokeObjectURL(a.href);
   } catch (e) {
     mostraErrore(e.message);
   }
-  $('scarica').textContent = etichetta;
-  $('scarica').disabled = false;
+  tasto.textContent = etichetta;
+  tasto.disabled = false;
 }
 
 // --- avvio ------------------------------------------------------------------ //
@@ -866,7 +880,8 @@ $('consiglio').addEventListener('click', (evento) => {
 });
 
 $('avvia').addEventListener('click', avvia);
-$('scarica').addEventListener('click', scarica);
+$('scarica').addEventListener('click', () => scarica('cliente'));
+$('scarica-nota').addEventListener('click', () => scarica('nota'));
 $('rianalizza').addEventListener('click', avvia);
 $('modifica').addEventListener('click', espandiModulo);
 $('urls').addEventListener('input', stimaDurata);

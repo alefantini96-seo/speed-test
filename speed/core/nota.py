@@ -293,34 +293,24 @@ class Tema:
 # `mainthread-work-breakdown` ripartisce per categoria il lavoro che `bootup-time`
 # attribuisce ai singoli script. Per questo il tema prende il MASSIMO fra i suoi
 # audit, non la somma — ed e' anche il modo in cui il numero va letto: "fino a".
-def _spreco(opportunita: dict) -> tuple:
-    """(byte, ms) sprecati secondo Lighthouse, dai numeri grezzi.
+def _spreco(problema: dict) -> tuple:
+    """(byte, ms) sprecati, dai numeri grezzi che `diagnose` mette nel problema.
 
-    Si legge da `fatti.opportunita`, dove i valori sono numeri: le misure dentro
-    `problemi` sono gia' stringhe formattate, e riparsarle significa rompersi al
-    primo cambio di formato.
+    Si legge dai problemi e non da `fatti.opportunita` perche' cosi' la nota si
+    genera anche da un run salvato dalla versione web, che le opportunita'
+    complete le scarta per stare nel limite del corpo di una richiesta. Sono due
+    numeri per problema: 700 byte a pagina invece di 59 KB.
     """
-    byte = ms = 0.0
-    for risorsa in opportunita.get("risorse") or []:
-        byte += float(risorsa.get("byte_sprecati") or 0)
-        ms += float(risorsa.get("ms_sprecati") or 0)
-    for voce in opportunita.get("voci") or []:
-        for chiave, valore in (voce.get("misure") or {}).items():
-            if chiave in ("wastedBytes", "totalBytes", "transferSize",
-                          "resourceBytes", "unusedBytes"):
-                byte += float(valore or 0)
-            elif chiave in ("wastedMs", "duration", "mainThreadTime",
-                            "blockingTime", "reflowTime", "total"):
-                ms += float(valore or 0)
-    return (byte, ms)
+    return (float(problema.get("byte_sprecati") or 0),
+            float(problema.get("ms_sprecati") or 0))
 
 
-def _opportunita_per_audit(esecuzione: dict) -> dict:
-    """{(template, audit): opportunita} da tutte le pagine riuscite."""
+def _problemi_per_audit(esecuzione: dict) -> dict:
+    """{(template, codice): problema} da tutte le pagine riuscite."""
     fuori = {}
     for pagina in _riuscite(esecuzione):
-        for opportunita in ((pagina.get("fatti") or {}).get("opportunita") or []):
-            fuori[(pagina.get("template", ""), opportunita.get("audit"))] = opportunita
+        for problema in pagina.get("problemi") or []:
+            fuori[(pagina.get("template", ""), problema.get("codice"))] = problema
     return fuori
 
 
@@ -403,7 +393,7 @@ def temi(esecuzione: dict) -> list:
     """I problemi del sito accorpati per tema, in ordine di gravita'."""
     interventi = raggruppa(esecuzione)
     totale = len(_riuscite(esecuzione))
-    per_audit = _opportunita_per_audit(esecuzione)
+    per_audit = _problemi_per_audit(esecuzione)
     dal_campo = quadro(esecuzione)["modalita"] == "campo"
 
     pesi = {p.get("template", ""): ((p.get("fatti") or {}).get("metriche_lab") or {}).get("Peso", 0)
@@ -422,10 +412,10 @@ def temi(esecuzione: dict) -> list:
         # Massimo e non somma: audit diversi misurano lo stesso lavoro con tagli
         # diversi, e sommarli lo conterebbe due volte.
         for template in intervento.template:
-            opportunita = per_audit.get((template.nome, intervento.codice))
-            if opportunita is None:
+            problema = per_audit.get((template.nome, intervento.codice))
+            if problema is None:
                 continue
-            byte, ms = _spreco(opportunita)
+            byte, ms = _spreco(problema)
             tema.byte_sprecati = max(tema.byte_sprecati, byte)
             tema.ms_sprecati = max(tema.ms_sprecati, ms)
         tema.audit.append(intervento.codice)

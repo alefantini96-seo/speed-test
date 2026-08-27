@@ -124,6 +124,9 @@ def fatti_essenziali(fatti) -> dict:
         "performance_score": fatti.performance_score,
         "lcp_elemento_snippet": fatti.lcp_elemento_snippet,
         "lcp_fasi": fatti.lcp_fasi,
+        # Nove numeri: sono il quadro di sintesi della nota tecnica, e senza di
+        # loro dal browser quel documento uscirebbe senza tabella in testa.
+        "metriche_lab": fatti.metriche_lab,
     }
 
 

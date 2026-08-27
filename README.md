@@ -202,7 +202,8 @@ bottone: sotto il quinto nessuno agisce subito.
     python -m speed run clienti/x.yaml --formato nota
     python -m speed report --formato nota "out/dati velocita 21082026.json"
 
-Scrive `Interventi Performance <ddmmyyyy>.docx`. È **il documento che si consegna**:
+Scrive `Interventi Performance <ddmmyyyy>.docx`. Si scarica **anche dalla versione
+web**, dal pulsante «Scarica la nota tecnica» accanto a quello del report. È **il documento che si consegna**:
 poche pagine, i problemi accorpati per tema e ordinati, la citazione di PageSpeed e
 il rimando alla documentazione Google per ognuno. Esempio committato:
 [`docs/esempio-interventi-performance.docx`](docs/esempio-interventi-performance.docx).
@@ -275,13 +276,19 @@ Le classificazioni nostre (chi interviene, priorità, azionabilità) sono marcat
 tali riga per riga. Gli audit non azionabili e gli artefatti di dati non spariscono:
 compaiono col motivo per cui nessuno li ha assegnati.
 
-**Solo da riga di comando, in questa versione.** La versione web non può generarlo:
+**Solo da riga di comando** — a differenza della nota tecnica, che invece si
+scarica anche dal browser. La versione web non può generare *questo* documento:
 `web.fatti_essenziali` scarta le opportunità complete per stare nel limite di 4,5 MB
 del corpo di una richiesta Vercel, e portarle al browser costerebbe 59 KB per pagina
 contro i 37 attuali — a 40 pagine si passerebbe da 1,5 a 3,8 MB, cioè quasi tutto il
 margine. Troncarle per farcele stare sarebbe l'opposto di questa feature. Un run
 salvato dalla versione web produce comunque il documento, che però dichiara in testa
 alla sezione interventi di essere incompleto.
+
+Alla nota tecnica invece bastano due numeri per problema — 700 byte a pagina contro
+59 KB — perché non elenca le risorse una per una: quelli viaggiano dentro `problemi`,
+che il payload web porta già. Per questo la nota si scarica dal browser e il
+riferimento no.
 
 ## Master plan: il frammento per l'xlsx
 
