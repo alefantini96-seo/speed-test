@@ -256,6 +256,45 @@ def test_l_evidenza_scarta_le_nostre_parafrasi():
     assert "Stima Lighthouse" not in evidenza and "dello spreco" not in evidenza
 
 
+def test_l_evidenza_dell_lcp_conserva_il_nome_della_fase():
+    """Il sintomo: si tagliava sull'em dash e restava "61% del tempo LCP", che non
+    dice di quale fase sia quel 61% — ed e' tutto il contenuto della riga."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("lcp-resourceLoadDelay", fonte="campo",
+                           metrica="largest_contentful_paint",
+                           evidenza=("Fase dominante (utenti reali): "
+                                     "Attesa prima del download — 61% del tempo LCP",
+                                     "Ripartizione: ..."))],
+                metriche={"largest_contentful_paint": 4180.0})))
+    evidenza = frammento["masterplan"][0]["evidenza"]
+    assert "Attesa prima del download" in evidenza
+    assert "61% del tempo" in evidenza
+    assert "Fase dominante" not in evidenza, "il prefisso non e' un dato"
+    assert "—" not in evidenza, "in una cella il trattino non serve"
+
+
+def test_un_numero_nudo_viene_qualificato_con_la_metrica_dell_audit():
+    """"1,7 s" in una cella di audit non dice di cosa sia il tempo."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("bootup-time", metrica="interaction_to_next_paint",
+                           evidenza=("1,7 s",))],
+                metriche={"interaction_to_next_paint": 109.0})))
+    assert frammento["masterplan"][0]["evidenza"] ==         "INP p75 109 ms. Tempo di esecuzione JavaScript 1,7 s."
+
+
+def test_un_displayvalue_che_si_descrive_da_solo_resta_com_e():
+    """"Risparmio stimato di 498 KiB" dice gia' cosa misura: qualificarlo sarebbe
+    testo in piu' su un testo di Lighthouse che va bene com'e'."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("unused-javascript", metrica="largest_contentful_paint",
+                           evidenza=("Risparmio stimato di 498 KiB",))],
+                metriche={"largest_contentful_paint": 4180.0})))
+    assert frammento["masterplan"][0]["evidenza"] ==         "LCP p75 4.180 ms. Risparmio stimato di 498 KiB."
+
+
 def test_nessuna_cella_contiene_una_data_o_il_metodo():
     frammento, _ = masterplan.costruisci(_esecuzione(
         _pagina("Home", "https://x.it/", [

@@ -194,10 +194,11 @@ da cui installa Vercel.
 ```json
 {
   "masterplan": [
-    {"id": 1, "problema": "LCP oltre soglia su 6 template su 9",
+    {"id": 1, "problema": "LCP: risorsa scoperta tardi su 6 template su 9",
      "priorita": "Alta",
-     "evidenza": "LCP p75 4.180 ms. Attesa prima del download 61% del tempo.",
-     "intervento": "Riduci il codice JavaScript inutilizzato",
+     "evidenza": "LCP p75 4.180 ms. Attesa prima del download 61% del tempo LCP.",
+     "intervento": "Deve essere applicata fetchpriority=high",
+     "fonte_intervento": "lighthouse",
      "tab": "URL - LCP oltre soglia"}
   ],
   "tab": [
@@ -228,6 +229,9 @@ Le regole che governano il contenuto:
   **`fonte_intervento`** (`lighthouse` | `nostra`). Vedi ADR-004.
 - **Registro telegrafico**: niente conseguenze, niente metodo o data, niente
   confronto con misure precedenti, niente elenco di pagine quando c'e' gia' un tab.
+  Un numero che da solo non dice cosa misura viene qualificato con l'etichetta del
+  problema — "1,7 s" diventa "Tempo di esecuzione JavaScript 1,7 s" — e l'evidenza
+  dell'LCP conserva il nome della fase, che e' tutto il contenuto della riga.
 - **Un tab si crea solo se la lista serve a chi implementa**, con un tetto di cinque.
   Il crawl completo e le liste informative non sono tab.
 

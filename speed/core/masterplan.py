@@ -25,6 +25,8 @@ scansione salvata mesi prima.
 """
 from __future__ import annotations
 
+import re
+
 from .soglie import ETICHETTE, SOGLIE, giudizio
 
 PRIORITA = {"alta": "Alta", "media": "Media", "bassa": "Bassa"}
@@ -167,11 +169,37 @@ def fonte_intervento_di(problema: dict) -> str:
     return "lighthouse"
 
 
+# Un displayValue che e' soltanto una quantita': "1,7 s", "2,8 s", "0,095". In una
+# cella di audit un numero nudo non dice di cosa sia, e la colonna accanto dice
+# cosa fare, non cosa si e' misurato. Quelli che si descrivono da soli —
+# "Risparmio stimato di 97 KiB", "15 attivita' lunghe trovate" — non rientrano.
+_SOLA_QUANTITA = re.compile(r"^[\d.,]+\s*(ms|s|byte|KiB|KB|MiB|MB)?$", re.IGNORECASE)
+
+
+def _cella(riga: str, codice: str) -> str:
+    """Una riga di evidenza ridotta a cella di audit: dato e numero, niente altro.
+
+    Due riscritture, entrambe su testo gia' misurato:
+
+    - la **fase dominante** perde il prefisso e il trattino, non il nome della
+      fase. Tagliare sull'em dash lasciava "39% del tempo LCP", che non dice di
+      quale fase sia quel 39% — e la fase e' tutto il contenuto della riga;
+    - un **displayValue che e' solo una quantita'** si qualifica con l'etichetta
+      del problema, che e' gia' una classificazione nostra dichiarata.
+    """
+    if riga.startswith("Fase dominante"):
+        return re.sub(r"\s*—\s*", " ", riga.split(":", 1)[-1]).strip()
+    if _SOLA_QUANTITA.match(riga.strip()):
+        return f"{etichetta_problema(codice)} {riga.strip()}"
+    return riga
+
+
 def _evidenza(problema: dict, campo: dict) -> str:
-    """Solo dati misurati: il p75 di campo, piu' il dato di laboratorio piu' concreto.
+    """Dati misurati: il p75 di campo, piu' il dato di laboratorio piu' concreto.
 
     La fonte resta implicita nel numero, che e' come si scrive una cella di audit:
-    "LCP p75 4.180 ms" non ha bisogno di "secondo CrUX".
+    "LCP p75 4.180 ms" non ha bisogno di "secondo CrUX". Dove il numero da solo
+    non dice cosa misura, lo qualifica l'etichetta del problema: vedi `_cella`.
     """
     parti = []
     metrica = problema.get("metrica")
@@ -190,9 +218,7 @@ def _evidenza(problema: dict, campo: dict) -> str:
         # audit sarebbero rumore.
         if riga.startswith("Stima Lighthouse") or "dello spreco" in riga:
             continue
-        pulita = riga.split(":", 1)[-1].strip() if riga.startswith("Fase dominante") else riga
-        pulita = pulita.split("—")[-1].strip() if "—" in pulita else pulita
-        parti.append(pulita.rstrip("."))
+        parti.append(_cella(riga, problema.get("codice", "")).rstrip("."))
         break
 
     return ". ".join(p for p in parti if p) + ("." if parti else "")
