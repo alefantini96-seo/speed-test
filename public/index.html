@@ -305,6 +305,30 @@ function fasiLcp(fatti) {
 // Quindi: il titolo si dice una volta, i bersagli si raggruppano per template. E
 // i file presenti su TUTTI i template si marcano: sono il bundle comune, e
 // sistemarli una volta vale per tutto il sito.
+// Le tre forme in cui un problema nomina cio' su cui si mette mano. `bersagli` e'
+// la lista corta della resa (3 voci); `risorse` ed `elementi` ne conservano sei
+// ciascuno, con gli stessi nomi. L'intersezione va fatta su questa, non su quella
+// di resa: su tre voci due template non hanno quasi mai un file in comune, e il
+// bundle condiviso spariva dalla scheda proprio dove c'era.
+function vociConfrontabili(p) {
+  const voci = [], viste = new Set();
+  // Il nome dev'essere una stringa: la constatazione sulle terze parti raggruppa
+  // piu' host in una riga sola e li' mette una lista.
+  const aggiungi = (nome, misura, dettaglio) => {
+    if (typeof nome !== 'string' || !nome || viste.has(nome)) return;
+    viste.add(nome);
+    voci.push([nome, misura || '', dettaglio || '']);
+  };
+  for (const [nome, misura, dettaglio] of p.bersagli || []) aggiungi(nome, misura, dettaglio);
+  for (const [url, misura] of p.risorse || []) {
+    if (typeof url === 'string') aggiungi(url.split('?')[0].split('/').pop() || url, misura, url);
+  }
+  for (const [riferimento, misura, percorso] of p.elementi || []) {
+    aggiungi(riferimento, misura, percorso);
+  }
+  return voci;
+}
+
 function raggruppa(pagine) {
   const gruppi = new Map();
   for (const pagina of pagine) {
@@ -312,7 +336,8 @@ function raggruppa(pagine) {
     for (const p of pagina.problemi || []) {
       if (!gruppi.has(p.codice)) gruppi.set(p.codice, { ...p, template: [] });
       const gruppo = gruppi.get(p.codice);
-      gruppo.template.push({ nome: template, bersagli: p.bersagli || [] });
+      gruppo.template.push({ nome: template, bersagli: p.bersagli || [],
+                             tutti: vociConfrontabili(p) });
       // Fra due template si tiene il guadagno piu' alto e la gravita' peggiore.
       if (ORDINE_GRAVITA[p.gravita] < ORDINE_GRAVITA[gruppo.gravita]) {
         gruppo.gravita = p.gravita;
@@ -326,7 +351,8 @@ function raggruppa(pagine) {
   const totale = pagine.length;
   const lista = [...gruppi.values()].map(g => {
     // I bersagli che compaiono su ogni template dove l'intervento c'e'.
-    const insiemi = g.template.map(t => new Set(t.bersagli.map(b => b[0])));
+    // Sulle liste complete: il troncamento e' compito della resa.
+    const insiemi = g.template.map(t => new Set(t.tutti.map(b => b[0])));
     const comuni = insiemi.length
       ? [...insiemi[0]].filter(nome => insiemi.every(i => i.has(nome)))
       : [];
@@ -346,7 +372,9 @@ function elencoBersagli(gruppo) {
   const righe = [];
   const comuni = [...gruppo.comuni];
   if (comuni.length && gruppo.quanti > 1) {
-    const misure = new Map(gruppo.template[0].bersagli.map(b => [b[0], b]));
+    // Le misure si cercano nella lista completa: un file comune puo' stare oltre
+    // il terzo posto su ogni template, ed e' proprio il caso che `comuni` trova.
+    const misure = new Map(gruppo.template[0].tutti.map(b => [b[0], b]));
     righe.push(`<li class="gruppo">su tutti i ${gruppo.quanti} template</li>`);
     for (const nome of comuni.slice(0, 3)) {
       const [, misura, dettaglio] = misure.get(nome) || ['', '', ''];

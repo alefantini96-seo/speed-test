@@ -5,13 +5,21 @@ Il caso reale che l'ha motivato: su tre template, 10 interventi su 13 comparivan
 su tutti e tre — 20 schede su 37 erano ripetizioni dello stesso titolo. I file su
 cui agire invece quasi non coincidevano, dal 43% allo 0% di sovrapposizione.
 """
+import json
+from pathlib import Path
+
+from speed.core import consenso, diagnose, extract, thirdparty
+from speed.io import crux
 from speed.core.aggregazione import Intervento, raggruppa
 
+FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
-def _problema(codice, gravita="media", bersagli=(), **extra):
+
+def _problema(codice, gravita="media", bersagli=(), risorse=(), elementi=(), **extra):
     base = {"codice": codice, "titolo": f"Titolo {codice}", "gravita": gravita,
             "responsabile": "sviluppo", "fonte": "lighthouse",
             "bersagli": [list(b) for b in bersagli], "azioni": ["Descrizione"],
+            "risorse": [list(r) for r in risorse], "elementi": [list(e) for e in elementi],
             "evidenza": [], "nota": "", "documentazione": "", "azionabile": True,
             "guadagno": "", "guadagno_tipo": ""}
     base.update(extra)
@@ -90,6 +98,69 @@ def test_un_template_senza_bersagli_azzera_i_comuni():
     assert lista[0].comuni == []
 
 
+def test_un_file_comune_oltre_il_terzo_bersaglio_non_deve_sparire():
+    """Il sintomo: l'intersezione girava sulle liste di resa, troncate a 3, e su
+    tre voci due template non hanno quasi mai un file in comune. Qui vendor.js e'
+    su entrambi ma quarto su entrambi: e' esattamente il bundle condiviso che la
+    funzione esiste per trovare."""
+    def pagina(nome, url, propri):
+        return _pagina(nome, url, [_problema(
+            "unused-javascript",
+            bersagli=[(f"{n}.js", "10 KB", "") for n in propri[:3]],
+            risorse=[(f"https://x.it/{n}.js", "10 KB", False) for n in propri]
+                    + [("https://cdn.x.it/vendor.js", "300 KB", False)])])
+
+    lista = raggruppa(_run(
+        pagina("Home", "https://x.it/", ["a", "b", "c"]),
+        pagina("Cat", "https://x.it/c", ["d", "e", "f"]),
+    ))
+    intervento = lista[0]
+    assert all("vendor.js" not in [b[0] for b in t.bersagli]
+               for t in intervento.template), "il caso ha senso solo se e' fuori dai primi tre"
+    assert intervento.comuni == ["vendor.js"]
+
+
+def test_il_bersaglio_comune_conserva_la_sua_misura():
+    """Trovato oltre i primi tre, deve comunque arrivare in tabella con l'impatto:
+    una riga "vendor.js" senza numero non serve a chi implementa."""
+    def pagina(nome, url, propri):
+        return _pagina(nome, url, [_problema(
+            "unused-javascript",
+            bersagli=[(f"{n}.js", "10 KB", "") for n in propri],
+            risorse=[(f"https://x.it/{n}.js", "10 KB", False) for n in propri]
+                    + [("https://cdn.x.it/vendor.js", "300 KB", False)])])
+
+    intervento = raggruppa(_run(pagina("Home", "https://x.it/", ["a", "b", "c"]),
+                                pagina("Cat", "https://x.it/c", ["d", "e", "f"])))[0]
+    assert intervento.misura_di("vendor.js") ==         ("vendor.js", "300 KB", "https://cdn.x.it/vendor.js")
+
+
+def test_gli_elementi_del_dom_entrano_nel_confronto():
+    """Per gli audit sul CLS i bersagli sono nodi, non file: la stessa regola."""
+    def pagina(nome, url, propri):
+        return _pagina(nome, url, [_problema(
+            "cls-culprits-insight",
+            bersagli=[(s, "0.010", "") for s in propri[:3]],
+            elementi=[(s, "0.010", "1,HTML", "<div>") for s in propri]
+                     + [("header.banner", "0.080", "1,HTML,0,HEADER", "<header>")])])
+
+    intervento = raggruppa(_run(pagina("Home", "https://x.it/", [".a", ".b", ".c"]),
+                                pagina("Cat", "https://x.it/c", [".d", ".e", ".f"])))[0]
+    assert intervento.comuni == ["header.banner"]
+
+
+def test_il_troncamento_resta_nella_lista_di_resa():
+    """`bersagli` non cresce: e' quella che finisce nel payload e nelle tabelle."""
+    intervento = raggruppa(_run(
+        _pagina("Home", "https://x.it/", [_problema(
+            "unused-javascript",
+            bersagli=[("a.js", "1 KB", ""), ("b.js", "1 KB", ""), ("c.js", "1 KB", "")],
+            risorse=[(f"https://x.it/{n}.js", "1 KB", False)
+                     for n in ("a", "b", "c", "d", "e", "f")])])))[0]
+    assert len(intervento.template[0].bersagli) == 3
+    assert len(intervento.template[0].tutti) == 6
+
+
 # --- gravita' e ordine -------------------------------------------------------- #
 
 def test_fra_due_template_vale_la_gravita_peggiore():
@@ -140,3 +211,33 @@ def test_la_riduzione_e_reale():
                              for n in range(3)]))
     assert len(lista) == 10, "trenta schede diventano dieci"
     assert all(i.quanti == 3 for i in lista)
+
+
+# --- sui due PSI reali -------------------------------------------------------- #
+
+def _pagina_reale(nome_template, nome_fixture, url):
+    """Una pagina come la produce un run, dai fixture e senza rete."""
+    psi = json.loads((FIXTURES / nome_fixture).read_text(encoding="utf-8"))
+    accordo = consenso.combina([extract.estrai(psi, url, "PHONE")])
+    fatti = accordo.fatti
+    metriche = crux.leggi_record(
+        json.loads((FIXTURES / "crux-bbc.json").read_text(encoding="utf-8")))["metriche"]
+    riepilogo = thirdparty.riepiloga(fatti.richieste, url)
+    pagina = {"template": nome_template, "url": url,
+              "problemi": diagnose.diagnostica(fatti, metriche, riepilogo, accordo)}
+    return json.loads(json.dumps(pagina, default=lambda o: o.__dict__,
+                                 ensure_ascii=False))
+
+
+def test_sui_fixture_il_bundle_condiviso_si_vede():
+    """Su bootup-time require.js e' sesto su entrambe le misurazioni: con
+    l'intersezione sui primi tre bersagli non compariva da nessuna parte."""
+    lista = raggruppa({"pagine": [
+        _pagina_reale("Home", "psi-bbc-mobile-it.json", "https://www.bbc.com/"),
+        _pagina_reale("News", "psi-bbc-mobile-it-2.json", "https://www.bbc.com/news"),
+    ]})
+    bootup = next(i for i in lista if i.codice == "bootup-time")
+    resa = {b[0] for t in bootup.template for b in t.bersagli}
+    assert "require.js" not in resa, "il caso ha senso solo se e' fuori dalla resa"
+    assert "require.js" in bootup.comuni
+    assert bootup.misura_di("require.js")[1], "deve arrivare con il suo impatto"

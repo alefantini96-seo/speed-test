@@ -301,6 +301,22 @@ def test_l_interfaccia_isola_i_bersagli_comuni_a_tutti_i_template():
     assert "su tutti i ${gruppo.quanti} template" in sorgente
 
 
+def test_l_interfaccia_interseca_le_liste_complete_non_quelle_di_resa():
+    """Stessa correzione di aggregazione.py: su tre voci l'intersezione e' quasi
+    sempre vuota e il bundle condiviso sparisce. Il controllo e' sul sorgente
+    perche' e' JavaScript e non c'e' un browser nei test."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "function vociConfrontabili(" in sorgente
+    assert "t.tutti.map(b => b[0])" in sorgente, "l'intersezione gira sulla lista completa"
+    assert "gruppo.template[0].tutti.map" in sorgente, "e le misure si cercano li'"
+
+
+def test_l_interfaccia_tronca_i_bersagli_in_resa():
+    """Il troncamento resta, ma dopo l'intersezione, non prima."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert sorgente.count(".slice(0, 3)") >= 2, "comuni e propri restano corti a schermo"
+
+
 def test_la_scheda_di_pagina_non_ripete_piu_gli_interventi():
     sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
     inizio = sorgente.index("function disegna(pagina)")
