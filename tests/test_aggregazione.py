@@ -182,13 +182,82 @@ def test_ordine_per_gravita_poi_per_quanti_template():
     assert [i.codice for i in lista] == ["grave", "diffuso", "isolato"]
 
 
-def test_il_guadagno_si_conserva_dal_primo_template_che_lo_dichiara():
+def test_l_evidenza_viene_dal_template_messo_peggio():
+    """Il sintomo: la gravita' era del peggiore, i numeri del primo template
+    incontrato. Una scheda diceva "alta" mostrando le misure della pagina sana."""
     lista = raggruppa(_run(
-        _pagina("Home", "https://x.it/", [_problema("x")]),
-        _pagina("Cat", "https://x.it/c", [_problema("x", guadagno="600 ms su LCP",
+        _pagina("Home", "https://x.it/", [_problema(
+            "x", gravita="bassa", evidenza=["Risparmio stimato di 2 KiB"],
+            nota="Per gli utenti reali questa metrica e' gia' a posto.")]),
+        _pagina("Cat", "https://x.it/c", [_problema(
+            "x", gravita="alta", evidenza=["Risparmio stimato di 800 KiB"],
+            nota="il campo dice LCP 4.180 ms (scarso).")]),
+    ))
+    intervento = lista[0]
+    assert intervento.gravita == "alta"
+    assert intervento.evidenza == ["Risparmio stimato di 800 KiB"]
+    assert "4.180 ms" in intervento.nota
+
+
+def test_il_guadagno_viene_dal_membro_peggiore_non_dal_primo_che_ce_l_ha():
+    """Mostrare il guadagno di un template e la gravita' di un altro e' la stessa
+    incoerenza: la scheda descrive un template solo, quello messo peggio."""
+    lista = raggruppa(_run(
+        _pagina("Home", "https://x.it/", [_problema("x", gravita="bassa",
+                                                    guadagno="10 ms su LCP",
+                                                    guadagno_tipo="tempo")]),
+        _pagina("Cat", "https://x.it/c", [_problema("x", gravita="alta",
+                                                    guadagno="600 ms su LCP",
                                                     guadagno_tipo="tempo")]),
     ))
     assert lista[0].guadagno == "600 ms su LCP" and lista[0].guadagno_tipo == "tempo"
+
+
+def test_l_azionabilita_non_si_eredita_dal_template_sbagliato():
+    """Marcare non azionabile un intervento che altrove lo e' lo toglie dal
+    master plan per il motivo sbagliato."""
+    lista = raggruppa(_run(
+        _pagina("Home", "https://x.it/", [_problema("cache-insight", gravita="bassa",
+                                                    azionabile=False)]),
+        _pagina("Cat", "https://x.it/c", [_problema("cache-insight", gravita="alta",
+                                                    azionabile=True)]),
+    ))
+    assert lista[0].gravita == "alta" and lista[0].azionabile is True
+
+
+def test_la_scheda_aggregata_descrive_un_template_solo():
+    """Tutti i campi non per-template vengono dallo stesso membro: e' cio' che
+    masterplan.costruisci fa gia' sulla riga aggregata."""
+    peggiore = _problema("x", gravita="alta", evidenza=["800 KiB"],
+                         nota="nota del peggiore", documentazione="https://peggiore",
+                         guadagno="600 ms su LCP", azioni=["Azione del peggiore"],
+                         responsabile="infrastruttura")
+    lista = raggruppa(_run(
+        _pagina("Home", "https://x.it/", [_problema(
+            "x", gravita="media", evidenza=["2 KiB"], nota="nota del primo",
+            documentazione="https://primo", azioni=["Azione del primo"],
+            responsabile="sviluppo")]),
+        _pagina("Cat", "https://x.it/c", [peggiore]),
+    ))
+    intervento = lista[0]
+    assert intervento.evidenza == ["800 KiB"]
+    assert intervento.nota == "nota del peggiore"
+    assert intervento.documentazione == "https://peggiore"
+    assert intervento.azioni == ["Azione del peggiore"]
+    assert intervento.responsabile == "infrastruttura"
+
+
+def test_i_bersagli_restano_di_ogni_template():
+    """L'unica cosa che NON viene dal peggiore: i file cambiano per pagina, ed e'
+    tutto il motivo per cui la scheda li tiene separati."""
+    lista = raggruppa(_run(
+        _pagina("Home", "https://x.it/", [_problema(
+            "x", gravita="bassa", bersagli=[("home.js", "50 KB", "")])]),
+        _pagina("Cat", "https://x.it/c", [_problema(
+            "x", gravita="alta", bersagli=[("cat.js", "30 KB", "")])]),
+    ))
+    nomi = {t.nome: [b[0] for b in t.bersagli] for t in lista[0].template}
+    assert nomi == {"Home": ["home.js"], "Cat": ["cat.js"]}
 
 
 # --- robustezza --------------------------------------------------------------- #

@@ -140,49 +140,53 @@ class Intervento:
 
 
 def raggruppa(esecuzione: dict) -> list:
-    """Le pagine di un run -> un intervento per tipo, ordinato per priorita'."""
+    """Le pagine di un run -> un intervento per tipo, ordinato per priorita'.
+
+    La scheda prende **tutto** dal template messo peggio: gravita', evidenza,
+    guadagno, nota, azionabilita'. Prendere la gravita' dal peggiore e i numeri
+    dal primo template incontrato produceva schede che dicevano "alta" mostrando
+    le misure della pagina sana, o marcavano non azionabile un intervento che
+    altrove lo era. E' lo stesso criterio che `masterplan.costruisci` applica alla
+    riga aggregata: qui era risolto in un altro modo, e male.
+
+    Restano per template i soli bersagli, che sono l'unica cosa davvero diversa
+    da una pagina all'altra.
+    """
     pagine = [p for p in esecuzione.get("pagine", []) if not p.get("errore")]
     totale = len(pagine)
-    gruppi: dict = {}
 
+    # Primo passo: si raccolgono i membri, senza ancora decidere chi rappresenta
+    # il gruppo. Il peggiore si conosce solo dopo averli visti tutti.
+    membri: dict = {}
     for pagina in pagine:
         nome = pagina.get("template") or pagina.get("url", "")
         for problema in pagina.get("problemi") or []:
-            codice = problema.get("codice", "")
-            intervento = gruppi.get(codice)
-            if intervento is None:
-                intervento = Intervento(
-                    codice=codice,
-                    titolo=problema.get("titolo", codice),
-                    gravita=problema.get("gravita", "bassa"),
-                    responsabile=problema.get("responsabile", ""),
-                    fonte=problema.get("fonte", "lighthouse"),
-                    guadagno=problema.get("guadagno", ""),
-                    guadagno_tipo=problema.get("guadagno_tipo", ""),
-                    azioni=list(problema.get("azioni") or []),
-                    evidenza=list(problema.get("evidenza") or []),
-                    nota=problema.get("nota", ""),
-                    documentazione=problema.get("documentazione", ""),
-                    azionabile=problema.get("azionabile", True),
-                    totale_template=totale,
-                )
-                gruppi[codice] = intervento
-            else:
-                # Fra due template vale la gravita' peggiore e il guadagno piu' alto
-                # gia' calcolato: si sta descrivendo un intervento solo.
-                if ORDINE_GRAVITA.get(problema.get("gravita"), 3) < \
-                        ORDINE_GRAVITA.get(intervento.gravita, 3):
-                    intervento.gravita = problema.get("gravita", intervento.gravita)
-                if not intervento.guadagno and problema.get("guadagno"):
-                    intervento.guadagno = problema["guadagno"]
-                    intervento.guadagno_tipo = problema.get("guadagno_tipo", "")
+            membri.setdefault(problema.get("codice", ""), []).append((nome, pagina, problema))
 
-            intervento.template.append(PerTemplate(
+    lista = []
+    for codice, voci in membri.items():
+        peggiore = min(voci, key=lambda v: ORDINE_GRAVITA.get(v[2].get("gravita"), 3))[2]
+        lista.append(Intervento(
+            codice=codice,
+            titolo=peggiore.get("titolo", codice),
+            gravita=peggiore.get("gravita", "bassa"),
+            responsabile=peggiore.get("responsabile", ""),
+            fonte=peggiore.get("fonte", "lighthouse"),
+            guadagno=peggiore.get("guadagno", ""),
+            guadagno_tipo=peggiore.get("guadagno_tipo", ""),
+            azioni=list(peggiore.get("azioni") or []),
+            evidenza=list(peggiore.get("evidenza") or []),
+            nota=peggiore.get("nota", ""),
+            documentazione=peggiore.get("documentazione", ""),
+            azionabile=peggiore.get("azionabile", True),
+            totale_template=totale,
+            template=[PerTemplate(
                 nome=nome, url=pagina.get("url", ""),
                 bersagli=[tuple(b) for b in (problema.get("bersagli") or [])],
-                tutti=_voci_confrontabili(problema)))
+                tutti=_voci_confrontabili(problema))
+                for nome, pagina, problema in voci],
+        ))
 
-    lista = list(gruppi.values())
     # Prima cio' che il campo dice piu' grave, poi cio' che tocca piu' template.
     lista.sort(key=lambda i: (ORDINE_GRAVITA.get(i.gravita, 3), -i.quanti, i.titolo))
     return lista

@@ -301,6 +301,14 @@ def test_l_interfaccia_isola_i_bersagli_comuni_a_tutti_i_template():
     assert "su tutti i ${gruppo.quanti} template" in sorgente
 
 
+def test_l_interfaccia_prende_la_scheda_dal_template_messo_peggio():
+    """Stessa correzione di aggregazione.raggruppa: gravita' del peggiore ed
+    evidenza del primo incontrato erano due numeri di due pagine diverse."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "...peggiore.problema" in sorgente, "la scheda viene tutta da un membro solo"
+    assert "if (!gruppo.guadagno && p.guadagno)" not in sorgente,         "il guadagno non si pesca dal primo template che ne dichiara uno"
+
+
 def test_l_interfaccia_interseca_le_liste_complete_non_quelle_di_resa():
     """Stessa correzione di aggregazione.py: su tre voci l'intersezione e' quasi
     sempre vuota e il bundle condiviso sparisce. Il controllo e' sul sorgente

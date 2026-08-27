@@ -330,33 +330,35 @@ function vociConfrontabili(p) {
 }
 
 function raggruppa(pagine) {
-  const gruppi = new Map();
+  // Si raccolgono prima i membri: chi rappresenta il gruppo si sa solo dopo
+  // averli visti tutti. La scheda poi prende TUTTO dal template messo peggio —
+  // gravita', evidenza, guadagno, nota — invece di mescolare la gravita' del
+  // peggiore con i numeri del primo incontrato.
+  const membri = new Map();
   for (const pagina of pagine) {
     const template = nomeTemplate(pagina.url);
     for (const p of pagina.problemi || []) {
-      if (!gruppi.has(p.codice)) gruppi.set(p.codice, { ...p, template: [] });
-      const gruppo = gruppi.get(p.codice);
-      gruppo.template.push({ nome: template, bersagli: p.bersagli || [],
-                             tutti: vociConfrontabili(p) });
-      // Fra due template si tiene il guadagno piu' alto e la gravita' peggiore.
-      if (ORDINE_GRAVITA[p.gravita] < ORDINE_GRAVITA[gruppo.gravita]) {
-        gruppo.gravita = p.gravita;
-      }
-      if (!gruppo.guadagno && p.guadagno) {
-        gruppo.guadagno = p.guadagno; gruppo.guadagno_tipo = p.guadagno_tipo;
-      }
+      if (!membri.has(p.codice)) membri.set(p.codice, []);
+      membri.get(p.codice).push({ template, problema: p });
     }
   }
 
   const totale = pagine.length;
-  const lista = [...gruppi.values()].map(g => {
+  const lista = [...membri.values()].map(voci => {
+    const peggiore = voci.reduce((a, b) =>
+      ORDINE_GRAVITA[b.problema.gravita] < ORDINE_GRAVITA[a.problema.gravita] ? b : a);
+    const template = voci.map(v => ({
+      nome: v.template, bersagli: v.problema.bersagli || [],
+      tutti: vociConfrontabili(v.problema),
+    }));
     // I bersagli che compaiono su ogni template dove l'intervento c'e'.
     // Sulle liste complete: il troncamento e' compito della resa.
-    const insiemi = g.template.map(t => new Set(t.tutti.map(b => b[0])));
+    const insiemi = template.map(t => new Set(t.tutti.map(b => b[0])));
     const comuni = insiemi.length
       ? [...insiemi[0]].filter(nome => insiemi.every(i => i.has(nome)))
       : [];
-    return { ...g, comuni: new Set(comuni), quanti: g.template.length, totale };
+    return { ...peggiore.problema, template,
+             comuni: new Set(comuni), quanti: template.length, totale };
   });
 
   lista.sort((a, b) =>
