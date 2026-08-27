@@ -222,3 +222,26 @@ def test_terze_parti_e_constatazione_non_intervento(fatti):
     assert p is not None
     assert p.azioni == [], "qui non si raccomanda niente: e' solo il dato"
     assert p.risorse and "non un intervento" in p.nota
+
+
+# --- bersagli inline: si dichiarano, non si scartano ------------------------- #
+
+def test_l_audit_con_bersagli_inline_arriva_nel_report(problemi):
+    """Sul fixture `unminified-css` fallisce (score 0,5) e dichiara 2 KiB di
+    risparmio: prima non compariva ne' fra i problemi ne' fra gli esclusi."""
+    problema = _per_codice(problemi, "unminified-css")
+    assert problema.titolo == "Minimizza CSS", "il titolo resta quello di Lighthouse"
+    assert problema.risorse, "il blocco inline e' un bersaglio"
+
+
+def test_l_etichetta_inline_e_dichiarata_nella_nota(problemi):
+    """ADR-004: l'etichetta e' nostra, e il report lo dice."""
+    problema = _per_codice(problemi, "unminified-css")
+    assert "codice inline" in problema.nota
+    assert "e' nostra" in problema.nota
+
+
+def test_il_codice_inline_non_manda_l_intervento_a_marketing(problemi):
+    """Un blocco nel documento e' prima parte: dedurne la proprieta' dal dominio
+    dava netloc vuoto, quindi terza parte, quindi il lavoro alla squadra sbagliata."""
+    assert _per_codice(problemi, "unminified-css").responsabile == diagnose.DEV

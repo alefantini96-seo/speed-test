@@ -123,11 +123,29 @@ class Risorsa:
     quota_sprecata: float = 0.0
     terza_parte: bool = False
     motivo: str = ""      # testo di Lighthouse sul perche' (es. image-delivery)
+    # Nome dichiarato da noi quando la riga non porta un URL ma un blocco di
+    # codice inline. Vuoto per tutte le risorse che un file ce l'hanno.
+    etichetta: str = ""
 
     @property
     def spreco(self) -> float:
         """Metrica unica per ordinare: ms se ci sono, altrimenti byte."""
         return self.ms_sprecati or self.byte_sprecati
+
+    @property
+    def nome(self) -> str:
+        """Come si nomina in una lista corta: il file, o l'etichetta se e' inline."""
+        return self.etichetta or self.url.split("?")[0].rsplit("/", 1)[-1] or self.url
+
+    @property
+    def riferimento(self) -> str:
+        """Come si nomina in una tabella di risorse.
+
+        Per un file e' l'URL. Per un blocco inline e' l'etichetta con l'estratto
+        che Lighthouse mette al posto dell'indirizzo: senza l'estratto la riga
+        direbbe "CSS inline" e basta, e il blocco resterebbe da cercare a mano.
+        """
+        return f"{self.etichetta}: {self.url}" if self.etichetta else self.url
 
 
 @dataclass
@@ -263,6 +281,28 @@ MISURE_NOTE = {
 # Etichette possibili per una riga che non nomina un URL.
 ETICHETTE_RIGA = ("entity", "source", "origin", "name", "label", "groupLabel")
 
+# Audit dove la cella `url` puo' portare un blocco di codice inline invece di un
+# indirizzo: Lighthouse ci mette l'estratto del `<style>` o dello `<script>`.
+#
+# Senza queste etichette la riga non produceva nulla — `_classifica_riga` chiede
+# un url che cominci per http, non c'e' un `node`, e `url` non e' fra
+# ETICHETTE_RIGA — quindi `ha_contenuto` era falso e l'audit intero spariva dal
+# report. Sul fixture BBC `unminified-css` ha score 0,5 e "Risparmio stimato di
+# 2 KiB" e non compariva da nessuna parte, nemmeno fra i "fuori master plan".
+#
+# L'etichetta e' una classificazione nostra (ADR-004, terza origine), dichiarata
+# nella nota del problema. Il numero e l'estratto restano di Lighthouse. Sono
+# elencati per audit e non dedotti da "l'url non e' un url": su `bootup-time` la
+# stessa cella porta "Unattributable", che e' lavoro non attribuito, non un
+# blocco inline, e chiamarlo "script inline" sarebbe un'informazione inventata.
+ETICHETTA_INLINE = {
+    "unminified-css": "CSS inline",
+    "unminified-javascript": "script inline",
+    "unused-css-rules": "CSS inline",
+    "render-blocking-resources": "risorsa inline",
+    "render-blocking-insight": "risorsa inline",
+}
+
 
 def _tabelle(audit: dict):
     """Ogni tabella dell'audit, ovunque sia annidata.
@@ -392,7 +432,7 @@ def leggi_catena_rete(audit: dict) -> list:
     return voci
 
 
-def _classifica_riga(riga: dict, propri: set, e_prima_parte) -> tuple:
+def _classifica_riga(riga: dict, propri: set, e_prima_parte, audit: str = "") -> tuple:
     """Una riga -> (Risorsa | None, Elemento | None, Voce | None).
 
     Una riga puo' dare piu' cose insieme: `image-delivery-insight` porta URL e
@@ -402,7 +442,8 @@ def _classifica_riga(riga: dict, propri: set, e_prima_parte) -> tuple:
     risorsa = elemento = voce = None
 
     url = riga.get("url")
-    if isinstance(url, str) and url.startswith("http"):
+    inline = "" if not isinstance(url, str) or url.startswith("http")         else ETICHETTA_INLINE.get(audit, "")
+    if isinstance(url, str) and (url.startswith("http") or inline):
         motivi = [_testo(s.get("reason")) for s in _sotto_righe(riga) if s.get("reason")]
         risorsa = Risorsa(
             url=url,
@@ -413,8 +454,12 @@ def _classifica_riga(riga: dict, propri: set, e_prima_parte) -> tuple:
             ms_sprecati=float(riga.get("wastedMs") or riga.get("duration")
                               or riga.get("mainThreadTime") or riga.get("total") or 0.0),
             quota_sprecata=float(riga.get("wastedPercent") or 0.0),
-            terza_parte=bool(propri) and not e_prima_parte(urlparse(url).netloc, propri),
+            # Un blocco inline sta nel documento: la proprieta' non e' da dedurre
+            # dal dominio, e' prima parte per costruzione.
+            terza_parte=(not inline and bool(propri)
+                         and not e_prima_parte(urlparse(url).netloc, propri)),
             motivo=motivi[0] if motivi else "",
+            etichetta=inline,
         )
 
     elemento = leggi_nodo(riga.get("node"))
@@ -504,7 +549,8 @@ def estrai_opportunita(psi: dict, dominio_sito: str = "", domini_propri=()) -> l
             for riga in righe:
                 if not isinstance(riga, dict):
                     continue
-                risorsa, elemento, voce = _classifica_riga(riga, propri, e_prima_parte)
+                risorsa, elemento, voce = _classifica_riga(
+                    riga, propri, e_prima_parte, aid)
                 if risorsa is not None:
                     risorse.append(risorsa)
                 if elemento is not None:

@@ -40,7 +40,8 @@ e il report dichiara quale:
 2. **un dato misurato** — p75 di campo, storico, peso, ripartizione delle fasi;
 3. **una classificazione nostra**, dichiarata come tale e derivata da dati: chi
    interviene, quanto e' prioritario, se e' azionabile, come si chiama il problema
-   (`ETICHETTA_PROBLEMA`);
+   (`ETICHETTA_PROBLEMA`), come si chiama un bersaglio che Lighthouse nomina con
+   un estratto di codice invece che con un URL (`ETICHETTA_INLINE`);
 4. **un'istruzione scritta da noi**, solo dove Lighthouse non ne ha una — vedi
    sotto. Enumerata per audit, limitata a una cella, dichiarata riga per riga.
 

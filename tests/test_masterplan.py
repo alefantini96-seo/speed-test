@@ -116,6 +116,18 @@ def test_le_constatazioni_restano_fuori():
     assert "constatazione" in esclusi[0][2]
 
 
+def test_un_audit_con_bersagli_inline_non_finisce_fra_i_silenzi():
+    """Non deve sparire ne' dal master plan ne' dall'elenco degli esclusi: il
+    tool dichiara cio' che lascia fuori."""
+    frammento, esclusi = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [_problema(
+            "unminified-css", titolo="Minimizza CSS",
+            risorse=(("CSS inline: .a { color: red }", "2 KB", False),))])))
+    righe = frammento["masterplan"]
+    assert len(righe) == 1 and righe[0]["intervento"] == "Minimizza CSS"
+    assert esclusi == []
+
+
 def test_le_pagine_fallite_non_entrano_nel_conteggio():
     frammento, _ = masterplan.costruisci(_esecuzione(
         _pagina("Home", "https://x.it/", [_problema("cache-insight")]),
