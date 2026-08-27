@@ -25,6 +25,8 @@ scansione salvata mesi prima.
 """
 from __future__ import annotations
 
+import re
+
 from .soglie import ETICHETTE, SOGLIE, giudizio
 
 PRIORITA = {"alta": "Alta", "media": "Media", "bassa": "Bassa"}
@@ -77,6 +79,27 @@ TITOLO_DESCRITTIVO = frozenset({
     "cls-culprits-insight",            # "Responsabili delle variazioni del layout"
 })
 
+# Audit dove il titolo NON e' un'istruzione e la descrizione non ne offre una:
+# il primo link markdown cade in mezzo alla frase e rende un termine, non un
+# imperativo. Il ripiego su `azione_breve` qui produceva "font-display" e
+# "di base" (<- baseline), che in una colonna "intervento" non dicono cosa fare.
+#
+# Qui l'azione la scriviamo NOI: e' la quarta origine del testo prevista da
+# ADR-004, limitata a questa tabella ed enumerata per audit. Vale per la sola
+# cella `intervento` del master plan — il titolo di Lighthouse resta invariato
+# ovunque nel report — e ogni riga del frammento dichiara da dove viene il suo
+# intervento nel campo `fonte_intervento`.
+AZIONE_PER_AUDIT = {
+    # sostituisce "Carattere visualizzato" (font-display): un sostantivo, e il
+    # primo link della descrizione e' il termine "font-display" a meta' frase.
+    "font-display-insight":
+        "Imposta font-display su swap o optional sui font della pagina",
+    # sostituisce "JavaScript precedente" (legacy JavaScript): il primo link
+    # della descrizione e' "di base", cioe' l'etichetta di baseline nella frase.
+    "legacy-javascript-insight":
+        "Escludi polyfill e transpilazione per i browser moderni dalla build JavaScript",
+}
+
 # Non tutte le etichette di link sono interventi: quelle che iniziano con "Scopri"
 # sono inviti alla documentazione ("Scopri come ridurre le dimensioni dei payload").
 # In quel caso il titolo, per quanto descrittivo, dice piu' cose di un rimando.
@@ -110,19 +133,23 @@ def etichetta_problema(codice: str) -> str:
 
 
 def intervento_di(problema: dict) -> str:
-    """Il testo di Lighthouse all'imperativo, verbatim.
+    """L'istruzione da mettere in colonna. Vedi `fonte_intervento_di` per l'origine.
 
-    Tre casi, tutti risolti scegliendo fra testi di Lighthouse e mai riscrivendoli:
+    Quattro casi, in quest'ordine:
 
     - titolo gia' imperativo ("Riduci il codice JavaScript inutilizzato"): si usa;
     - titolo descrittivo ("Terze parti"): si usa l'etichetta del link, dove
       Lighthouse scrive l'azione ("Riduci e posticipa il caricamento del codice
       di terze parti");
+    - titolo descrittivo senza imperativo da nessuna parte: si usa la voce di
+      AZIONE_PER_AUDIT, che e' testo nostro e viene dichiarato;
     - classificazione nostra (la fase LCP): si usa la voce di checklist, che e'
       scritta da Lighthouse ed e' gia' un'istruzione.
     """
     codice = problema.get("codice", "")
     if problema.get("fonte") == "lighthouse":
+        if codice in AZIONE_PER_AUDIT:
+            return AZIONE_PER_AUDIT[codice]
         breve = problema.get("azione_breve") or ""
         if codice in TITOLO_DESCRITTIVO and breve and                 not breve.lower().startswith(INVITI_ALLA_DOCUMENTAZIONE):
             return breve
@@ -131,11 +158,48 @@ def intervento_di(problema: dict) -> str:
     return azioni[0] if azioni else ""
 
 
+def fonte_intervento_di(problema: dict) -> str:
+    """"nostra" | "lighthouse". Chi ha scritto la cella `intervento` di questa riga.
+
+    Serve a chi impagina l'xlsx e a chi difende il documento davanti al cliente:
+    ADR-004 vuole che l'origine del testo sia dichiarata, non dedotta.
+    """
+    if problema.get("fonte") == "lighthouse" and             problema.get("codice", "") in AZIONE_PER_AUDIT:
+        return "nostra"
+    return "lighthouse"
+
+
+# Un displayValue che e' soltanto una quantita': "1,7 s", "2,8 s", "0,095". In una
+# cella di audit un numero nudo non dice di cosa sia, e la colonna accanto dice
+# cosa fare, non cosa si e' misurato. Quelli che si descrivono da soli —
+# "Risparmio stimato di 97 KiB", "15 attivita' lunghe trovate" — non rientrano.
+_SOLA_QUANTITA = re.compile(r"^[\d.,]+\s*(ms|s|byte|KiB|KB|MiB|MB)?$", re.IGNORECASE)
+
+
+def _cella(riga: str, codice: str) -> str:
+    """Una riga di evidenza ridotta a cella di audit: dato e numero, niente altro.
+
+    Due riscritture, entrambe su testo gia' misurato:
+
+    - la **fase dominante** perde il prefisso e il trattino, non il nome della
+      fase. Tagliare sull'em dash lasciava "39% del tempo LCP", che non dice di
+      quale fase sia quel 39% — e la fase e' tutto il contenuto della riga;
+    - un **displayValue che e' solo una quantita'** si qualifica con l'etichetta
+      del problema, che e' gia' una classificazione nostra dichiarata.
+    """
+    if riga.startswith("Fase dominante"):
+        return re.sub(r"\s*—\s*", " ", riga.split(":", 1)[-1]).strip()
+    if _SOLA_QUANTITA.match(riga.strip()):
+        return f"{etichetta_problema(codice)} {riga.strip()}"
+    return riga
+
+
 def _evidenza(problema: dict, campo: dict) -> str:
-    """Solo dati misurati: il p75 di campo, piu' il dato di laboratorio piu' concreto.
+    """Dati misurati: il p75 di campo, piu' il dato di laboratorio piu' concreto.
 
     La fonte resta implicita nel numero, che e' come si scrive una cella di audit:
-    "LCP p75 4.180 ms" non ha bisogno di "secondo CrUX".
+    "LCP p75 4.180 ms" non ha bisogno di "secondo CrUX". Dove il numero da solo
+    non dice cosa misura, lo qualifica l'etichetta del problema: vedi `_cella`.
     """
     parti = []
     metrica = problema.get("metrica")
@@ -154,9 +218,7 @@ def _evidenza(problema: dict, campo: dict) -> str:
         # audit sarebbero rumore.
         if riga.startswith("Stima Lighthouse") or "dello spreco" in riga:
             continue
-        pulita = riga.split(":", 1)[-1].strip() if riga.startswith("Fase dominante") else riga
-        pulita = pulita.split("—")[-1].strip() if "—" in pulita else pulita
-        parti.append(pulita.rstrip("."))
+        parti.append(_cella(riga, problema.get("codice", "")).rstrip("."))
         break
 
     return ". ".join(p for p in parti if p) + ("." if parti else "")
@@ -272,6 +334,7 @@ def costruisci(esecuzione: dict):
             "problema": f"{etichetta} su {len(membri)} template su {totale_template}",
             "evidenza": _evidenza(peggiore["problema"], peggiore["campo"]),
             "intervento": intervento_di(peggiore["problema"]),
+            "fonte_intervento": fonte_intervento_di(peggiore["problema"]),
             "etichetta": etichetta,
             "membri": membri,
         })
@@ -291,6 +354,7 @@ def costruisci(esecuzione: dict):
             "priorita": PRIORITA.get(voce["gravita"], "Bassa"),
             "evidenza": voce["evidenza"],
             "intervento": voce["intervento"],
+            "fonte_intervento": voce["fonte_intervento"],
             "tab": atteso if atteso in nomi_tab else "",
         })
 

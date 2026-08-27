@@ -14,8 +14,14 @@ from __future__ import annotations
 import httpx
 
 from ..errori import da_risposta_google
+from .google import richiedi
 
 BASE = "https://chromeuxreport.googleapis.com/v1/records"
+
+# Timeout delle due chiamate, per la CLI che non ha limiti di durata. Il percorso
+# web passa i suoi, piu' stretti, perche' deve stare nel budget della funzione.
+TIMEOUT_RECORD = 30.0
+TIMEOUT_STORICO = 45.0
 METRICHE = [
     "largest_contentful_paint",
     "interaction_to_next_paint",
@@ -75,42 +81,67 @@ def _payload(url: str, form_factor: str, origin: bool) -> dict:
     return {chiave: url, "formFactor": form_factor, "metrics": METRICHE}
 
 
-async def record(client: httpx.AsyncClient, api_key: str, url: str,
-                 form_factor: str = "PHONE", origin: bool = False) -> dict:
-    """p75 correnti. Solleva CruxNonDisponibile se l'URL non ha dati."""
-    r = await client.post(f"{BASE}:queryRecord", params={"key": api_key},
-                          json=_payload(url, form_factor, origin), timeout=30)
-    dati = r.json()
-    if "error" in dati:
+async def _chiedi(client: httpx.AsyncClient, servizio: str, percorso: str,
+                  api_key: str, payload: dict, url: str, timeout: float,
+                  tentativi: int, attesa_iniziale: float) -> dict:
+    """Una chiamata CrUX con le stesse tre protezioni di PSI.
+
+    Il 404 non e' un errore: significa "questa URL non ha dati di campo
+    sufficienti", ed e' un esito legittimo che il report dichiara. Si intercetta
+    sia quando arriva dichiarato nel corpo sia quando arriva dal solo status: un
+    404 servito dal gateway non ha un corpo JSON e prima usciva come
+    JSONDecodeError.
+    """
+    risposta, dati = await richiedi(
+        lambda: client.post(f"{BASE}:{percorso}", params={"key": api_key},
+                            json=payload, timeout=timeout),
+        tentativi, attesa_iniziale)
+
+    if dati is not None and "error" in dati:
         err = dati["error"]
         if err.get("code") == 404:
             raise CruxNonDisponibile(url)
-        raise da_risposta_google("CrUX", err.get("code"), err.get("message", ""), url)
+        raise da_risposta_google(servizio, err.get("code"), err.get("message", ""), url)
+    if risposta.status_code == 404:
+        raise CruxNonDisponibile(url)
+    if risposta.status_code >= 400:
+        raise da_risposta_google(servizio, risposta.status_code,
+                                 (risposta.text or "")[:200], url)
+    if dati is None:
+        raise da_risposta_google(servizio, risposta.status_code,
+                                 "la risposta non e' in formato JSON", url)
+    return dati
 
+
+async def record(client: httpx.AsyncClient, api_key: str, url: str,
+                 form_factor: str = "PHONE", origin: bool = False,
+                 timeout: float = TIMEOUT_RECORD, tentativi: int = 3,
+                 attesa_iniziale: float = 2.0) -> dict:
+    """p75 correnti. Solleva CruxNonDisponibile se l'URL non ha dati."""
+    dati = await _chiedi(client, "CrUX", "queryRecord", api_key,
+                         _payload(url, form_factor, origin), url,
+                         timeout, tentativi, attesa_iniziale)
     return {"url": url, "livello": "origin" if origin else "url"} | leggi_record(dati)
 
 
 async def storico(client: httpx.AsyncClient, api_key: str, url: str,
                   form_factor: str = "PHONE", periodi: int = 40,
-                  origin: bool = False) -> dict:
+                  origin: bool = False, timeout: float = TIMEOUT_STORICO,
+                  tentativi: int = 3, attesa_iniziale: float = 2.0) -> dict:
     """Fino a 40 settimane. Ogni punto e' una media mobile a 28 giorni: un evento
     istantaneo appare spalmato su circa quattro punti."""
     payload = _payload(url, form_factor, origin) | {"collectionPeriodCount": periodi}
-    r = await client.post(f"{BASE}:queryHistoryRecord", params={"key": api_key},
-                          json=payload, timeout=45)
-    dati = r.json()
-    if "error" in dati:
-        err = dati["error"]
-        if err.get("code") == 404:
-            raise CruxNonDisponibile(url)
-        raise da_risposta_google("CrUX History", err.get("code"),
-                                 err.get("message", ""), url)
-
+    dati = await _chiedi(client, "CrUX History", "queryHistoryRecord", api_key,
+                         payload, url, timeout, tentativi, attesa_iniziale)
     return {"url": url} | leggi_storico(dati)
 
 
 async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
-                   form_factor: str = "PHONE") -> dict:
+                   form_factor: str = "PHONE",
+                   timeout_record: float = TIMEOUT_RECORD,
+                   timeout_storico: float = TIMEOUT_STORICO,
+                   tentativi: int = 3, tentativi_storico: int = 3,
+                   attesa_iniziale: float = 2.0) -> dict:
     """Metriche di campo e andamento di una pagina, in due passi SEPARATI.
 
     Chiedere record e storico in un'unica espressione faceva perdere tutto: se lo
@@ -126,14 +157,19 @@ async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
     """
     voce = {"livello": "assente", "metriche": {}, "storico": None}
     try:
-        rec = await record(client, api_key, url, form_factor)
+        rec = await record(client, api_key, url, form_factor,
+                           timeout=timeout_record, tentativi=tentativi,
+                           attesa_iniziale=attesa_iniziale)
     except CruxNonDisponibile:
         return voce      # resta la sola diagnosi di laboratorio, dichiarata nel report
 
     voce = {"livello": "url", "metriche": rec["metriche"],
             "periodo_a": rec["periodo_a"], "storico": None}
     try:
-        voce["storico"] = await storico(client, api_key, url, form_factor)
+        voce["storico"] = await storico(client, api_key, url, form_factor,
+                                        timeout=timeout_storico,
+                                        tentativi=tentativi_storico,
+                                        attesa_iniziale=attesa_iniziale)
     except Exception:
         pass             # niente andamento, ma le metriche correnti restano
     return voce

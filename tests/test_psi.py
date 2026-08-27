@@ -11,7 +11,7 @@ import asyncio
 import pytest
 
 from speed.errori import ErroreSpeed
-from speed.io import psi
+from speed.io import google, psi
 
 
 class RispostaFinta:
@@ -105,6 +105,6 @@ def test_la_quota_esaurita_porta_il_suo_rimedio():
 
 
 def test_json_sicuro():
-    assert psi._json_sicuro(RispostaFinta(200, {"a": 1})) == {"a": 1}
-    assert psi._json_sicuro(RispostaFinta(200, None, "<html>")) is None
-    assert psi._json_sicuro(RispostaFinta(200, [1, 2])) is None, "una lista non e' utile"
+    assert google.json_sicuro(RispostaFinta(200, {"a": 1})) == {"a": 1}
+    assert google.json_sicuro(RispostaFinta(200, None, "<html>")) is None
+    assert google.json_sicuro(RispostaFinta(200, [1, 2])) is None, "una lista non e' utile"

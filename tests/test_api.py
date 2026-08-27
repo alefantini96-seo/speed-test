@@ -8,12 +8,14 @@ il documento esce mutilo: questi test lo intercettano.
 """
 import io
 import json
+import re
 from datetime import date
 from pathlib import Path
 
 import pytest
 from docx import Document
 
+from speed import web
 from speed.core import consenso, diagnose, extract, thirdparty
 from speed.io import crux, render, render_docx
 from speed.web import fatti_essenziali, serializza, terze_essenziali, valida_url
@@ -238,6 +240,29 @@ def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
     assert "quota Google" in json.loads(corpo)["rimedio"]
 
 
+def test_il_report_rifiuta_oltre_il_limite(monkeypatch, pagina):
+    """Non consuma quota Google, ma impagina fino a 40 pagine e 4,5 MB di JSON in
+    un Word: e' CPU dell'istanza, e senza freno bastava un ciclo per occuparla."""
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 0)
+    stato, _, corpo = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    assert stato.startswith("429")
+    assert "quota Google" in json.loads(corpo)["rimedio"]
+
+
+def test_i_due_endpoint_condividono_lo_stesso_contatore(monkeypatch, pagina):
+    """Un limite per endpoint sarebbe il doppio del limite dichiarato."""
+    import app as applicazione
+    monkeypatch.setenv("GOOGLE_API_KEY", "finta")
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 1)
+    primo, _, _ = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    secondo, _, _ = _chiama("/api/analizza", "POST", {"url": "https://x.it/"})
+    assert primo.startswith("200")
+    assert secondo.startswith("429"), "la prima richiesta ha gia' consumato il limite"
+
+
 # --- ripresa dopo una pagina fallita ----------------------------------------- #
 
 def test_il_report_accetta_pagine_riuscite_e_fallite(monkeypatch, pagina, tmp_path):
@@ -299,6 +324,30 @@ def test_l_interfaccia_isola_i_bersagli_comuni_a_tutti_i_template():
     sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
     assert "function elencoBersagli(" in sorgente
     assert "su tutti i ${gruppo.quanti} template" in sorgente
+
+
+def test_l_interfaccia_prende_la_scheda_dal_template_messo_peggio():
+    """Stessa correzione di aggregazione.raggruppa: gravita' del peggiore ed
+    evidenza del primo incontrato erano due numeri di due pagine diverse."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "...peggiore.problema" in sorgente, "la scheda viene tutta da un membro solo"
+    assert "if (!gruppo.guadagno && p.guadagno)" not in sorgente,         "il guadagno non si pesca dal primo template che ne dichiara uno"
+
+
+def test_l_interfaccia_interseca_le_liste_complete_non_quelle_di_resa():
+    """Stessa correzione di aggregazione.py: su tre voci l'intersezione e' quasi
+    sempre vuota e il bundle condiviso sparisce. Il controllo e' sul sorgente
+    perche' e' JavaScript e non c'e' un browser nei test."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert "function vociConfrontabili(" in sorgente
+    assert "t.tutti.map(b => b[0])" in sorgente, "l'intersezione gira sulla lista completa"
+    assert "gruppo.template[0].tutti.map" in sorgente, "e le misure si cercano li'"
+
+
+def test_l_interfaccia_tronca_i_bersagli_in_resa():
+    """Il troncamento resta, ma dopo l'intersezione, non prima."""
+    sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
+    assert sorgente.count(".slice(0, 3)") >= 2, "comuni e propri restano corti a schermo"
 
 
 def test_la_scheda_di_pagina_non_ripete_piu_gli_interventi():
@@ -397,6 +446,29 @@ def test_il_ritento_non_duplica_la_pagina_fra_i_falliti():
     corpo = sorgente[sorgente.index("async function riprova("):
                      sorgente.index("async function scarica(")]
     assert "falliti.splice" in corpo
+
+
+# --- la stima di durata a schermo -------------------------------------------- #
+
+def test_la_stima_di_durata_dichiara_un_intervallo():
+    """Il sintomo: 40 s a pagina era il caso migliore — un giro solo di PageSpeed.
+    Il server ne fa due quando le fasi LCP non arrivano dal campo, cioe' su ogni
+    LCP testuale: su cinque URL erano "4 minuti" contro dieci e passa effettivi."""
+    sorgente = _sorgente()
+    assert "SECONDI_PAGINA_MINIMO" in sorgente and "SECONDI_PAGINA_MASSIMO" in sorgente
+    assert "quante * 40 / 60" not in sorgente, "la stima non e' piu' il caso migliore"
+    assert "${da}-${a}" in sorgente, "a schermo si dichiara un intervallo"
+
+
+def test_la_stima_copre_i_due_giri_di_pagespeed():
+    """Il massimo dichiarato deve reggere il ramo costoso: due giri piu' l'attesa
+    fra l'uno e l'altro."""
+    sorgente = _sorgente()
+    massimo = int(re.search(r"SECONDI_PAGINA_MASSIMO = (\d+)", sorgente).group(1))
+    minimo = int(re.search(r"SECONDI_PAGINA_MINIMO = (\d+)", sorgente).group(1))
+    assert minimo < massimo
+    assert massimo >= 2 * 45 + web.BUDGET.psi_attesa_fra_giri, \
+        "due giri realistici piu' l'attesa non ci stanno nella stima"
 
 
 # --- memoria della pagina ----------------------------------------------------- #

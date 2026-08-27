@@ -62,8 +62,15 @@ proprietà dell'HTML, non della rete.
 
 Oltre alla CLI c'è un'interfaccia web pensata per Vercel: incolli gli URL, il browser
 li manda **uno alla volta** e i risultati compaiono mano a mano. Una pagina richiede
-~20-60 secondi, quindi sta dentro i 300 secondi di una funzione Vercel anche sul piano
-gratuito, senza code né database.
+45-165 secondi — due giri di PageSpeed quando le fasi LCP non arrivano dal campo, che
+è il caso frequente — senza code né database.
+
+Il tetto è `maxDuration`, 300 secondi: oltre quello Vercel uccide la funzione e
+restituisce un 504 anonimo, cioè l'utente perde l'errore con rimedio che il tool
+avrebbe consegnato. Perciò il percorso web dichiara un **budget di tempo esplicito**
+(`web.Budget`) e lo passa ai client: timeout più corti e meno tentativi della CLI, con
+il caso peggiore a 249 secondi. La CLI non ha limiti di durata e tiene i valori
+generosi. `Budget.peggior_caso()` fa il conto, e un test lo confronta con `vercel.json`.
 
 ```
 app.py               applicazione WSGI: instrada tutto, nessuna dipendenza
@@ -194,10 +201,11 @@ da cui installa Vercel.
 ```json
 {
   "masterplan": [
-    {"id": 1, "problema": "LCP oltre soglia su 6 template su 9",
+    {"id": 1, "problema": "LCP: risorsa scoperta tardi su 6 template su 9",
      "priorita": "Alta",
-     "evidenza": "LCP p75 4.180 ms. Attesa prima del download 61% del tempo.",
-     "intervento": "Riduci il codice JavaScript inutilizzato",
+     "evidenza": "LCP p75 4.180 ms. Attesa prima del download 61% del tempo LCP.",
+     "intervento": "Deve essere applicata fetchpriority=high",
+     "fonte_intervento": "lighthouse",
      "tab": "URL - LCP oltre soglia"}
   ],
   "tab": [
@@ -217,13 +225,20 @@ Le regole che governano il contenuto:
 - **Ogni riga ha un intervento eseguibile.** Le righe non azionabili, le
   constatazioni e gli artefatti di dati restano fuori, e il motivo compare a
   terminale come «fuori master plan».
-- **`problema`** e' l'unica cella scritta da noi: una classificazione nella forma
-  «X su Y». **`evidenza`** sono solo numeri misurati. **`intervento`** e' testo di
-  Lighthouse verbatim — il titolo, o l'etichetta del link quando il titolo e' un
-  sostantivo ("Terze parti" -> "Riduci e posticipa il caricamento del codice di
-  terze parti").
+- **`problema`** e' una classificazione nostra nella forma «X su Y».
+  **`evidenza`** sono numeri misurati. **`intervento`** e' testo di Lighthouse
+  verbatim — il titolo, o l'etichetta del link quando il titolo e' un sostantivo
+  ("Terze parti" -> "Riduci e posticipa il caricamento del codice di terze parti").
+  Fanno eccezione i pochi audit il cui titolo localizzato non e' un'istruzione e
+  la cui descrizione non ne offre una — "Carattere visualizzato" per `font-display`,
+  "JavaScript precedente" per il *legacy JavaScript*: li' l'istruzione la scriviamo
+  noi, da una tabella enumerata per audit, e la riga lo dichiara in
+  **`fonte_intervento`** (`lighthouse` | `nostra`). Vedi ADR-004.
 - **Registro telegrafico**: niente conseguenze, niente metodo o data, niente
   confronto con misure precedenti, niente elenco di pagine quando c'e' gia' un tab.
+  Un numero che da solo non dice cosa misura viene qualificato con l'etichetta del
+  problema — "1,7 s" diventa "Tempo di esecuzione JavaScript 1,7 s" — e l'evidenza
+  dell'LCP conserva il nome della fase, che e' tutto il contenuto della riga.
 - **Un tab si crea solo se la lista serve a chi implementa**, con un tetto di cinque.
   Il crawl completo e le liste informative non sono tab.
 

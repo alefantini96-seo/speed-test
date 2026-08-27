@@ -305,32 +305,60 @@ function fasiLcp(fatti) {
 // Quindi: il titolo si dice una volta, i bersagli si raggruppano per template. E
 // i file presenti su TUTTI i template si marcano: sono il bundle comune, e
 // sistemarli una volta vale per tutto il sito.
+// Le tre forme in cui un problema nomina cio' su cui si mette mano. `bersagli` e'
+// la lista corta della resa (3 voci); `risorse` ed `elementi` ne conservano sei
+// ciascuno, con gli stessi nomi. L'intersezione va fatta su questa, non su quella
+// di resa: su tre voci due template non hanno quasi mai un file in comune, e il
+// bundle condiviso spariva dalla scheda proprio dove c'era.
+function vociConfrontabili(p) {
+  const voci = [], viste = new Set();
+  // Il nome dev'essere una stringa: la constatazione sulle terze parti raggruppa
+  // piu' host in una riga sola e li' mette una lista.
+  const aggiungi = (nome, misura, dettaglio) => {
+    if (typeof nome !== 'string' || !nome || viste.has(nome)) return;
+    viste.add(nome);
+    voci.push([nome, misura || '', dettaglio || '']);
+  };
+  for (const [nome, misura, dettaglio] of p.bersagli || []) aggiungi(nome, misura, dettaglio);
+  for (const [url, misura] of p.risorse || []) {
+    if (typeof url === 'string') aggiungi(url.split('?')[0].split('/').pop() || url, misura, url);
+  }
+  for (const [riferimento, misura, percorso] of p.elementi || []) {
+    aggiungi(riferimento, misura, percorso);
+  }
+  return voci;
+}
+
 function raggruppa(pagine) {
-  const gruppi = new Map();
+  // Si raccolgono prima i membri: chi rappresenta il gruppo si sa solo dopo
+  // averli visti tutti. La scheda poi prende TUTTO dal template messo peggio —
+  // gravita', evidenza, guadagno, nota — invece di mescolare la gravita' del
+  // peggiore con i numeri del primo incontrato.
+  const membri = new Map();
   for (const pagina of pagine) {
     const template = nomeTemplate(pagina.url);
     for (const p of pagina.problemi || []) {
-      if (!gruppi.has(p.codice)) gruppi.set(p.codice, { ...p, template: [] });
-      const gruppo = gruppi.get(p.codice);
-      gruppo.template.push({ nome: template, bersagli: p.bersagli || [] });
-      // Fra due template si tiene il guadagno piu' alto e la gravita' peggiore.
-      if (ORDINE_GRAVITA[p.gravita] < ORDINE_GRAVITA[gruppo.gravita]) {
-        gruppo.gravita = p.gravita;
-      }
-      if (!gruppo.guadagno && p.guadagno) {
-        gruppo.guadagno = p.guadagno; gruppo.guadagno_tipo = p.guadagno_tipo;
-      }
+      if (!membri.has(p.codice)) membri.set(p.codice, []);
+      membri.get(p.codice).push({ template, problema: p });
     }
   }
 
   const totale = pagine.length;
-  const lista = [...gruppi.values()].map(g => {
+  const lista = [...membri.values()].map(voci => {
+    const peggiore = voci.reduce((a, b) =>
+      ORDINE_GRAVITA[b.problema.gravita] < ORDINE_GRAVITA[a.problema.gravita] ? b : a);
+    const template = voci.map(v => ({
+      nome: v.template, bersagli: v.problema.bersagli || [],
+      tutti: vociConfrontabili(v.problema),
+    }));
     // I bersagli che compaiono su ogni template dove l'intervento c'e'.
-    const insiemi = g.template.map(t => new Set(t.bersagli.map(b => b[0])));
+    // Sulle liste complete: il troncamento e' compito della resa.
+    const insiemi = template.map(t => new Set(t.tutti.map(b => b[0])));
     const comuni = insiemi.length
       ? [...insiemi[0]].filter(nome => insiemi.every(i => i.has(nome)))
       : [];
-    return { ...g, comuni: new Set(comuni), quanti: g.template.length, totale };
+    return { ...peggiore.problema, template,
+             comuni: new Set(comuni), quanti: template.length, totale };
   });
 
   lista.sort((a, b) =>
@@ -346,7 +374,9 @@ function elencoBersagli(gruppo) {
   const righe = [];
   const comuni = [...gruppo.comuni];
   if (comuni.length && gruppo.quanti > 1) {
-    const misure = new Map(gruppo.template[0].bersagli.map(b => [b[0], b]));
+    // Le misure si cercano nella lista completa: un file comune puo' stare oltre
+    // il terzo posto su ogni template, ed e' proprio il caso che `comuni` trova.
+    const misure = new Map(gruppo.template[0].tutti.map(b => [b[0], b]));
     righe.push(`<li class="gruppo">su tutti i ${gruppo.quanti} template</li>`);
     for (const nome of comuni.slice(0, 3)) {
       const [, misura, dettaglio] = misure.get(nome) || ['', '', ''];
@@ -596,11 +626,27 @@ function ricorda() {
   } catch (e) { /* modalita' privata: si perde la memoria, non l'analisi */ }
 }
 
+// Quanto dura DAVVERO una pagina, dai due rami del server.
+//
+// 40 s a pagina era il caso migliore e basta: un giro solo di PageSpeed, veloce.
+// Ma il server ne fa due quando le fasi LCP non arrivano dal campo — cioe' su
+// ogni LCP testuale, che e' il caso frequente — con l'attesa fra i giri che
+// serve a scavalcare la cache di PSI. Su cinque URL erano "4 minuti" annunciati
+// contro dieci e passa effettivi.
+//
+// Quindi si dichiara un intervallo, non un numero: annunciare un tempo che il
+// tool sa gia' di non poter rispettare e' peggio che non annunciarne nessuno.
+const SECONDI_PAGINA_MINIMO = 45;    // un giro, PSI veloce, campo con le fasi LCP
+const SECONDI_PAGINA_MASSIMO = 165;  // due giri, PSI lento, piu' l'attesa in mezzo
+
 function stimaDurata() {
   const quante = $('urls').value.split('\n').filter(s => s.trim()).length;
-  $('stima').textContent = quante
-    ? `${plurale(quante, 'pagina', 'pagine')} · circa ${Math.ceil(quante * 40 / 60)} minuti`
-    : '';
+  if (!quante) { $('stima').textContent = ''; return; }
+  const da = Math.max(1, Math.round(quante * SECONDI_PAGINA_MINIMO / 60));
+  const a = Math.ceil(quante * SECONDI_PAGINA_MASSIMO / 60);
+  const durata = da === a ? `circa ${da}` : `${da}-${a}`;
+  $('stima').textContent =
+    `${plurale(quante, 'pagina', 'pagine')} · ${durata} ${a === 1 ? 'minuto' : 'minuti'}`;
 }
 
 // --- suggerimento sui domini propri ----------------------------------------- //

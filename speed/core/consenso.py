@@ -59,6 +59,18 @@ class Consenso:
         return self.ripetizioni > 1 and self.concordi * 2 > self.ripetizioni
 
     @property
+    def consolidato(self) -> bool:
+        """Le misurazioni distinte sono piu' di una.
+
+        Distinto da `attendibile`, che chiede anche la maggioranza. I due
+        motivi per cui la fase dominante non regge sono diversi e vanno detti
+        con parole diverse: qui non c'e' niente da confrontare, li' c'e' e non
+        va d'accordo. Il caso n=1 arriva anche da tre giri, quando PSI li serve
+        tutti dalla cache: e' il caso per cui questo modulo esiste.
+        """
+        return self.ripetizioni > 1
+
+    @property
     def descrizione(self) -> str:
         if self.ripetizioni == 1:
             testo = ("Una sola misurazione di laboratorio distinta: la ripartizione in "

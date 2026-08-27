@@ -155,6 +155,57 @@ def test_la_discordanza_arriva_nel_report():
     assert "NON concordano" in p.nota
 
 
+def test_una_misurazione_sola_non_e_una_discordanza():
+    """Il sintomo: con una misurazione sola il titolo dichiarava misurazioni
+    discordanti, mentre la nota diceva correttamente "Una sola misurazione".
+    Non c'e' niente che discorda: non c'e' niente da confrontare."""
+    c = consenso.combina([_fatti(ATTESA_A)])
+    p = diagnose.classifica_lcp(c.fatti, {"largest_contentful_paint": 3699.0}, c)
+    assert "[misurazione non consolidata]" in p.titolo
+    assert "discordanti" not in p.titolo
+    assert "da confermare" in p.responsabile, "la riserva resta, cambia il motivo"
+    assert "Una sola misurazione" in p.nota
+
+
+def test_tre_giri_serviti_dalla_cache_sono_una_misurazione_sola():
+    """E' il caso per cui consenso.py esiste: n=1 arrivando da tre giri. Anche qui
+    l'etichetta e' "non consolidata", non "discordanti"."""
+    c = consenso.combina([_fatti(ATTESA_A, timestamp="2026-08-20T15:03:28.124Z")] * 3)
+    assert c.ripetizioni == 1 and c.richieste == 3 and c.cache_rilevata
+    p = diagnose.classifica_lcp(c.fatti, {"largest_contentful_paint": 3699.0}, c)
+    assert "[misurazione non consolidata]" in p.titolo
+    assert "dalla cache" in p.nota
+
+
+def test_due_misurazioni_che_non_concordano_sono_discordanti():
+    """Due misurazioni distinte, fasi dominanti diverse: qui il confronto c'e'
+    ed e' andato male."""
+    c = consenso.combina([_fatti(ATTESA_A, timestamp="A"),
+                          _fatti(RENDERING, timestamp="B")])
+    assert c.ripetizioni == 2 and c.consolidato and not c.attendibile
+    p = diagnose.classifica_lcp(c.fatti, {"largest_contentful_paint": 3699.0}, c)
+    assert "[misurazioni discordanti]" in p.titolo
+    assert "da confermare" in p.responsabile
+
+
+def test_i_due_stati_dei_fixture_reali():
+    """Sui due PSI reali: n=1 passando una misurazione sola, n=2 passandole
+    entrambe. Hanno analysisUTCTimestamp diversi, quindi contano per due."""
+    misurazioni = [extract.estrai(
+        json.loads((FIXTURES / nome).read_text(encoding="utf-8")),
+        "https://www.bbc.com/", "PHONE")
+        for nome in ("psi-bbc-mobile-it.json", "psi-bbc-mobile-it-2.json")]
+    campo = {"largest_contentful_paint": 1162.0}
+
+    sola = consenso.combina(misurazioni[:1])
+    entrambe = consenso.combina(misurazioni)
+    assert sola.ripetizioni == 1 and entrambe.ripetizioni == 2
+
+    assert "non consolidata" in diagnose.classifica_lcp(sola.fatti, campo, sola).titolo
+    titolo = diagnose.classifica_lcp(entrambe.fatti, campo, entrambe).titolo
+    assert "discordanti" in titolo, "le due misurazioni danno fasi dominanti diverse"
+
+
 def test_la_concordanza_non_sporca_il_titolo():
     c = consenso.combina([_fatti(ATTESA_A), _fatti(ATTESA_B), _fatti(RENDERING)])
     p = diagnose.classifica_lcp(c.fatti, {"largest_contentful_paint": 3699.0}, c)

@@ -60,6 +60,10 @@ def _leggi(environ) -> dict:
 #  e' l'unico freno lato applicazione; se serve una barriera vera, si mette
 #  davanti (Deployment Protection di Vercel), non qui dentro.
 #
+#  Vale per ENTRAMBI gli endpoint. /api/report non consuma quota Google, ma
+#  impagina fino a 40 pagine e 4,5 MB di JSON in un Word: e' CPU dell'istanza, e
+#  senza freno bastava un ciclo per tenerla occupata.
+#
 #  LIMITE DICHIARATO: il contatore vive nella memoria dell'istanza. Su una
 #  piattaforma serverless le istanze sono piu' d'una e vengono ricreate, quindi
 #  questo argina un abuso da una sola sorgente su un'istanza calda, non un attacco
@@ -131,12 +135,16 @@ def _stato(avvia):
     })
 
 
+def _troppe(avvia):
+    return _json(avvia, "429 Too Many Requests", {
+        "errore": f"Troppe richieste: il limite e' {LIMITE_RICHIESTE} all'ora.",
+        "rimedio": "Riprova fra un po'. Il limite protegge la quota Google "
+                   "del progetto che ospita l'app."})
+
+
 def _analizza(avvia, richiesta: dict, environ):
     if _oltre_il_limite(environ):
-        return _json(avvia, "429 Too Many Requests", {
-            "errore": f"Troppe analisi: il limite e' {LIMITE_RICHIESTE} all'ora.",
-            "rimedio": "Riprova fra un po'. Il limite protegge la quota Google "
-                       "del progetto che ospita l'app."})
+        return _troppe(avvia)
 
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
@@ -162,7 +170,10 @@ def _analizza(avvia, richiesta: dict, environ):
     return _json(avvia, "200 OK", risultato)
 
 
-def _report(avvia, richiesta: dict):
+def _report(avvia, richiesta: dict, environ):
+    if _oltre_il_limite(environ):
+        return _troppe(avvia)
+
     pagine = richiesta.get("pagine") or []
     if not pagine:
         return _json(avvia, "400 Bad Request", {"errore": "Nessuna pagina da impaginare."})
@@ -208,7 +219,7 @@ def app(environ, avvia):
     if percorso == "/api/analizza" and metodo == "POST":
         return _analizza(avvia, _leggi(environ), environ)
     if percorso == "/api/report" and metodo == "POST":
-        return _report(avvia, _leggi(environ))
+        return _report(avvia, _leggi(environ), environ)
     if percorso in ("/api/analizza", "/api/report"):
         return _json(avvia, "405 Method Not Allowed", {"errore": "Usa POST."})
     return _json(avvia, "404 Not Found", {"errore": "Percorso sconosciuto."})

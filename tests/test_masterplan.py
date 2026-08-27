@@ -116,6 +116,18 @@ def test_le_constatazioni_restano_fuori():
     assert "constatazione" in esclusi[0][2]
 
 
+def test_un_audit_con_bersagli_inline_non_finisce_fra_i_silenzi():
+    """Non deve sparire ne' dal master plan ne' dall'elenco degli esclusi: il
+    tool dichiara cio' che lascia fuori."""
+    frammento, esclusi = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [_problema(
+            "unminified-css", titolo="Minimizza CSS",
+            risorse=(("CSS inline: .a { color: red }", "2 KB", False),))])))
+    righe = frammento["masterplan"]
+    assert len(righe) == 1 and righe[0]["intervento"] == "Minimizza CSS"
+    assert esclusi == []
+
+
 def test_le_pagine_fallite_non_entrano_nel_conteggio():
     frammento, _ = masterplan.costruisci(_esecuzione(
         _pagina("Home", "https://x.it/", [_problema("cache-insight")]),
@@ -150,6 +162,68 @@ def test_gli_inviti_alla_documentazione_non_sono_interventi():
     assert frammento["masterplan"][0]["intervento"] == "Responsabili delle variazioni"
 
 
+def test_dove_lighthouse_non_ha_un_imperativo_l_intervento_lo_scriviamo_noi():
+    """"Carattere visualizzato" e' il nome di `font-display` tradotto, non un'azione,
+    e il primo link della descrizione rende il termine stesso: nessuna delle due
+    strade di Lighthouse porta a un'istruzione."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato",
+                      azione_breve="font-display"),
+            _problema("legacy-javascript-insight", titolo="JavaScript precedente",
+                      azione_breve="di base")])))
+    interventi = {r["problema"].split(" su ")[0]: r["intervento"]
+                  for r in frammento["masterplan"]}
+    assert interventi["Font senza font-display"].startswith("Imposta font-display")
+    assert interventi["JavaScript per browser vecchi"].startswith("Escludi polyfill")
+
+
+def test_nessun_intervento_e_il_sostantivo_di_quei_due_audit():
+    """Il sintomo: la colonna consegnata al cliente riceveva il titolo tradotto."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato",
+                      azione_breve="font-display"),
+            _problema("legacy-javascript-insight", titolo="JavaScript precedente",
+                      azione_breve="di base")])))
+    interventi = [r["intervento"] for r in frammento["masterplan"]]
+    for sostantivo in ("Carattere visualizzato", "JavaScript precedente",
+                       "font-display", "di base"):
+        assert sostantivo not in interventi
+
+
+def test_la_tabella_non_tocca_gli_audit_col_titolo_gia_imperativo():
+    """AZIONE_PER_AUDIT e' un'eccezione enumerata: dove Lighthouse ha gia'
+    un'istruzione, il suo testo resta."""
+    codici = ("unused-javascript", "bootup-time", "cache-insight",
+              "image-delivery-insight", "third-parties-insight")
+    assert not [c for c in codici if c in masterplan.AZIONE_PER_AUDIT]
+
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("unused-javascript",
+                      titolo="Riduci il codice JavaScript inutilizzato")])))
+    assert frammento["masterplan"][0]["intervento"] ==         "Riduci il codice JavaScript inutilizzato"
+
+
+def test_la_riga_dichiara_chi_ha_scritto_l_intervento():
+    """ADR-004: l'origine del testo si dichiara, non si deduce."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato"),
+            _problema("unused-javascript", titolo="Riduci il codice inutilizzato")])))
+    fonti = {r["intervento"]: r["fonte_intervento"] for r in frammento["masterplan"]}
+    assert fonti["Riduci il codice inutilizzato"] == "lighthouse"
+    assert fonti[masterplan.AZIONE_PER_AUDIT["font-display-insight"]] == "nostra"
+
+
+def test_ogni_voce_della_tabella_e_un_imperativo_non_un_sostantivo():
+    """Il difetto che la tabella corregge non deve rientrare dalla tabella stessa."""
+    for codice, azione in masterplan.AZIONE_PER_AUDIT.items():
+        assert len(azione.split()) >= 4, f"{codice}: troppo corto per essere un'azione"
+        assert azione[0].isupper(), f"{codice}: un'istruzione comincia con un verbo"
+
+
 def test_per_le_classificazioni_nostre_l_intervento_e_la_checklist_lighthouse():
     frammento, _ = masterplan.costruisci(_esecuzione(
         _pagina("Home", "https://x.it/", [
@@ -180,6 +254,45 @@ def test_l_evidenza_scarta_le_nostre_parafrasi():
                 metriche={"largest_contentful_paint": 4180.0})))
     evidenza = frammento["masterplan"][0]["evidenza"]
     assert "Stima Lighthouse" not in evidenza and "dello spreco" not in evidenza
+
+
+def test_l_evidenza_dell_lcp_conserva_il_nome_della_fase():
+    """Il sintomo: si tagliava sull'em dash e restava "61% del tempo LCP", che non
+    dice di quale fase sia quel 61% — ed e' tutto il contenuto della riga."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("lcp-resourceLoadDelay", fonte="campo",
+                           metrica="largest_contentful_paint",
+                           evidenza=("Fase dominante (utenti reali): "
+                                     "Attesa prima del download — 61% del tempo LCP",
+                                     "Ripartizione: ..."))],
+                metriche={"largest_contentful_paint": 4180.0})))
+    evidenza = frammento["masterplan"][0]["evidenza"]
+    assert "Attesa prima del download" in evidenza
+    assert "61% del tempo" in evidenza
+    assert "Fase dominante" not in evidenza, "il prefisso non e' un dato"
+    assert "—" not in evidenza, "in una cella il trattino non serve"
+
+
+def test_un_numero_nudo_viene_qualificato_con_la_metrica_dell_audit():
+    """"1,7 s" in una cella di audit non dice di cosa sia il tempo."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("bootup-time", metrica="interaction_to_next_paint",
+                           evidenza=("1,7 s",))],
+                metriche={"interaction_to_next_paint": 109.0})))
+    assert frammento["masterplan"][0]["evidenza"] ==         "INP p75 109 ms. Tempo di esecuzione JavaScript 1,7 s."
+
+
+def test_un_displayvalue_che_si_descrive_da_solo_resta_com_e():
+    """"Risparmio stimato di 498 KiB" dice gia' cosa misura: qualificarlo sarebbe
+    testo in piu' su un testo di Lighthouse che va bene com'e'."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/",
+                [_problema("unused-javascript", metrica="largest_contentful_paint",
+                           evidenza=("Risparmio stimato di 498 KiB",))],
+                metriche={"largest_contentful_paint": 4180.0})))
+    assert frammento["masterplan"][0]["evidenza"] ==         "LCP p75 4.180 ms. Risparmio stimato di 498 KiB."
 
 
 def test_nessuna_cella_contiene_una_data_o_il_metodo():
@@ -241,7 +354,8 @@ def test_forma_del_frammento():
         _pagina("Home", "https://x.it/", [_problema("cache-insight")])))
     assert set(frammento) == {"masterplan", "tab"}
     riga = frammento["masterplan"][0]
-    assert set(riga) == {"id", "problema", "priorita", "evidenza", "intervento", "tab"}
+    assert set(riga) == {"id", "problema", "priorita", "evidenza", "intervento",
+                         "fonte_intervento", "tab"}
     assert isinstance(riga["id"], int)
     assert json.dumps(frammento, ensure_ascii=False), "dev'essere serializzabile"
 

@@ -141,3 +141,51 @@ def test_le_entita_raggruppano_piu_host(fatti):
 def test_peso_per_tipo(fatti):
     per_tipo = thirdparty.peso_per_tipo(fatti.richieste)
     assert per_tipo and list(per_tipo.values()) == sorted(per_tipo.values(), reverse=True)
+
+
+# --- bersagli inline: Lighthouse non li nomina con un URL -------------------- #
+
+def test_un_audit_con_bersagli_inline_non_sparisce(fatti):
+    """Il sintomo: `unminified-css` sul fixture ha score 0,5 e "Risparmio stimato
+    di 2 KiB", e non compariva da nessuna parte. La cella `url` porta l'estratto
+    del blocco `<style>`, non un indirizzo: la riga non produceva niente,
+    `ha_contenuto` era falso e l'audit veniva scartato in silenzio."""
+    audit = {o.audit: o for o in fatti.opportunita}
+    assert "unminified-css" in audit
+    opportunita = audit["unminified-css"]
+    assert opportunita.risorse, "il blocco inline e' un bersaglio, non niente"
+    assert opportunita.risorse[0].etichetta == "CSS inline"
+    assert opportunita.risorse[0].byte_sprecati > 0
+
+
+def test_il_bersaglio_inline_porta_l_estratto_di_lighthouse(fatti):
+    """L'etichetta e' nostra, l'estratto no: senza, il blocco resta da cercare."""
+    inline = next(o for o in fatti.opportunita if o.audit == "unminified-css").risorse[0]
+    assert inline.nome == "CSS inline"
+    assert inline.riferimento.startswith("CSS inline: ")
+    assert ".hygVWX" in inline.riferimento, "l'estratto e' testo di Lighthouse"
+
+
+def test_il_codice_inline_e_prima_parte_per_costruzione(psi):
+    """Sta nel documento: la proprieta' non si deduce dal dominio. Dedurla dava
+    netloc vuoto, quindi terza parte, quindi l'intervento a marketing/tag."""
+    fatti = extract.estrai(psi, URL, "PHONE", ["bbci.co.uk"])
+    inline = next(o for o in fatti.opportunita if o.audit == "unminified-css").risorse[0]
+    assert inline.terza_parte is False
+
+
+def test_l_etichetta_inline_non_si_applica_a_ogni_riga_senza_url(fatti):
+    """Su `bootup-time` la stessa cella porta "Unattributable": e' lavoro non
+    attribuito, non un blocco inline, e chiamarlo "script inline" sarebbe
+    un'informazione inventata."""
+    bootup = next(o for o in fatti.opportunita if o.audit == "bootup-time")
+    assert not [r for r in bootup.risorse if r.etichetta]
+    assert "Unattributable" not in [r.url for r in bootup.risorse]
+
+
+def test_le_risorse_con_un_file_non_cambiano_forma(fatti):
+    """L'etichetta resta vuota dove un URL c'e': `riferimento` e' l'URL, come prima."""
+    unused = next(o for o in fatti.opportunita if o.audit == "unused-javascript")
+    for risorsa in unused.risorse:
+        assert risorsa.etichetta == ""
+        assert risorsa.riferimento == risorsa.url
