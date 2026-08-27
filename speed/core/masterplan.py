@@ -286,8 +286,14 @@ def _tab_risorse(nome: str, membri: list) -> dict | None:
             "righe": righe[:MASSIMO_RIGHE_TAB]}
 
 
-def _motivo_esclusione(problema: dict) -> str:
-    """Ogni riga del master plan deve avere un intervento eseguibile."""
+def motivo_esclusione(problema: dict) -> str:
+    """Perche' questo problema non produce una riga di master plan, o "" se la produce.
+
+    Pubblica perche' la usa anche il documento tecnico: allo sviluppatore serve
+    sapere che `cache-insight` non gli e' stato assegnato perche' e' tutto su
+    terze parti, non trovarselo sparito. La ragione dev'essere una sola e detta
+    con le stesse parole nei due documenti.
+    """
     if not problema.get("azionabile", True):
         return "non azionabile: le risorse coinvolte non sono sotto controllo"
     if problema.get("fonte") == "lighthouse" and not (problema.get("azioni") or []):
@@ -309,7 +315,7 @@ def costruisci(esecuzione: dict):
     for pagina in pagine:
         campo = (pagina.get("campo") or {}).get("metriche") or {}
         for problema in pagina.get("problemi") or []:
-            motivo = _motivo_esclusione(problema)
+            motivo = motivo_esclusione(problema)
             if motivo:
                 esclusi.append((pagina.get("template", ""),
                                 problema.get("titolo", ""), motivo))

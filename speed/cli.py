@@ -4,6 +4,7 @@ CLI del tool.
     python -m speed check-config clienti/x.yaml     verifica la copertura CrUX degli URL
     python -m speed run          clienti/x.yaml     scansione completa -> JSON + HTML + DOCX
     python -m speed masterplan   "out/dati ....json"  frammento per lo script che fa l'xlsx
+    python -m speed report --formato md "out/dati ....json"   documento tecnico per gli sviluppatori
     python -m speed confronta    vecchio.json nuovo.json   cosa e' cambiato fra due scansioni
 
 La scansione e' una tantum: non c'e' database e non c'e' storico da accumulare.
@@ -31,6 +32,12 @@ from .core.soglie import ETICHETTE, formatta, giudizio
 from .io import crux, psi
 
 SIMBOLO = {"buono": "OK", "da_migliorare": "!!", "scarso": "XX", "sconosciuto": "--"}
+
+
+# I formati che `run` e `report` sanno emettere. `entrambi` resta il default e
+# resta html+docx: e' il report al cliente, ed e' il significato che aveva prima
+# che esistesse il documento tecnico.
+FORMATI = ("html", "docx", "md", "entrambi", "tutti")
 
 
 def _console_utf8():
@@ -275,16 +282,29 @@ def _nomi(conf: cfg.Config):
     return (f"dati velocita {slug} {oggi}", f"Report velocità {slug} {oggi}")
 
 
+# Il documento tecnico non e' il report del cliente in un altro formato: ha un
+# altro lettore e un altro nome. "Report velocita'" lo apre chi decide, "Interventi
+# tecnici" chi mette mano al codice.
+def _stem_tecnico(stem: str) -> str:
+    if "Report velocità" in stem:
+        return stem.replace("Report velocità", "Interventi tecnici")
+    return f"Interventi tecnici {stem}"
+
+
 def _scrivi_report(esecuzione: dict, destinazione: Path, stem: str, formato: str) -> list:
     scritti = []
-    if formato in ("html", "entrambi"):
+    if formato in ("html", "entrambi", "tutti"):
         from .io import render
         percorso = destinazione / f"{stem}.html"
         percorso.write_text(render.html_report(esecuzione), encoding="utf-8")
         scritti.append(percorso)
-    if formato in ("docx", "entrambi"):
+    if formato in ("docx", "entrambi", "tutti"):
         from .io import render_docx
         scritti.append(render_docx.docx_report(esecuzione, destinazione / f"{stem}.docx"))
+    if formato in ("md", "tutti"):
+        from .io import render_md
+        scritti.append(render_md.scrivi_markdown(
+            esecuzione, destinazione / f"{_stem_tecnico(stem)}.md"))
     return scritti
 
 
@@ -429,7 +449,9 @@ def main(argv=None) -> int:
     p_run = sub.add_parser("run", help="scansione completa")
     p_run.add_argument("config")
     p_run.add_argument("--desktop", action="store_true", help="misura desktop invece di mobile")
-    p_run.add_argument("--formato", choices=("html", "docx", "entrambi"), default="entrambi")
+    p_run.add_argument("--formato", choices=FORMATI, default="entrambi",
+                       help="html e docx sono il report al cliente; md e' il documento "
+                            "tecnico per chi sviluppa; entrambi = html+docx, tutti = i tre")
     p_run.add_argument("--ripetizioni", type=int, default=None,
                        help="misurazioni lab per URL; senza valore decide il tool: "
                             "1 se le fasi LCP arrivano dal campo, altrimenti 3")
@@ -442,9 +464,11 @@ def main(argv=None) -> int:
     p_conf.add_argument("prima")
     p_conf.add_argument("dopo")
 
-    p_rep = sub.add_parser("report", help="rigenera l'HTML da un run salvato")
+    p_rep = sub.add_parser("report", help="rigenera i report da un run salvato")
     p_rep.add_argument("json")
-    p_rep.add_argument("--formato", choices=("html", "docx", "entrambi"), default="entrambi")
+    p_rep.add_argument("--formato", choices=FORMATI, default="entrambi",
+                       help="html e docx sono il report al cliente; md e' il documento "
+                            "tecnico per chi sviluppa; entrambi = html+docx, tutti = i tre")
 
     args = parser.parse_args(argv)
     # Gli errori previsti portano con se' il rimedio: si stampano, non si
