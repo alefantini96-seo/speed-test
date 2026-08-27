@@ -626,11 +626,27 @@ function ricorda() {
   } catch (e) { /* modalita' privata: si perde la memoria, non l'analisi */ }
 }
 
+// Quanto dura DAVVERO una pagina, dai due rami del server.
+//
+// 40 s a pagina era il caso migliore e basta: un giro solo di PageSpeed, veloce.
+// Ma il server ne fa due quando le fasi LCP non arrivano dal campo — cioe' su
+// ogni LCP testuale, che e' il caso frequente — con l'attesa fra i giri che
+// serve a scavalcare la cache di PSI. Su cinque URL erano "4 minuti" annunciati
+// contro dieci e passa effettivi.
+//
+// Quindi si dichiara un intervallo, non un numero: annunciare un tempo che il
+// tool sa gia' di non poter rispettare e' peggio che non annunciarne nessuno.
+const SECONDI_PAGINA_MINIMO = 45;    // un giro, PSI veloce, campo con le fasi LCP
+const SECONDI_PAGINA_MASSIMO = 165;  // due giri, PSI lento, piu' l'attesa in mezzo
+
 function stimaDurata() {
   const quante = $('urls').value.split('\n').filter(s => s.trim()).length;
-  $('stima').textContent = quante
-    ? `${plurale(quante, 'pagina', 'pagine')} · circa ${Math.ceil(quante * 40 / 60)} minuti`
-    : '';
+  if (!quante) { $('stima').textContent = ''; return; }
+  const da = Math.max(1, Math.round(quante * SECONDI_PAGINA_MINIMO / 60));
+  const a = Math.ceil(quante * SECONDI_PAGINA_MASSIMO / 60);
+  const durata = da === a ? `circa ${da}` : `${da}-${a}`;
+  $('stima').textContent =
+    `${plurale(quante, 'pagina', 'pagine')} · ${durata} ${a === 1 ? 'minuto' : 'minuti'}`;
 }
 
 // --- suggerimento sui domini propri ----------------------------------------- //

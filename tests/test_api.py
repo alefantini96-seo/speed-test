@@ -8,12 +8,14 @@ il documento esce mutilo: questi test lo intercettano.
 """
 import io
 import json
+import re
 from datetime import date
 from pathlib import Path
 
 import pytest
 from docx import Document
 
+from speed import web
 from speed.core import consenso, diagnose, extract, thirdparty
 from speed.io import crux, render, render_docx
 from speed.web import fatti_essenziali, serializza, terze_essenziali, valida_url
@@ -421,6 +423,29 @@ def test_il_ritento_non_duplica_la_pagina_fra_i_falliti():
     corpo = sorgente[sorgente.index("async function riprova("):
                      sorgente.index("async function scarica(")]
     assert "falliti.splice" in corpo
+
+
+# --- la stima di durata a schermo -------------------------------------------- #
+
+def test_la_stima_di_durata_dichiara_un_intervallo():
+    """Il sintomo: 40 s a pagina era il caso migliore — un giro solo di PageSpeed.
+    Il server ne fa due quando le fasi LCP non arrivano dal campo, cioe' su ogni
+    LCP testuale: su cinque URL erano "4 minuti" contro dieci e passa effettivi."""
+    sorgente = _sorgente()
+    assert "SECONDI_PAGINA_MINIMO" in sorgente and "SECONDI_PAGINA_MASSIMO" in sorgente
+    assert "quante * 40 / 60" not in sorgente, "la stima non e' piu' il caso migliore"
+    assert "${da}-${a}" in sorgente, "a schermo si dichiara un intervallo"
+
+
+def test_la_stima_copre_i_due_giri_di_pagespeed():
+    """Il massimo dichiarato deve reggere il ramo costoso: due giri piu' l'attesa
+    fra l'uno e l'altro."""
+    sorgente = _sorgente()
+    massimo = int(re.search(r"SECONDI_PAGINA_MASSIMO = (\d+)", sorgente).group(1))
+    minimo = int(re.search(r"SECONDI_PAGINA_MINIMO = (\d+)", sorgente).group(1))
+    assert minimo < massimo
+    assert massimo >= 2 * 45 + web.BUDGET.psi_attesa_fra_giri, \
+        "due giri realistici piu' l'attesa non ci stanno nella stima"
 
 
 # --- memoria della pagina ----------------------------------------------------- #
