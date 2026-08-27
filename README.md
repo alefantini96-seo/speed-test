@@ -115,13 +115,20 @@ python -m speed check-config clienti/cliente.yaml   # quali URL hanno dati di ca
 python -m speed run          clienti/cliente.yaml   # scansione -> JSON + HTML + DOCX
 python -m speed run          clienti/cliente.yaml --desktop
 python -m speed run          clienti/cliente.yaml --formato docx
+python -m speed run          clienti/cliente.yaml --formato tutti   # + documento tecnico
 python -m speed run          clienti/cliente.yaml --ripetizioni 5
 python -m speed report       "out/dati velocita 20082026.json"   # rigenera i report
+python -m speed report --formato md "out/dati velocita 20082026.json"
 ```
 
 Il report esce in **HTML e Word**, dallo stesso run: `--formato html|docx|entrambi`
 (default: entrambi). Il DOCX e' pensato per la consegna al cliente ed e' modificabile;
 l'HTML si stampa in PDF con Ctrl+P, il CSS ha gia' le interruzioni di pagina per template.
+
+C'è un terzo formato, `md`, che non è il report al cliente in un'altra veste ma un
+documento con un altro lettore: [Documento tecnico per gli
+sviluppatori](#documento-tecnico-per-gli-sviluppatori). `--formato tutti` emette tutti
+e tre; `entrambi` resta HTML+Word, che è quello che significava prima.
 
 `check-config` va lanciato **prima** di fissare la lista URL: con un URL per template,
 se quella pagina non ha traffico sufficiente CrUX non ha dati e resta solo la diagnosi
@@ -187,6 +194,52 @@ Tutto il resto — evidenza, provenienza del testo, note metodologiche — sta d
 un «perche'» richiudibile. Serve a difendere il dato davanti a un cliente, non a
 decidere cosa fare. I primi cinque interventi sono visibili, gli altri dietro un
 bottone: sotto il quinto nessuno agisce subito.
+
+## Documento tecnico per gli sviluppatori
+
+    python -m speed run clienti/x.yaml --formato tutti
+    python -m speed report --formato md "out/dati velocita 21082026.json"
+
+Scrive `Interventi tecnici <ddmmyyyy>.md` accanto agli altri report. È il terzo
+deliverable, e **ha un lettore diverso**: il report HTML e il Word rispondono a «il
+sito è lento, e quanto costa sistemarlo»; questo risponde a «quale file, quale riga
+di configurazione, quale elemento del DOM». Markdown perché finisce in un ticket o
+in una PR: si diffa, si greppa, non ha dipendenze.
+
+C'è un esempio committato, generato dai fixture:
+[`docs/esempio-interventi-tecnici.md`](docs/esempio-interventi-tecnici.md). Si
+rigenera con `python scripts/esempio_md.py`, e un test verifica che sia allineato
+al renderer.
+
+Le tre differenze dal report al cliente, tutte volute:
+
+- **Le liste sono complete.** Le schede del cliente si fermano a sei risorse per
+  audit: bastano a decidere, non a lavorare. Qui `cache-insight` porta i suoi 24
+  file e `script-treemap-data` i suoi 83. Le liste lunghe stanno dentro un
+  `<details>`, non vengono tagliate.
+- **Si raggruppa per template, non per sito.** Il report cliente fa una lista sola
+  perché su tre template 20 schede su 37 erano ripetizioni dello stesso titolo. Ma
+  i *file* su cui agire quasi non coincidono — dal 43% allo 0% di sovrapposizione,
+  misurato — e chi sviluppa lavora per rotta. Le due scelte sono giuste entrambe,
+  per lettori diversi.
+- **C'è la chiave dell'audit**, `cache-insight` e non solo «Utilizza durate della
+  memorizzazione nella cache efficienti»: serve a rilanciare Lighthouse e a cercare
+  nei changelog quando un audit cambia nome.
+
+Vale ADR-004 come altrove, e più che altrove: nessuna raccomandazione scritta da
+noi. I link alla documentazione sono quelli che Lighthouse mette nella descrizione,
+e dove non ce n'è uno — `script-treemap-data` — non se ne cerca un sostituto.
+Le classificazioni nostre (chi interviene, priorità, azionabilità) sono marcate come
+tali riga per riga. Gli audit non azionabili e gli artefatti di dati non spariscono:
+compaiono col motivo per cui nessuno li ha assegnati.
+
+**Solo da riga di comando, in questa versione.** La versione web non può generarlo:
+`web.fatti_essenziali` scarta le opportunità complete per stare nel limite di 4,5 MB
+del corpo di una richiesta Vercel, e portarle al browser costerebbe 59 KB per pagina
+contro i 37 attuali — a 40 pagine si passerebbe da 1,5 a 3,8 MB, cioè quasi tutto il
+margine. Troncarle per farcele stare sarebbe l'opposto di questa feature. Un run
+salvato dalla versione web produce comunque il documento, che però dichiara in testa
+alla sezione interventi di essere incompleto.
 
 ## Master plan: il frammento per l'xlsx
 
