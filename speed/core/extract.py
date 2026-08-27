@@ -31,6 +31,9 @@ class Richiesta:
     byte: int
     tipo: str
     entita: str = ""      # nome del provider secondo Lighthouse, quando lo riconosce
+    stato: int = 0        # statusCode: 206 su piu' richieste dello stesso file dice
+                          # che una risorsa e' servita a pezzi, ed e' un fatto che
+                          # nessun audit riporta
 
 
 @dataclass
@@ -48,6 +51,7 @@ class FattiPagina:
     lcp_discovery_label: dict = field(default_factory=dict)
     opportunita: list = field(default_factory=list)
     richieste: list = field(default_factory=list)
+    metriche_lab: dict = field(default_factory=dict)
     campo_psi: dict = field(default_factory=dict)
     campo_psi_origin_fallback: bool = False
 
@@ -502,6 +506,39 @@ INSIGHT_INFORMATIVI = frozenset({
 # nello stesso report, con la seconda copia priva del contesto sul campo.
 GIA_CONSUMATI = frozenset({"lcp-breakdown-insight", "lcp-discovery-insight"})
 
+# Gli audit che riportano il VALORE di una metrica di laboratorio. Non sono
+# interventi — non nominano niente su cui mettere le mani — e restano fuori dalla
+# lista dei problemi, ma il numero serve: e' il quadro di sintesi che si mette in
+# testa a una nota tecnica, ed e' l'unico ordinamento possibile su un ambiente
+# senza dati di campo (staging). Si estraggono a parte, non si promuovono a
+# problemi.
+METRICHE_LAB = {
+    "first-contentful-paint": "FCP",
+    "largest-contentful-paint": "LCP",
+    "speed-index": "SI",
+    "total-blocking-time": "TBT",
+    "interactive": "TTI",
+    "cumulative-layout-shift": "CLS",
+    "max-potential-fid": "FID max",
+    "server-response-time": "TTFB",
+    "total-byte-weight": "Peso",
+}
+
+
+def estrai_metriche_lab(psi: dict) -> dict:
+    """{sigla: valore numerico} dagli audit che riportano solo una misura.
+
+    `numericValue` e non `displayValue`: il secondo e' gia' formattato ("1,7 s")
+    e non si puo' confrontare con una soglia.
+    """
+    fuori = {}
+    for aid, sigla in METRICHE_LAB.items():
+        valore = (_audits(psi).get(aid) or {}).get("numericValue")
+        if isinstance(valore, (int, float)):
+            fuori[sigla] = float(valore)
+    return fuori
+
+
 # Audit che riportano il valore di una metrica invece di un intervento:
 # `largest-contentful-paint`, `speed-index`, `interactive`... Hanno un punteggio,
 # spesso basso, ma niente su cui mettere le mani. Il valore della metrica lo
@@ -605,6 +642,7 @@ def estrai_richieste(psi: dict) -> list:
             byte=int(r.get("transferSize") or 0),
             tipo=str(r.get("resourceType") or "?"),
             entita=str(entita or ""),
+            stato=int(r.get("statusCode") or 0),
         ))
     return out
 
@@ -629,6 +667,7 @@ def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagi
         lcp_discovery_label=etichette,
         opportunita=estrai_opportunita(psi, url, domini_propri),
         richieste=estrai_richieste(psi),
+        metriche_lab=estrai_metriche_lab(psi),
         campo_psi=campo.get("metrics", {}) or {},
         campo_psi_origin_fallback=bool(campo.get("origin_fallback")),
     )

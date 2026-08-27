@@ -115,7 +115,8 @@ python -m speed check-config clienti/cliente.yaml   # quali URL hanno dati di ca
 python -m speed run          clienti/cliente.yaml   # scansione -> JSON + HTML + DOCX
 python -m speed run          clienti/cliente.yaml --desktop
 python -m speed run          clienti/cliente.yaml --formato docx
-python -m speed run          clienti/cliente.yaml --formato tutti   # + documento tecnico
+python -m speed run          clienti/cliente.yaml --formato nota    # nota per lo sviluppo
+python -m speed run          clienti/cliente.yaml --formato tutti   # tutti e quattro
 python -m speed run          clienti/cliente.yaml --ripetizioni 5
 python -m speed report       "out/dati velocita 20082026.json"   # rigenera i report
 python -m speed report --formato md "out/dati velocita 20082026.json"
@@ -125,10 +126,11 @@ Il report esce in **HTML e Word**, dallo stesso run: `--formato html|docx|entram
 (default: entrambi). Il DOCX e' pensato per la consegna al cliente ed e' modificabile;
 l'HTML si stampa in PDF con Ctrl+P, il CSS ha gia' le interruzioni di pagina per template.
 
-C'è un terzo formato, `md`, che non è il report al cliente in un'altra veste ma un
-documento con un altro lettore: [Documento tecnico per gli
-sviluppatori](#documento-tecnico-per-gli-sviluppatori). `--formato tutti` emette tutti
-e tre; `entrambi` resta HTML+Word, che è quello che significava prima.
+Ci sono altri due formati, che non sono il report al cliente in un'altra veste ma
+documenti con un altro lettore: `nota`, la [nota tecnica per lo
+sviluppo](#nota-tecnica-per-lo-sviluppo) che si consegna, e `md`, il [riferimento
+completo](#documento-tecnico-per-gli-sviluppatori) per ticket e PR. `--formato tutti`
+emette tutti e quattro; `entrambi` resta HTML+Word, che è quello che significava prima.
 
 `check-config` va lanciato **prima** di fissare la lista URL: con un URL per template,
 se quella pagina non ha traffico sufficiente CrUX non ha dati e resta solo la diagnosi
@@ -194,6 +196,46 @@ Tutto il resto — evidenza, provenienza del testo, note metodologiche — sta d
 un «perche'» richiudibile. Serve a difendere il dato davanti a un cliente, non a
 decidere cosa fare. I primi cinque interventi sono visibili, gli altri dietro un
 bottone: sotto il quinto nessuno agisce subito.
+
+## Nota tecnica per lo sviluppo
+
+    python -m speed run clienti/x.yaml --formato nota
+    python -m speed report --formato nota "out/dati velocita 21082026.json"
+
+Scrive `Interventi Performance <ddmmyyyy>.docx`. È **il documento che si consegna**:
+poche pagine, i problemi accorpati per tema e ordinati, la citazione di PageSpeed e
+il rimando alla documentazione Google per ognuno. Esempio committato:
+[`docs/esempio-interventi-performance.docx`](docs/esempio-interventi-performance.docx).
+
+La differenza dal riferimento completo non è di formattazione ma di contenuto:
+
+| | Nota (`--formato nota`) | Riferimento (`--formato md`) |
+|---|---|---|
+| Voci | ~8 temi | ~15 audit per template |
+| Raggruppa | per tema, attraverso i template | per template |
+| Liste | i primi bersagli per tema | complete, senza tetti |
+| Serve a | decidere cosa mettere a piano | aprire i file e lavorare |
+
+**Cosa decide il tool da solo**, e come:
+
+- **L'accorpamento per tema** — `unused-javascript`, `third-parties` e la catena di
+  richieste sono lo stesso lavoro per chi lo deve fare. La mappa `TEMI` in
+  `core/nota.py` è enumerata: ogni voce dice quali audit raccoglie.
+- **Il valore di un tema** è il **massimo**, non la somma: `bootup-time` attribuisce
+  agli script il lavoro che `mainthread-work` ripartisce per categoria, e sommarli
+  lo conterebbe due volte. Per questo il titolo dice «fino a».
+- **`BLOCCANTE`** è una soglia dichiarata — tre volte il valore accettabile, o
+  cinque megabyte su una pagina — non un giudizio.
+- **Le frasi di sintesi** vengono da `REGOLE_SINTESI`: condizione sui numeri e
+  modello. Compaiono se e solo se i dati le rendono vere.
+
+**Laboratorio e campo.** Il quadro di sintesi porta le metriche di laboratorio,
+perché sono le uniche che esistono ovunque — staging compreso — e dove CrUX ha dati
+aggiunge le colonne reali accanto. L'escalation a `BLOCCANTE` sulle metriche invece
+scatta **solo quando il campo manca**: con i dati di campo disponibili decide il
+campo (ADR-001), e dichiarare bloccante un LCP che in laboratorio è 10 s e sugli
+utenti reali è 1,1 s riporterebbe la priorità al laboratorio dalla porta di
+servizio. Il documento dichiara in quale delle due modalità è stato prodotto.
 
 ## Documento tecnico per gli sviluppatori
 
