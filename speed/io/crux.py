@@ -137,7 +137,11 @@ async def storico(client: httpx.AsyncClient, api_key: str, url: str,
 
 
 async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
-                   form_factor: str = "PHONE") -> dict:
+                   form_factor: str = "PHONE",
+                   timeout_record: float = TIMEOUT_RECORD,
+                   timeout_storico: float = TIMEOUT_STORICO,
+                   tentativi: int = 3, tentativi_storico: int = 3,
+                   attesa_iniziale: float = 2.0) -> dict:
     """Metriche di campo e andamento di una pagina, in due passi SEPARATI.
 
     Chiedere record e storico in un'unica espressione faceva perdere tutto: se lo
@@ -153,14 +157,19 @@ async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
     """
     voce = {"livello": "assente", "metriche": {}, "storico": None}
     try:
-        rec = await record(client, api_key, url, form_factor)
+        rec = await record(client, api_key, url, form_factor,
+                           timeout=timeout_record, tentativi=tentativi,
+                           attesa_iniziale=attesa_iniziale)
     except CruxNonDisponibile:
         return voce      # resta la sola diagnosi di laboratorio, dichiarata nel report
 
     voce = {"livello": "url", "metriche": rec["metriche"],
             "periodo_a": rec["periodo_a"], "storico": None}
     try:
-        voce["storico"] = await storico(client, api_key, url, form_factor)
+        voce["storico"] = await storico(client, api_key, url, form_factor,
+                                        timeout=timeout_storico,
+                                        tentativi=tentativi_storico,
+                                        attesa_iniziale=attesa_iniziale)
     except Exception:
         pass             # niente andamento, ma le metriche correnti restano
     return voce

@@ -62,8 +62,15 @@ proprietà dell'HTML, non della rete.
 
 Oltre alla CLI c'è un'interfaccia web pensata per Vercel: incolli gli URL, il browser
 li manda **uno alla volta** e i risultati compaiono mano a mano. Una pagina richiede
-~20-60 secondi, quindi sta dentro i 300 secondi di una funzione Vercel anche sul piano
-gratuito, senza code né database.
+45-165 secondi — due giri di PageSpeed quando le fasi LCP non arrivano dal campo, che
+è il caso frequente — senza code né database.
+
+Il tetto è `maxDuration`, 300 secondi: oltre quello Vercel uccide la funzione e
+restituisce un 504 anonimo, cioè l'utente perde l'errore con rimedio che il tool
+avrebbe consegnato. Perciò il percorso web dichiara un **budget di tempo esplicito**
+(`web.Budget`) e lo passa ai client: timeout più corti e meno tentativi della CLI, con
+il caso peggiore a 249 secondi. La CLI non ha limiti di durata e tiene i valori
+generosi. `Budget.peggior_caso()` fa il conto, e un test lo confronta con `vercel.json`.
 
 ```
 app.py               applicazione WSGI: instrada tutto, nessuna dipendenza

@@ -59,7 +59,9 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
 async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
                          parallelismo: int = 4, locale: str = "it",
                          ripetizioni: int = 3, attesa_fra_giri: float = 90.0,
-                         avviso=None) -> dict:
+                         avviso=None, tentativi: int = 3,
+                         attesa_iniziale: float = 2.0,
+                         timeout: float = TIMEOUT) -> dict:
     """Ritorna {url: [risposta | Exception, ...]}.
 
     Le ripetizioni servono perche' la ripartizione in fasi dell'LCP e' instabile
@@ -73,6 +75,10 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
 
     Il parallelismo resta basso: la quota non e' il vincolo (240 richieste al
     minuto), lo e' la pazienza di PSI.
+
+    `tentativi`, `attesa_iniziale` e `timeout` valgono per la singola chiamata e
+    li decide il chiamante: chi gira dentro una funzione serverless ha un tetto di
+    durata e deve stare sotto (vedi `web.Budget`), la CLI no.
     """
     sem = asyncio.Semaphore(parallelismo)
     risultati: dict = {u: [] for u in urls}
@@ -81,7 +87,9 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
         async def uno(url: str):
             async with sem:
                 try:
-                    risultati[url].append(await analizza(client, api_key, url, strategy, locale))
+                    risultati[url].append(await analizza(
+                        client, api_key, url, strategy, locale,
+                        tentativi, attesa_iniziale, timeout))
                 except Exception as exc:   # la singola pagina non deve fermare il run
                     risultati[url].append(exc)
 
