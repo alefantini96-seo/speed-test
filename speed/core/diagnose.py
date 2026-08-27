@@ -371,6 +371,22 @@ SIGNIFICATO_FASI = {
 }
 
 
+# Perche' la fase dominante di laboratorio non regge. Sono due casi distinti e il
+# titolo deve dire quale: con una misurazione sola non c'e' niente da confrontare
+# (e il caso arriva anche da tre giri, se PSI li serve tutti dalla cache); con piu'
+# misurazioni che non concordano il confronto c'e' ed e' andato male. In entrambi
+# i casi il responsabile resta "(da confermare)".
+RISERVA_NON_CONSOLIDATA = "misurazione non consolidata"
+RISERVA_DISCORDANTE = "misurazioni discordanti"
+
+
+def _riserva_sul_lab(accordo) -> str:
+    """L'etichetta da mettere fra parentesi quadre nel titolo, o "" se non serve."""
+    if accordo is None or accordo.attendibile:
+        return ""
+    return RISERVA_DISCORDANTE if accordo.consolidato else RISERVA_NON_CONSOLIDATA
+
+
 def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | None:
     """Dove si perde il tempo dell'LCP, e chi se ne occupa.
 
@@ -384,6 +400,7 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
     """
     fasi_campo = fasi_dal_campo(campo)
     dal_campo = bool(fasi_campo)
+    riserva = ""
     fasi = fasi_campo or fatti.lcp_fasi
     if not fasi:
         return None
@@ -431,13 +448,13 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
                          "cosa che di norma non accade.")
         # Senza accordo fra le misurazioni la fase dominante non regge, e con essa
         # l'attribuzione della responsabilita': lo dichiariamo invece di nasconderlo.
-        incerto = accordo is not None and not accordo.attendibile
+        riserva = _riserva_sul_lab(accordo)
 
     return Problema(
         codice=f"lcp-{fase}",
-        titolo=significato + (" [misurazioni discordanti]" if incerto else ""),
+        titolo=significato + (f" [{riserva}]" if riserva else ""),
         gravita=GRAVITA_DA_CAMPO[giudizio("largest_contentful_paint", lcp_campo)],
-        responsabile=f"{responsabile} (da confermare)" if incerto else responsabile,
+        responsabile=f"{responsabile} (da confermare)" if riserva else responsabile,
         fonte="campo" if dal_campo else "classificazione",
         evidenza=evidenza,
         azioni=azioni,
