@@ -327,6 +327,14 @@ def _masterplan(percorso_json: str) -> int:
         print(f"  {riga['id']:2d}. [{riga['priorita']:5s}] {riga['problema']}{tab}")
         print(f"      {riga['intervento']}")
 
+    nostre = [r for r in righe if r.get("fonte_intervento") == "nostra"]
+    if nostre:
+        print("")
+        print(f"  intervento scritto da noi ({len(nostre)}): il titolo Lighthouse "
+              f"non e' un'istruzione")
+        for riga in nostre:
+            print(f"    {riga['id']:2d}. {riga['intervento']}")
+
     if esclusi:
         print("")
         print(f"  fuori master plan ({len(esclusi)}):")

@@ -150,6 +150,68 @@ def test_gli_inviti_alla_documentazione_non_sono_interventi():
     assert frammento["masterplan"][0]["intervento"] == "Responsabili delle variazioni"
 
 
+def test_dove_lighthouse_non_ha_un_imperativo_l_intervento_lo_scriviamo_noi():
+    """"Carattere visualizzato" e' il nome di `font-display` tradotto, non un'azione,
+    e il primo link della descrizione rende il termine stesso: nessuna delle due
+    strade di Lighthouse porta a un'istruzione."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato",
+                      azione_breve="font-display"),
+            _problema("legacy-javascript-insight", titolo="JavaScript precedente",
+                      azione_breve="di base")])))
+    interventi = {r["problema"].split(" su ")[0]: r["intervento"]
+                  for r in frammento["masterplan"]}
+    assert interventi["Font senza font-display"].startswith("Imposta font-display")
+    assert interventi["JavaScript per browser vecchi"].startswith("Escludi polyfill")
+
+
+def test_nessun_intervento_e_il_sostantivo_di_quei_due_audit():
+    """Il sintomo: la colonna consegnata al cliente riceveva il titolo tradotto."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato",
+                      azione_breve="font-display"),
+            _problema("legacy-javascript-insight", titolo="JavaScript precedente",
+                      azione_breve="di base")])))
+    interventi = [r["intervento"] for r in frammento["masterplan"]]
+    for sostantivo in ("Carattere visualizzato", "JavaScript precedente",
+                       "font-display", "di base"):
+        assert sostantivo not in interventi
+
+
+def test_la_tabella_non_tocca_gli_audit_col_titolo_gia_imperativo():
+    """AZIONE_PER_AUDIT e' un'eccezione enumerata: dove Lighthouse ha gia'
+    un'istruzione, il suo testo resta."""
+    codici = ("unused-javascript", "bootup-time", "cache-insight",
+              "image-delivery-insight", "third-parties-insight")
+    assert not [c for c in codici if c in masterplan.AZIONE_PER_AUDIT]
+
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("unused-javascript",
+                      titolo="Riduci il codice JavaScript inutilizzato")])))
+    assert frammento["masterplan"][0]["intervento"] ==         "Riduci il codice JavaScript inutilizzato"
+
+
+def test_la_riga_dichiara_chi_ha_scritto_l_intervento():
+    """ADR-004: l'origine del testo si dichiara, non si deduce."""
+    frammento, _ = masterplan.costruisci(_esecuzione(
+        _pagina("Home", "https://x.it/", [
+            _problema("font-display-insight", titolo="Carattere visualizzato"),
+            _problema("unused-javascript", titolo="Riduci il codice inutilizzato")])))
+    fonti = {r["intervento"]: r["fonte_intervento"] for r in frammento["masterplan"]}
+    assert fonti["Riduci il codice inutilizzato"] == "lighthouse"
+    assert fonti[masterplan.AZIONE_PER_AUDIT["font-display-insight"]] == "nostra"
+
+
+def test_ogni_voce_della_tabella_e_un_imperativo_non_un_sostantivo():
+    """Il difetto che la tabella corregge non deve rientrare dalla tabella stessa."""
+    for codice, azione in masterplan.AZIONE_PER_AUDIT.items():
+        assert len(azione.split()) >= 4, f"{codice}: troppo corto per essere un'azione"
+        assert azione[0].isupper(), f"{codice}: un'istruzione comincia con un verbo"
+
+
 def test_per_le_classificazioni_nostre_l_intervento_e_la_checklist_lighthouse():
     frammento, _ = masterplan.costruisci(_esecuzione(
         _pagina("Home", "https://x.it/", [
@@ -241,7 +303,8 @@ def test_forma_del_frammento():
         _pagina("Home", "https://x.it/", [_problema("cache-insight")])))
     assert set(frammento) == {"masterplan", "tab"}
     riga = frammento["masterplan"][0]
-    assert set(riga) == {"id", "problema", "priorita", "evidenza", "intervento", "tab"}
+    assert set(riga) == {"id", "problema", "priorita", "evidenza", "intervento",
+                         "fonte_intervento", "tab"}
     assert isinstance(riga["id"], int)
     assert json.dumps(frammento, ensure_ascii=False), "dev'essere serializzabile"
 

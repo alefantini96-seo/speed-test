@@ -217,11 +217,15 @@ Le regole che governano il contenuto:
 - **Ogni riga ha un intervento eseguibile.** Le righe non azionabili, le
   constatazioni e gli artefatti di dati restano fuori, e il motivo compare a
   terminale come «fuori master plan».
-- **`problema`** e' l'unica cella scritta da noi: una classificazione nella forma
-  «X su Y». **`evidenza`** sono solo numeri misurati. **`intervento`** e' testo di
-  Lighthouse verbatim — il titolo, o l'etichetta del link quando il titolo e' un
-  sostantivo ("Terze parti" -> "Riduci e posticipa il caricamento del codice di
-  terze parti").
+- **`problema`** e' una classificazione nostra nella forma «X su Y».
+  **`evidenza`** sono numeri misurati. **`intervento`** e' testo di Lighthouse
+  verbatim — il titolo, o l'etichetta del link quando il titolo e' un sostantivo
+  ("Terze parti" -> "Riduci e posticipa il caricamento del codice di terze parti").
+  Fanno eccezione i pochi audit il cui titolo localizzato non e' un'istruzione e
+  la cui descrizione non ne offre una — "Carattere visualizzato" per `font-display`,
+  "JavaScript precedente" per il *legacy JavaScript*: li' l'istruzione la scriviamo
+  noi, da una tabella enumerata per audit, e la riga lo dichiara in
+  **`fonte_intervento`** (`lighthouse` | `nostra`). Vedi ADR-004.
 - **Registro telegrafico**: niente conseguenze, niente metodo o data, niente
   confronto con misure precedenti, niente elenco di pagine quando c'e' gia' un tab.
 - **Un tab si crea solo se la lista serve a chi implementa**, con un tetto di cinque.
