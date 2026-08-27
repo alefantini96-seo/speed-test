@@ -240,6 +240,29 @@ def test_l_analisi_rifiuta_oltre_il_limite(monkeypatch):
     assert "quota Google" in json.loads(corpo)["rimedio"]
 
 
+def test_il_report_rifiuta_oltre_il_limite(monkeypatch, pagina):
+    """Non consuma quota Google, ma impagina fino a 40 pagine e 4,5 MB di JSON in
+    un Word: e' CPU dell'istanza, e senza freno bastava un ciclo per occuparla."""
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 0)
+    stato, _, corpo = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    assert stato.startswith("429")
+    assert "quota Google" in json.loads(corpo)["rimedio"]
+
+
+def test_i_due_endpoint_condividono_lo_stesso_contatore(monkeypatch, pagina):
+    """Un limite per endpoint sarebbe il doppio del limite dichiarato."""
+    import app as applicazione
+    monkeypatch.setenv("GOOGLE_API_KEY", "finta")
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    monkeypatch.setattr(applicazione, "LIMITE_RICHIESTE", 1)
+    primo, _, _ = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    secondo, _, _ = _chiama("/api/analizza", "POST", {"url": "https://x.it/"})
+    assert primo.startswith("200")
+    assert secondo.startswith("429"), "la prima richiesta ha gia' consumato il limite"
+
+
 # --- ripresa dopo una pagina fallita ----------------------------------------- #
 
 def test_il_report_accetta_pagine_riuscite_e_fallite(monkeypatch, pagina, tmp_path):
