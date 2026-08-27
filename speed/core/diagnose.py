@@ -443,7 +443,6 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
                 "28 giorni, non una simulazione. I quattro valori sono percentili "
                 "indipendenti, quindi non sommano esattamente all'LCP complessivo. "
                 "Le voci sopra sono la checklist di Lighthouse riportata testualmente.")
-        incerto = False
     else:
         nota = ("Ripartizione dal laboratorio: CrUX non espone le fasi per questa pagina "
                 "(le fornisce solo quando l'elemento LCP e' un'immagine e il traffico "
