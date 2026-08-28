@@ -447,3 +447,80 @@ def test_il_proxy_non_diventa_un_affermazione_sulla_metrica():
     assert "TBT" not in nota.CAMPO_DELLA_SIGLA
     assert nota.CAMPO_DELLA_SIGLA["LCP"] == "largest_contentful_paint"
 
+
+# --- la gravita' distingue ---------------------------------------------------- #
+
+def test_la_gravita_distingue_gli_interventi(esecuzione):
+    """Il sintomo: su una scansione reale otto voci su nove erano MEDIA, e la
+    colonna non diceva da dove cominciare."""
+    gravita = [t.gravita for t in nota.temi(esecuzione)]
+    assert len(set(gravita)) >= 3, gravita
+    assert gravita == sorted(gravita, key=lambda g: nota.ORDINE_GRAVITA[g]), \
+        "la tabella resta ordinata dalla piu' grave"
+
+
+def test_l_intervento_piu_grosso_sta_in_cima(esecuzione):
+    """3 MB di JavaScript inutilizzato non possono stare alla pari con 126 ms
+    di reflow."""
+    temi = nota.temi(esecuzione)
+    assert temi[0].codice == "js-inutile"
+    reflow = _tema(temi, "reflow")
+    assert nota.ORDINE_GRAVITA[temi[0].gravita] < nota.ORDINE_GRAVITA[reflow.gravita]
+
+
+def test_la_taglia_viene_da_soglie_dichiarate():
+    grosso = nota.Tema(codice="x", titolo="", gravita="media",
+                       byte_sprecati=nota.BYTE_GROSSO)
+    medio = nota.Tema(codice="x", titolo="", gravita="media",
+                      byte_sprecati=nota.BYTE_MEDIO)
+    piccolo = nota.Tema(codice="x", titolo="", gravita="media",
+                        byte_sprecati=nota.BYTE_MEDIO - 1)
+    assert nota.taglia_di(grosso) == "grossa"
+    assert nota.taglia_di(medio) == "media"
+    assert nota.taglia_di(piccolo) == "piccola"
+    lento = nota.Tema(codice="x", titolo="", gravita="media",
+                      ms_sprecati=nota.MS_GROSSO)
+    assert nota.taglia_di(lento) == "grossa"
+
+
+def test_un_tema_con_metrica_si_misura_sulla_metrica():
+    """L'LCP non si pesa in kilobyte: la taglia e' quante pagine sono oltre
+    soglia, non quanti byte dichiara l'audit."""
+    tutte = nota.Tema(codice="lcp", titolo="", gravita="media",
+                      soglia=nota.ContoSoglia(oltre_campo=3, con_campo=3))
+    alcune = nota.Tema(codice="lcp", titolo="", gravita="media",
+                       soglia=nota.ContoSoglia(oltre_campo=1, con_campo=3))
+    nessuna = nota.Tema(codice="lcp", titolo="", gravita="media",
+                        soglia=nota.ContoSoglia(oltre_campo=0, con_campo=3))
+    assert nota.taglia_di(tutte) == "grossa"
+    assert nota.taglia_di(alcune) == "media"
+    assert nota.taglia_di(nessuna) == "piccola"
+
+
+def test_col_campo_buono_nessun_tema_supera_media(esecuzione):
+    """ADR-001: il campo tiene il tetto. Un tema grosso in laboratorio non puo'
+    diventare ALTA se gli utenti reali stanno bene."""
+    for urgenza, per_taglia in nota.GRAVITA_COMBINATA.items():
+        if urgenza != "bassa":
+            continue
+        for gravita in per_taglia.values():
+            assert nota.ORDINE_GRAVITA[gravita] >= nota.ORDINE_GRAVITA["media"]
+
+
+def test_bloccante_non_si_combina(senza_campo):
+    """BLOCCANTE ha una soglia sua ed e' gia' il massimo: la taglia non lo
+    abbassa."""
+    temi = nota.temi(senza_campo)
+    bloccanti = [t for t in temi if t.urgenza == "bloccante"]
+    assert bloccanti, "il caso ha senso solo se qualcuno scatta"
+    for tema in bloccanti:
+        assert tema.gravita == "bloccante"
+
+
+def test_la_gravita_resta_una_regola_non_un_giudizio():
+    """ADR-004: chi legge deve poter rifare il conto. Le due meta' sono
+    entrambe enumerate."""
+    assert set(nota.GRAVITA_COMBINATA) == {"alta", "media", "bassa"}
+    for per_taglia in nota.GRAVITA_COMBINATA.values():
+        assert set(per_taglia) == {"grossa", "media", "piccola"}
+

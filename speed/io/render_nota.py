@@ -189,9 +189,12 @@ def _tema(doc, indice: int, tema, esecuzione: dict):
 
 def _ordine(doc, temi_ordinati: list):
     doc.add_heading("Ordine di lavorazione", level=1)
-    _p(doc, "L'ordine viene dalla gravita' e da quanti template sono toccati. "
-            "«Fino a» perche' il valore e' il massimo fra gli audit del tema e "
-            "fra le pagine, non una somma.", size=9, colore=GRIGIO, spazio_dopo=6)
+    _p(doc, "La gravita' combina due cose misurate: cosa dicono di quella "
+            "metrica gli utenti reali su CrUX, e quanto pesa l'intervento "
+            "secondo i numeri di Lighthouse. Con il campo «buono» un tema non "
+            "supera MEDIA, per quanto grosso sia in laboratorio. «Fino a» "
+            "perche' il valore e' il massimo fra gli audit del tema e fra le "
+            "pagine, non una somma.", size=9, colore=GRIGIO, spazio_dopo=6)
     _tabella(doc, ["#", "Intervento", "Pagine", "Gravita'", "Peso del problema"],
              nota.ordine_di_lavorazione(temi_ordinati))
 

@@ -132,6 +132,7 @@ def conta_oltre_soglia(esecuzione: dict, sigla: str) -> ContoSoglia:
             conto.oltre_lab += 1
     return conto
 
+
 ORDINE_GRAVITA = {"bloccante": 0, "alta": 1, "media": 2, "bassa": 3}
 ETICHETTA_GRAVITA = {"bloccante": "BLOCCANTE", "alta": "ALTA",
                      "media": "MEDIA", "bassa": "BASSA"}
@@ -140,6 +141,38 @@ ETICHETTA_GRAVITA = {"bloccante": "BLOCCANTE", "alta": "ALTA",
 # dichiarata sulla soglia di accettabilita' di Google, e una soglia di peso.
 FATTORE_BLOCCANTE = 3.0
 BYTE_BLOCCANTI = 5 * 1024 * 1024        # 5 MB su una singola pagina
+
+# --------------------------------------------------------------------------- #
+#  Quanto vale un intervento: la taglia
+#
+#  Il giudizio di campo da solo non ordina niente. Dentro un sito e' quasi
+#  costante - CrUX dice "da migliorare" su LCP e INP di tutte le pagine, o
+#  "buono" su tutte - e siccome la gravita' di un audit e' quel giudizio mappato,
+#  tutti gli audit escono con la stessa gravita': su una scansione reale erano
+#  otto MEDIA su nove, e la colonna non diceva da dove cominciare.
+#
+#  La taglia e' l'altra meta': quanto pesa l'intervento, per soglie dichiarate
+#  sui numeri che Lighthouse stesso mette nell'audit. Sono numeri, non giudizi.
+# --------------------------------------------------------------------------- #
+
+BYTE_GROSSO = 1024 * 1024               # 1 MB recuperabili su una pagina
+BYTE_MEDIO = 100 * 1024                 # 100 KiB
+MS_GROSSO = 2000                        # 2 s dichiarati dall'audit
+MS_MEDIO = 500                          # mezzo secondo
+
+# Urgenza (dal campo) x taglia -> gravita'.
+#
+# La riga la sceglie il campo, e questo tiene fermo ADR-001: con il campo
+# "buono" un tema non puo' superare MEDIA, qualunque numero abbia il
+# laboratorio. La colonna la sceglie la taglia, e ordina dentro quella riga.
+# Nessuna delle due da sola basta: la prima appiattisce, la seconda ignorerebbe
+# cio' che Google misura davvero.
+GRAVITA_COMBINATA = {
+    "alta":  {"grossa": "alta",  "media": "alta",  "piccola": "media"},
+    "media": {"grossa": "alta",  "media": "media", "piccola": "bassa"},
+    "bassa": {"grossa": "media", "media": "bassa", "piccola": "bassa"},
+}
+ORDINE_TAGLIA = {"grossa": 0, "media": 1, "piccola": 2}
 
 
 def tema_di(codice: str) -> tuple:
@@ -346,6 +379,9 @@ class Tema:
     ms_sprecati: float = 0.0
     totale_template: int = 0
     soglia: ContoSoglia | None = None   # solo per i temi con una metrica propria
+    taglia: str = ""                    # grossa | media | piccola
+    urgenza: str = ""                   # la gravita' che viene dal campo, prima
+                                        # di essere combinata con la taglia
 
 
 # Audit che misurano lo stesso lavoro di un altro con un taglio diverso: sommarli
@@ -390,16 +426,40 @@ def _gravita_tema(codice: str, gravita_audit: str, esecuzione: dict,
     """
     if byte_pagina_massimo >= BYTE_BLOCCANTI:
         return "bloccante"
-    if dal_campo:
-        return gravita_audit
-    sigla = METRICA_DEL_TEMA.get(codice)
-    soglia = SOGLIA_BUONA_LAB.get(sigla or "")
-    if sigla and soglia:
-        for pagina in _riuscite(esecuzione):
-            valore = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
-            if valore is not None and valore >= soglia * FATTORE_BLOCCANTE:
-                return "bloccante"
+    if not dal_campo:
+        sigla = METRICA_DEL_TEMA.get(codice)
+        soglia = SOGLIA_BUONA_LAB.get(sigla or "")
+        if sigla and soglia:
+            for pagina in _riuscite(esecuzione):
+                valore = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
+                if valore is not None and valore >= soglia * FATTORE_BLOCCANTE:
+                    return "bloccante"
     return gravita_audit
+
+
+def taglia_di(tema: Tema) -> str:
+    """Quanto vale l'intervento: grossa, media o piccola. Solo soglie e numeri.
+
+    Un tema che ha una metrica propria si misura su quella — l'LCP non si pesa in
+    kilobyte — e la misura e' quante pagine ce l'hanno oltre soglia: tutte quelle
+    misurate e' grossa, alcune e' media, nessuna e' piccola. Chi ha anche dei
+    numeri dichiarati prende la piu' grande delle due letture, perche' sono due
+    modi di guardare lo stesso intervento e non due interventi.
+    """
+    letture = []
+    conto = tema.soglia
+    if conto is not None and (conto.con_campo or conto.senza_campo):
+        oltre = conto.oltre_campo if conto.con_campo else conto.oltre_lab
+        misurate = conto.con_campo or conto.senza_campo
+        letture.append("grossa" if oltre and oltre == misurate
+                       else "media" if oltre else "piccola")
+    if tema.byte_sprecati >= BYTE_GROSSO or tema.ms_sprecati >= MS_GROSSO:
+        letture.append("grossa")
+    elif tema.byte_sprecati >= BYTE_MEDIO or tema.ms_sprecati >= MS_MEDIO:
+        letture.append("media")
+    else:
+        letture.append("piccola")
+    return min(letture, key=lambda t: ORDINE_TAGLIA[t])
 
 
 # Un bersaglio piu' lungo di cosi' non si legge in una nota di poche pagine: i
@@ -529,11 +589,15 @@ def temi(esecuzione: dict) -> list:
         tema = gruppi.get(codice)
         if tema is None:
             continue
-        tema.gravita = _gravita_tema(codice, tema.gravita, esecuzione,
-                                     peso_massimo, dal_campo)
         sigla = METRICA_DEL_TEMA.get(codice)
         if sigla:
             tema.soglia = conta_oltre_soglia(esecuzione, sigla)
+        tema.urgenza = _gravita_tema(codice, tema.gravita, esecuzione,
+                                     peso_massimo, dal_campo)
+        tema.taglia = taglia_di(tema)
+        # BLOCCANTE ha una soglia sua e non si combina: e' gia' il massimo.
+        tema.gravita = (tema.urgenza if tema.urgenza == "bloccante"
+                        else GRAVITA_COMBINATA[tema.urgenza][tema.taglia])
         tema.titolo = _titolo(codice, titolo_tema, tema)
         tema.evidenze = raggruppa_evidenze(tema.evidenze)
         tema.citazioni = accorpa_citazioni(tema.citazioni)

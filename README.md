@@ -225,8 +225,22 @@ La differenza dal riferimento completo non è di formattazione ma di contenuto:
 - **Il valore di un tema** è il **massimo**, non la somma: `bootup-time` attribuisce
   agli script il lavoro che `mainthread-work` ripartisce per categoria, e sommarli
   lo conterebbe due volte. Per questo il titolo dice «fino a».
+- **La gravità** combina due misure. L'**urgenza** viene dal campo: cosa dicono di
+  quella metrica gli utenti reali su CrUX. La **taglia** viene dai numeri
+  dell'audit, per soglie dichiarate (`BYTE_GROSSO` 1 MB, `BYTE_MEDIO` 100 KiB,
+  `MS_GROSSO` 2 s, `MS_MEDIO` 500 ms); i temi che hanno una metrica propria — LCP,
+  CLS — si misurano invece su quante pagine ce l'hanno oltre soglia, perché l'LCP
+  non si pesa in kilobyte. La matrice `GRAVITA_COMBINATA` è enumerata.
+
+  Serve perché nessuna delle due da sola ordina. Dentro un sito il giudizio di
+  campo è quasi costante — CrUX dice «da migliorare» su LCP e INP di tutte le
+  pagine — e su una scansione reale uscivano **otto MEDIA su nove**: la colonna
+  non diceva da dove cominciare. La taglia da sola ignorerebbe invece ciò che
+  Google misura davvero. ADR-001 resta fermo: **la riga la sceglie il campo**, e
+  col campo «buono» un tema non supera MEDIA per quanto grosso sia in laboratorio.
 - **`BLOCCANTE`** è una soglia dichiarata — tre volte il valore accettabile, o
-  cinque megabyte su una pagina — non un giudizio.
+  cinque megabyte su una pagina — non un giudizio, e non si combina: è già il
+  massimo.
 - **Le frasi di sintesi** vengono da `REGOLE_SINTESI`: condizione sui numeri e
   modello. Compaiono se e solo se i dati le rendono vere.
 
