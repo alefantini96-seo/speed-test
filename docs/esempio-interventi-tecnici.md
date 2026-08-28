@@ -240,7 +240,7 @@ Polyfill e trasformazioni consentono ai browser precedenti di usare nuove funzio
 
 > **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
 
-- Fase dominante (utenti reali): Attesa prima del download — 39% del tempo LCP
+- Fase dominante (utenti reali): Attesa prima del download — 39% (498 ms) del tempo LCP
 - Ripartizione: Risposta del server (TTFB) 27%, Attesa prima del download 39%, Download della risorsa 14%, Rendering dell'elemento 20%
 - Elemento LCP: &lt;img sizes="(min-width: 1008px) 33vw, (min-width: 600px) 66vw, 100vw" srcset="https://ichef.bbci.co.uk/news/240/cpsprodpb/04db/live/0a124600-9c81-11f1-a…" src="
 - LCP di campo (p75 utenti reali): 1162 ms — buono
@@ -696,7 +696,7 @@ Valuta la possibilità di impostare font-display su swap o optional per assicura
 
 > **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
 
-- Fase dominante (utenti reali): Attesa prima del download — 39% del tempo LCP
+- Fase dominante (utenti reali): Attesa prima del download — 39% (498 ms) del tempo LCP
 - Ripartizione: Risposta del server (TTFB) 27%, Attesa prima del download 39%, Download della risorsa 14%, Rendering dell'elemento 20%
 - Elemento LCP: &lt;img sizes="(min-width: 1008px) 33vw, (min-width: 600px) 66vw, 100vw" srcset="https://ichef.bbci.co.uk/news/240/cpsprodpb/04db/live/0a124600-9c81-11f1-a…" src="
 - LCP di campo (p75 utenti reali): 1162 ms — buono

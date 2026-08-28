@@ -430,6 +430,20 @@ def _riserva_sul_lab(accordo) -> str:
     return RISERVA_DISCORDANTE if accordo.consolidato else RISERVA_NON_CONSOLIDATA
 
 
+def quota_lcp(fasi: dict, fase: str) -> str:
+    """«39% (2,1 s)»: la quota di una fase con accanto il tempo che vale.
+
+    La sola percentuale non si legge senza risalire all'LCP della pagina, che sta
+    in un'altra tabella: il 39% di 8,1 s e il 39% di 12,3 s sono due problemi
+    diversi. Il valore assoluto e' quello della fase, misurato — non ricalcolato
+    sull'LCP complessivo, al quale le fasi di campo non sommano esattamente.
+    """
+    totale = sum(fasi.values()) or 1
+    ms = fasi[fase]
+    assoluto = f"{ms / 1000:.1f} s".replace(".", ",") if ms >= 1000 else f"{ms:.0f} ms"
+    return f"{ms / totale * 100:.0f}% ({assoluto})"
+
+
 def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | None:
     """Dove si perde il tempo dell'LCP, e chi se ne occupa.
 
@@ -450,12 +464,12 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
 
     totale = sum(fasi.values()) or 1
     fase = max(fasi, key=fasi.get)
-    quota = fasi[fase] / totale
     significato, responsabile = SIGNIFICATO_FASI[fase]
 
     origine = "utenti reali" if dal_campo else "laboratorio"
     evidenza = [
-        f"Fase dominante ({origine}): {FASI_IT[fase]} — {quota * 100:.0f}% del tempo LCP",
+        f"Fase dominante ({origine}): {FASI_IT[fase]} — "
+        f"{quota_lcp(fasi, fase)} del tempo LCP",
         "Ripartizione: " + ", ".join(f"{FASI_IT[k]} {v / totale * 100:.0f}%"
                                      for k, v in fasi.items()),
     ]
@@ -503,7 +517,7 @@ def classifica_lcp(fatti: FattiPagina, campo: dict, accordo=None) -> Problema | 
         nota=nota,
         metrica="largest_contentful_paint",
         bersagli=([(fatti.lcp_elemento_selettore or "elemento LCP",
-                    f"{quota * 100:.0f}% del tempo LCP",
+                    f"{quota_lcp(fasi, fase)} del tempo LCP",
                     fatti.lcp_elemento_snippet[:160])]
                   if fatti.lcp_elemento_snippet else []),
     )
