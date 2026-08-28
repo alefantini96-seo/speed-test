@@ -147,6 +147,15 @@ button:disabled { opacity:.38; cursor:default; }
 .barra .cosa span { font-weight:400; color:var(--tenue); }
 
 /* --- avanzamento: una riga per URL, con lo stato di ciascuna --------------- */
+/* A lavoro finito il blocco si chiude in una riga: da li' in poi occupa lo
+   schermo sopra il verdetto, cioe' sopra la cosa che si e' venuti a leggere.
+   Chiuso, non tolto: l'elenco dei tempi serve quando una pagina e' andata male. */
+.avanzamento details > summary { font-size:13px; color:var(--tenue); cursor:pointer;
+                                 list-style:none; padding:0; }
+.avanzamento details > summary:hover { color:var(--blu); }
+.avanzamento details > summary::before { content:"+ "; }
+.avanzamento details[open] > summary::before { content:"\2212 "; }
+.avanzamento details[open] ol { margin-top:10px; }
 .avanzamento ol { list-style:none; margin:0; padding:0; }
 .avanzamento li { display:flex; align-items:baseline; gap:11px; font-size:13px;
                   padding:6px 0; border-bottom:1px solid var(--bordo-tenue); }
@@ -727,6 +736,15 @@ function disegnaAvanzamento() {
       <span class="tempo">${secondi != null ? secondi + 's' : ''}</span></li>`;
   }).join('');
   $('avanzamento').hidden = false;
+  // Finito: il blocco si richiude su se stesso. Restava aperto sopra il verdetto
+  // a occupare uno schermo intero per dire una cosa che non serviva piu'.
+  if (fatti === stati.length) {
+    const durata = stati.reduce((somma, s) => somma + (s.secondi || 0), 0);
+    $('avanzamento').innerHTML = `<details><summary>${
+      plurale(stati.length, 'pagina misurata', 'pagine misurate')} in ${durata}s
+      </summary><ol>${righe}</ol></details>`;
+    return;
+  }
   $('avanzamento').innerHTML =
     `<p class="meta">${fatti} di ${stati.length} pagine · una pagina richiede
       20-60 secondi, e vengono misurate una alla volta</p><ol>${righe}</ol>`;

@@ -484,6 +484,28 @@ def test_una_pagina_fallita_manda_al_server_lo_stesso_campo_delle_altre():
     assert "template: url, url," in sorgente
 
 
+# --- l'avanzamento si toglie di mezzo quando ha finito ----------------------- #
+
+def test_l_avanzamento_si_chiude_a_lavoro_finito():
+    """Il sintomo: il blocco restava aperto sopra il verdetto, cioe' sopra la
+    cosa che si e' venuti a leggere, per dire "3 di 3"."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("function disegnaAvanzamento(")
+    fine = sorgente.index("function avviaOrologio(")
+    resa = sorgente[inizio:fine]
+    assert "fatti === stati.length" in resa, "il caso 'finito' e' distinto"
+    assert "<details>" in resa, "chiuso, non tolto: i tempi servono se una va male"
+    assert "pagine misurate" in resa
+
+
+def test_l_elenco_resta_riapribile():
+    """Quando una pagina va male, il suo tempo e il suo stato servono ancora."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("if (fatti === stati.length)")
+    fine = sorgente.index("return;", inizio)
+    assert "${righe}" in sorgente[inizio:fine], "le righe restano dentro il details"
+
+
 # --- la gerarchia dei pulsanti ----------------------------------------------- #
 
 def _barra():
