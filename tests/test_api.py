@@ -526,6 +526,33 @@ def test_la_gravita_di_un_intervento_e_scritta():
     assert ETICHETTA_GRAVITA["media"] == "MEDIA", "stessa parola, maiuscola"
 
 
+# --- l'analisi viene annunciata ---------------------------------------------- #
+
+def test_c_e_una_regione_annunciata():
+    """Un'analisi da tre minuti il cui unico segno di vita e' un contatore che
+    scorre non esiste, per chi non vede lo schermo."""
+    sorgente = _sorgente()
+    assert 'id="annuncio"' in sorgente
+    assert 'aria-live="polite"' in sorgente
+    assert 'role="status"' in sorgente
+    assert ".solo-lettori" in _css(), "va tolta alla vista, non all'albero"
+    assert "clip-path:inset(50%)" in _css()
+
+
+def test_si_annuncia_il_cambio_di_stato_non_il_tempo_che_scorre():
+    """L'elenco si ridisegna ogni secondo: leggerlo tutto a ogni tick renderebbe
+    la pagina inascoltabile."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("function disegnaAvanzamento(")
+    fine = sorgente.index("function annuncia(")
+    assert "annuncia(" not in sorgente[inizio:fine], "non dentro il ciclo dell'orologio"
+    assert "in corso:" in sorgente and "Analisi completata:" in sorgente
+
+
+def test_l_errore_e_un_alert():
+    assert '<div id="errore" role="alert">' in _sorgente()
+
+
 # --- la gerarchia dei pulsanti ----------------------------------------------- #
 
 def _barra():

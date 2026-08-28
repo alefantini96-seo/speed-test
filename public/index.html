@@ -268,6 +268,10 @@ li { margin:3px 0; }
            text-transform:uppercase; letter-spacing:.03125rem;
            color:var(--tenue); border:1px solid var(--bordo); vertical-align:middle; }
 .attesa { color:var(--tenue); font-size:13px; }
+/* Esiste per gli screen reader e per nessun altro. `display:none` la
+   toglierebbe anche a loro: va tolta alla vista, non all'albero. */
+.solo-lettori { position:absolute; width:1px; height:1px; overflow:hidden;
+                clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 a { color:var(--blu); }
 </style>
 </head>
@@ -343,9 +347,15 @@ a { color:var(--blu); }
     </div>
   </div>
 
+  <!-- L'analisi dura minuti e il solo segno che sta lavorando e' visivo: un
+       contatore che scorre. Qui si annuncia il passaggio di stato, e SOLO quello:
+       l'elenco si ridisegna ogni secondo, e leggerlo tutto a ogni tick renderebbe
+       la pagina inascoltabile. -->
+  <p class="solo-lettori" id="annuncio" role="status" aria-live="polite"></p>
+
   <!-- Fuori dal modulo: il modulo si chiude durante l'analisi, e questi due
        devono restare leggibili proprio in quel momento. -->
-  <div id="errore"></div>
+  <div id="errore" role="alert"></div>
   <div id="consiglio"></div>
 
   <!-- Avanzamento: una riga per URL con il suo stato. Prima c'era una sola riga di
@@ -759,6 +769,12 @@ function disegnaAvanzamento() {
       20-60 secondi, e vengono misurate una alla volta</p><ol>${righe}</ol>`;
 }
 
+// Si annuncia il cambio di stato, non il tempo che scorre.
+function annuncia(testo) {
+  const regione = $('annuncio');
+  if (regione) regione.textContent = testo;
+}
+
 function avviaOrologio() {
   fermaOrologio();
   // Il contatore che scorre e' cio' che dice "non e' bloccato": prima l'unico
@@ -937,10 +953,13 @@ async function avvia() {
   disegnaAvanzamento();
   avviaOrologio();
 
+  annuncia(`Analisi avviata su ${plurale(urls.length, 'pagina', 'pagine')}.`);
+
   for (let i = 0; i < urls.length; i++) {
     stati[i].stato = 'corso';
     stati[i].avvio = Date.now();
     disegnaAvanzamento();
+    annuncia(`Pagina ${i + 1} di ${urls.length} in corso: ${urls[i]}`);
     try {
       const dati = await analizzaUna(urls[i], desktop, domini);
       stati[i].stato = 'fatto';
@@ -968,6 +987,7 @@ async function avvia() {
 
   fermaOrologio();
   disegnaAvanzamento();
+  annuncia(`Analisi completata: ${riepilogo()} I documenti sono scaricabili.`);
   $('avvia').disabled = false;
   // Il download resta possibile sulle pagine riuscite: il report dichiara quali
   // sono mancate invece di far finta che la lista fosse piu' corta.
