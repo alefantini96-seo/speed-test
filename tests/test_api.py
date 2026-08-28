@@ -433,6 +433,57 @@ def test_url_valido_passa_la_validazione():
     assert valida_url("esempio.it") is not None
 
 
+# --- i nomi delle pagine sono quelli del core -------------------------------- #
+
+# Il contratto fra la pagina e i documenti: da questi URL devono uscire queste
+# etichette, in Python come in JavaScript. Senza un browser nei test la meta'
+# JavaScript si controlla sul sorgente; questa tabella tiene ferma l'altra meta'
+# e dice, nero su bianco, cosa deve produrre anche la prima.
+ETICHETTE_ATTESE = [
+    ("https://www.pluxee.it/", "/"),
+    ("https://www.pluxee.it/prodotti/aziende/buoni-pasto/",
+     "/prodotti/aziende/buoni-pasto/"),
+    ("https://www.pluxee.it", "https://www.pluxee.it"),
+]
+
+
+def test_il_core_etichetta_le_pagine_cosi():
+    from speed.core.aggregazione import etichetta_template
+    for url, atteso in ETICHETTE_ATTESE:
+        assert etichetta_template(url, url) == atteso, url
+        assert etichetta_template("", url) == atteso, url
+
+
+def test_l_interfaccia_nomina_le_pagine_con_la_regola_del_core():
+    """Il sintomo: nel verdetto comparivano affiancati "Home" e
+    "/prodotti/utilizzatori/buoni-pasto/" - due regole diverse nello stesso
+    elenco, e nessuna delle due quella dei documenti Word."""
+    sorgente = _sorgente()
+    assert "function etichettaTemplate(" in sorgente
+    assert "function nomeInProsa(" in sorgente
+    assert "nomeTemplate" not in sorgente, "la vecchia regola non deve sopravvivere"
+    assert "'Home'" not in sorgente, "la home non si ribattezza a mano"
+
+
+def test_il_gemello_javascript_taglia_come_il_core():
+    """Stesso algoritmo: dopo il primo '://', dal primo '/' in poi."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("function etichettaTemplate(")
+    fine = sorgente.index("function nomeInProsa(")
+    funzione = sorgente[inizio:fine]
+    assert "indexOf('://')" in funzione, "il taglio parte dal PRIMO '://', come il core"
+    assert "resto.indexOf('/')" in funzione
+
+
+def test_una_pagina_fallita_manda_al_server_lo_stesso_campo_delle_altre():
+    """`speed/web.py` mette l'URL in `template`. Se il browser ci mettesse il
+    percorso, il documento chiamerebbe le pagine mancate in un modo e le altre
+    in un altro."""
+    sorgente = _sorgente()
+    assert "template: urls[i], url: urls[i]" in sorgente
+    assert "template: url, url," in sorgente
+
+
 # --- il verdetto non nasconde le pagine che non ha misurato ------------------ #
 
 def test_il_verdetto_dichiara_le_pagine_senza_dati_di_campo():

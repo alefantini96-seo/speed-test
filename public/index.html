@@ -339,7 +339,7 @@ function raggruppa(pagine) {
   // peggiore con i numeri del primo incontrato.
   const membri = new Map();
   for (const pagina of pagine) {
-    const template = nomeTemplate(pagina.url);
+    const template = etichettaTemplate(pagina.url);
     for (const p of pagina.problemi || []) {
       if (!membri.has(p.codice)) membri.set(p.codice, []);
       membri.get(p.codice).push({ template, problema: p });
@@ -479,7 +479,7 @@ function disegnaFallita(pagina) {
   const div = document.createElement('div');
   div.className = 'riquadro';
   div.dataset.fallita = pagina.url;
-  div.innerHTML = `<h2>${esc(pagina.template)}</h2>
+  div.innerHTML = `<h2>${esc(etichettaTemplate(pagina.url))}</h2>
     <p class="url">${esc(pagina.url)}</p>
     <div class="errore">Misurazione fallita: ${esc(pagina.errore)}
       ${pagina.rimedio ? `<div class="rimedio">${esc(pagina.rimedio)}</div>` : ''}
@@ -502,7 +502,7 @@ function disegna(pagina) {
   div.id = `template-${indicePagina}`;
   div.dataset.url = pagina.url;
   div.innerHTML = `
-    <h2>${esc(nomeTemplate(pagina.url))}</h2>
+    <h2>${esc(etichettaTemplate(pagina.url))}</h2>
     <p class="url">${esc(pagina.url)}</p>
     ${tabellaCampo(pagina.campo)}
     ${fasiLcp(pagina.fatti)}
@@ -538,7 +538,7 @@ function disegnaVerdetto() {
       giudizio(metrica, p.campo.metriche[metrica]) !== 'buono');
     const stato = fuori.length
       ? `<span class="fuori">${fuori.length} su ${misurati.length} fuori soglia</span>
-         <span class="attesa">${fuori.map(p => esc(nomeTemplate(p.url))).join(', ')}</span>`
+         <span class="attesa">${fuori.map(p => esc(etichettaTemplate(p.url))).join(', ')}</span>`
       : `<span class="dentro">a posto su ${plurale(misurati.length, 'template', 'template')}</span>`;
     return `<li><span class="et">${SOGLIE[metrica].et}</span>${stato}</li>`;
   }).join('');
@@ -555,7 +555,7 @@ function disegnaVerdetto() {
     p => !Object.keys(p.campo?.metriche || {}).length);
   const avviso = scoperte.length
     ? `<p class="scoperte">Senza dati di campo:
-        ${scoperte.map(p => esc(p.url)).join(', ')}. CrUX non li espone quando il
+        ${scoperte.map(p => esc(nomeInProsa(p.url))).join(', ')}. CrUX non li espone quando il
         traffico non basta, ed è il caso delle pagine nuove o poco visitate: non
         entrano nei conteggi qui sopra, e la priorità dei loro interventi non è
         calibrata sugli utenti reali.</p>`
@@ -564,7 +564,7 @@ function disegnaVerdetto() {
   // Un indice: con cinque template la pagina supera i cinquemila pixel e gli
   // interventi, che sono la parte che si usa, stanno in fondo.
   const salti = risultati.map((p, i) =>
-    `<a href="#template-${i+1}">${esc(nomeTemplate(p.url))}</a>`).join(' · ');
+    `<a href="#template-${i+1}">${esc(etichettaTemplate(p.url))}</a>`).join(' · ');
 
   vecchio.className = 'verdetto';
   vecchio.innerHTML = `<h2>In sintesi</h2><ul>${righe}</ul>${avviso}
@@ -701,11 +701,27 @@ function mostraErrore(messaggio, rimedio) {
     ${rimedio ? `<div class="rimedio">${esc(rimedio)}</div>` : ''}</div>`;
 }
 
-function nomeTemplate(url) {
-  try {
-    const percorso = new URL(url).pathname;
-    return percorso === '/' ? 'Home' : percorso;
-  } catch (e) { return url; }
+// Gemelli di `core/aggregazione.etichetta_template` e `nome_in_prosa`.
+//
+// Il sintomo che li ha resi necessari: nel verdetto comparivano affiancati "Home"
+// e "/prodotti/utilizzatori/buoni-pasto/". Erano due regole diverse nello stesso
+// elenco, e nessuna delle due era quella con cui il documento Word nomina le
+// stesse pagine. Adesso la regola e' una sola e sta nel core: qui si replica.
+//
+// Dal browser il nome del template non esiste - lo dichiara lo YAML del cliente,
+// che qui non c'e' - quindi l'etichetta e' sempre il percorso dell'URL.
+function etichettaTemplate(url) {
+  const testo = String(url || '').trim();
+  const separatore = testo.indexOf('://');
+  const resto = separatore >= 0 ? testo.slice(separatore + 3) : testo;
+  const taglio = resto.indexOf('/');
+  return (taglio >= 0 ? resto.slice(taglio) : '') || testo;
+}
+
+// Dentro una frase "/" non si legge come il nome di una pagina: li' vale l'URL
+// intero, lungo ma inequivocabile.
+function nomeInProsa(url) {
+  return String(url || '').trim();
 }
 
 function riepilogo() {
@@ -775,7 +791,10 @@ async function avvia() {
       // che accumula l'errore e prosegue. Fermarsi qui perderebbe il lavoro
       // fatto e tutte le pagine successive.
       stati[i].stato = 'errore';
-      const fallita = { template: nomeTemplate(urls[i]), url: urls[i],
+      // `template` va al server, che lo etichetta col suo criterio: qui si
+      // manda l'URL come fa `speed/web.py` per le pagine riuscite, cosi' il
+      // documento non chiama le mancate in un modo e le altre in un altro.
+      const fallita = { template: urls[i], url: urls[i],
                         errore: e.message, rimedio: e.rimedio || '' };
       falliti.push(fallita);
       disegnaFallita(fallita);
@@ -814,7 +833,7 @@ async function riprova(url) {
     $('scarica-nota').disabled = risultati.length === 0;
   } catch (e) {
     if (scheda) scheda.remove();
-    const fallita = { template: nomeTemplate(url), url,
+    const fallita = { template: url, url,
                       errore: e.message, rimedio: e.rimedio || '' };
     if (indice >= 0) falliti[indice] = fallita; else falliti.push(fallita);
     disegnaFallita(fallita);
