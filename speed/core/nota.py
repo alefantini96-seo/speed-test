@@ -78,6 +78,60 @@ METRICA_DEL_TEMA = {
     "layout": "CLS", "font": "FCP",
 }
 
+# La metrica di campo che e' la STESSA COSA della sigla di laboratorio. In
+# `diagnose.LAB_A_CAMPO` il TBT e' mappato su INP e lo Speed Index sull'LCP: sono
+# proxy dichiarati, buoni per calibrare una priorita' e non per affermare "TBT
+# oltre soglia", che parlerebbe di un'altra metrica.
+CAMPO_DELLA_SIGLA = {
+    "LCP": "largest_contentful_paint",
+    "CLS": "cumulative_layout_shift",
+    "FCP": "first_contentful_paint",
+    "TTFB": "experimental_time_to_first_byte",
+}
+
+
+@dataclass
+class ContoSoglia:
+    """Quante pagine hanno la metrica oltre soglia, e su quale misura si sa."""
+    oltre_campo: int = 0
+    con_campo: int = 0
+    oltre_lab: int = 0
+    senza_campo: int = 0
+
+    @property
+    def dichiarabile(self) -> bool:
+        return bool(self.oltre_campo or (not self.con_campo and self.oltre_lab))
+
+
+def conta_oltre_soglia(esecuzione: dict, sigla: str) -> ContoSoglia:
+    """Quante pagine hanno davvero quella metrica oltre soglia.
+
+    Il conteggio si fa sul CAMPO dove il campo c'e' (ADR-001). Contare gli audit
+    falliti e chiamarli "LCP oltre soglia su 3 template" mentre CrUX dice che su
+    una di quelle pagine l'LCP reale e' buono e' una contraddizione dentro lo
+    stesso documento: il titolo affermava un fatto sulla metrica partendo da un
+    numero che parla d'altro.
+
+    Le pagine senza campo si contano a parte. Per loro esiste solo il
+    laboratorio, che e' un'altra misura e non si somma alla prima.
+    """
+    conto = ContoSoglia()
+    chiave = CAMPO_DELLA_SIGLA.get(sigla or "")
+    soglia_lab = SOGLIA_BUONA_LAB.get(sigla or "")
+    for pagina in _riuscite(esecuzione):
+        campo = (pagina.get("campo") or {}).get("metriche") or {}
+        valore = campo.get(chiave) if chiave else None
+        if valore is not None:
+            conto.con_campo += 1
+            if giudizio(chiave, valore) != "buono":
+                conto.oltre_campo += 1
+            continue
+        conto.senza_campo += 1
+        lab = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
+        if soglia_lab and lab is not None and lab > soglia_lab:
+            conto.oltre_lab += 1
+    return conto
+
 ORDINE_GRAVITA = {"bloccante": 0, "alta": 1, "media": 2, "bassa": 3}
 ETICHETTA_GRAVITA = {"bloccante": "BLOCCANTE", "alta": "ALTA",
                      "media": "MEDIA", "bassa": "BASSA"}
@@ -291,6 +345,7 @@ class Tema:
     byte_sprecati: float = 0.0
     ms_sprecati: float = 0.0
     totale_template: int = 0
+    soglia: ContoSoglia | None = None   # solo per i temi con una metrica propria
 
 
 # Audit che misurano lo stesso lavoro di un altro con un taglio diverso: sommarli
@@ -388,9 +443,16 @@ def _titolo(codice_tema: str, titolo_tema: str, tema: Tema) -> str:
     if tema.ms_sprecati >= 100 and codice_tema in SUFFISSO_MS:
         return (f"{titolo_tema}: fino a {_ms(tema.ms_sprecati)} "
                 f"{SUFFISSO_MS[codice_tema]}")
-    sigla = METRICA_DEL_TEMA.get(codice_tema)
-    if sigla and tema.template:
-        return f"{titolo_tema} oltre soglia su {len(tema.template)} template"
+    conto = tema.soglia
+    if conto is not None and conto.dichiarabile:
+        if conto.con_campo:
+            titolo = (f"{titolo_tema} oltre soglia sul campo su "
+                      f"{conto.oltre_campo} template di {conto.con_campo}")
+            if conto.senza_campo:
+                titolo += f" misurati ({conto.senza_campo} senza dati di campo)"
+            return titolo
+        return (f"{titolo_tema} oltre soglia in laboratorio su "
+                f"{conto.oltre_lab} template")
     quanti = len(tema.audit)
     return f"{titolo_tema}: {quanti} audit non superat{'o' if quanti == 1 else 'i'}"
 
@@ -469,6 +531,9 @@ def temi(esecuzione: dict) -> list:
             continue
         tema.gravita = _gravita_tema(codice, tema.gravita, esecuzione,
                                      peso_massimo, dal_campo)
+        sigla = METRICA_DEL_TEMA.get(codice)
+        if sigla:
+            tema.soglia = conta_oltre_soglia(esecuzione, sigla)
         tema.titolo = _titolo(codice, titolo_tema, tema)
         tema.evidenze = raggruppa_evidenze(tema.evidenze)
         tema.citazioni = accorpa_citazioni(tema.citazioni)

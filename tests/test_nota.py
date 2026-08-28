@@ -383,3 +383,67 @@ def test_nessun_tema_ripete_una_citazione(esecuzione):
         testi = [testo for _titolo, testo, _url in tema.citazioni]
         assert len(testi) == len(set(testi)), tema.codice
 
+
+# --- «oltre soglia» conta le pagine, sul campo -------------------------------- #
+
+def _con_campo(esecuzione, valori):
+    """Lo stesso run con l'LCP di campo forzato pagina per pagina.
+
+    `valori` e' una lista lunga quanto le pagine riuscite: un numero, oppure None
+    per togliere del tutto i dati di campo a quella pagina.
+    """
+    pagine, indice = [], 0
+    for pagina in esecuzione["pagine"]:
+        if pagina.get("errore"):
+            pagine.append(pagina)
+            continue
+        valore = valori[indice]
+        indice += 1
+        if valore is None:
+            pagine.append({**pagina, "campo": {"livello": "assente", "metriche": {}}})
+        else:
+            metriche = dict((pagina.get("campo") or {}).get("metriche") or {})
+            metriche["largest_contentful_paint"] = valore
+            pagine.append({**pagina, "campo": {**(pagina.get("campo") or {}),
+                                               "metriche": metriche}})
+    return {**esecuzione, "pagine": pagine}
+
+
+def test_oltre_soglia_si_conta_sul_campo_non_sugli_audit(esecuzione):
+    """Il sintomo: "LCP oltre soglia su 2 template" mentre la tabella CrUX dello
+    stesso documento dava LCP buono su tutte e due."""
+    conto = nota.conta_oltre_soglia(esecuzione, "LCP")
+    assert conto.con_campo == 2 and conto.oltre_campo == 0
+    lcp = _tema(nota.temi(esecuzione), "lcp")
+    assert "oltre soglia" not in lcp.titolo, lcp.titolo
+    assert "audit non superat" in lcp.titolo
+
+
+def test_con_il_campo_oltre_soglia_il_titolo_lo_dice(esecuzione):
+    run = _con_campo(esecuzione, [3684, 922])
+    conto = nota.conta_oltre_soglia(run, "LCP")
+    assert (conto.oltre_campo, conto.con_campo, conto.senza_campo) == (1, 2, 0)
+    lcp = _tema(nota.temi(run), "lcp")
+    assert lcp.titolo == "LCP oltre soglia sul campo su 1 template di 2"
+
+
+def test_le_pagine_senza_campo_si_contano_a_parte(esecuzione):
+    """Il caso Pluxee: due pagine con CrUX, il blog senza."""
+    run = _con_campo(esecuzione, [3684, None])
+    conto = nota.conta_oltre_soglia(run, "LCP")
+    assert (conto.oltre_campo, conto.con_campo, conto.senza_campo) == (1, 1, 1)
+    lcp = _tema(nota.temi(run), "lcp")
+    assert "1 senza dati di campo" in lcp.titolo, lcp.titolo
+
+
+def test_senza_campo_ovunque_il_titolo_dichiara_il_laboratorio(senza_campo):
+    lcp = _tema(nota.temi(senza_campo), "lcp")
+    assert "in laboratorio" in lcp.titolo, lcp.titolo
+
+
+def test_il_proxy_non_diventa_un_affermazione_sulla_metrica():
+    """TBT e' mappato su INP come proxy per calibrare la priorita'. Non basta a
+    dire "TBT oltre soglia": e' un'altra metrica."""
+    assert "TBT" not in nota.CAMPO_DELLA_SIGLA
+    assert nota.CAMPO_DELLA_SIGLA["LCP"] == "largest_contentful_paint"
+
