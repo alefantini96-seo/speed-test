@@ -433,6 +433,38 @@ def test_url_valido_passa_la_validazione():
     assert valida_url("esempio.it") is not None
 
 
+# --- il verdetto non nasconde le pagine che non ha misurato ------------------ #
+
+def test_il_verdetto_dichiara_le_pagine_senza_dati_di_campo():
+    """Il sintomo: "3 pagine analizzate" in testa e "LCP 1 su 2 fuori soglia"
+    sotto. La terza non ha CrUX, veniva filtrata via in silenzio, e il lettore
+    non aveva modo di sapere che il conteggio parlava di due pagine."""
+    sorgente = _sorgente()
+    inizio = sorgente.index("function disegnaVerdetto(")
+    fine = sorgente.index("// --- avanzamento")
+    verdetto = sorgente[inizio:fine]
+    assert "Senza dati di campo:" in verdetto
+    assert "non entrano nei conteggi qui sopra" in verdetto
+    assert "${avviso}" in verdetto, "l'avviso va reso, non solo calcolato"
+
+
+def test_l_avviso_compare_solo_quando_serve():
+    """Con il campo su tutte le pagine la riga non deve comparire."""
+    sorgente = _sorgente()
+    assert "scoperte.length" in sorgente, "l'avviso e' condizionato"
+
+
+def test_la_pagina_e_il_documento_usano_le_stesse_parole():
+    """Due testi diversi sullo stesso fatto confondono piu' di uno che tace."""
+    from speed.io.render_nota import SENZA_CAMPO
+    sorgente = _sorgente()
+    assert "Senza dati di campo:" in SENZA_CAMPO
+    assert "Senza dati di campo:" in sorgente
+    for pezzo in ("CrUX non li espone quando il",
+                  "traffico non basta"):
+        assert pezzo in SENZA_CAMPO and pezzo in sorgente, pezzo
+
+
 # --- l'attesa: la pagina deve dire che sta lavorando ------------------------- #
 
 def _sorgente():

@@ -88,6 +88,8 @@ h3 { font-size:13px; color:var(--tenue); margin:22px 0 8px; font-weight:600; }
 .verdetto .et { font-weight:700; width:52px; flex:none; }
 .verdetto .fuori { color:var(--scarso); font-weight:600; }
 .verdetto .dentro { color:var(--buono); font-weight:600; }
+.scoperte { font-size:13px; color:var(--tenue); margin:10px 0 0;
+            padding-top:10px; border-top:1px solid var(--bordo); }
 .indice { margin-top:14px; font-size:13px; }
 .indice a { color:var(--tenue); text-decoration:none; border-bottom:1px solid var(--bordo); }
 .indice a:hover { color:var(--testo); border-color:var(--testo); }
@@ -541,13 +543,31 @@ function disegnaVerdetto() {
     return `<li><span class="et">${SOGLIE[metrica].et}</span>${stato}</li>`;
   }).join('');
 
+  // Le pagine senza dati di campo non entrano nei conteggi qui sopra. Se
+  // spariscono in silenzio, "1 su 2 fuori soglia" sotto la riga "3 pagine
+  // analizzate" chiede al lettore una sottrazione che nessuno fa: la terza
+  // pagina sembra a posto invece che non misurata.
+  //
+  // Stessa cosa che il documento Word dichiara in `render_nota.SENZA_CAMPO`, e
+  // con le stesse parole: due testi diversi sullo stesso fatto confondono piu'
+  // di uno che tace.
+  const scoperte = risultati.filter(
+    p => !Object.keys(p.campo?.metriche || {}).length);
+  const avviso = scoperte.length
+    ? `<p class="scoperte">Senza dati di campo:
+        ${scoperte.map(p => esc(p.url)).join(', ')}. CrUX non li espone quando il
+        traffico non basta, ed è il caso delle pagine nuove o poco visitate: non
+        entrano nei conteggi qui sopra, e la priorità dei loro interventi non è
+        calibrata sugli utenti reali.</p>`
+    : '';
+
   // Un indice: con cinque template la pagina supera i cinquemila pixel e gli
   // interventi, che sono la parte che si usa, stanno in fondo.
   const salti = risultati.map((p, i) =>
     `<a href="#template-${i+1}">${esc(nomeTemplate(p.url))}</a>`).join(' · ');
 
   vecchio.className = 'verdetto';
-  vecchio.innerHTML = `<h2>In sintesi</h2><ul>${righe}</ul>
+  vecchio.innerHTML = `<h2>In sintesi</h2><ul>${righe}</ul>${avviso}
     <p class="indice"><a href="#interventi"><strong>Vai agli interventi</strong></a>
       · ${salti}</p>`;
 }
