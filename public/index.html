@@ -283,10 +283,16 @@ a { color:var(--blu); }
        la prima schermata mostra i numeri e non piu' il modulo gia' compilato. -->
   <div class="barra" id="barra" hidden>
     <span class="cosa" id="barra-cosa"></span>
+    <!-- Tre livelli, e l'ordine di lettura arriva al primario.
+         "Rianalizza" rifa' l'intera scansione: minuti di attesa e quota API
+         consumata. Restava indistinguibile da "Modifica gli URL", che non costa
+         niente, e stava alla pari con i due download - cioe' con l'azione che
+         si viene a fare. -->
     <button class="minuto" id="modifica">Modifica gli URL</button>
-    <button class="minuto" id="rianalizza">Rianalizza</button>
-    <button class="secondario" id="scarica" disabled>Scarica il report</button>
-    <button class="secondario" id="scarica-nota" disabled>Scarica la nota tecnica</button>
+    <button class="minuto costosa" id="rianalizza"
+            title="Rifà la scansione di tutte le pagine da capo: alcuni minuti">Rianalizza tutto</button>
+    <button class="secondario" id="scarica" disabled>Report per il cliente</button>
+    <button id="scarica-nota" disabled>Scarica la nota tecnica</button>
   </div>
 
   <div class="riquadro" id="modulo">

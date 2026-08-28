@@ -484,6 +484,42 @@ def test_una_pagina_fallita_manda_al_server_lo_stesso_campo_delle_altre():
     assert "template: url, url," in sorgente
 
 
+# --- la gerarchia dei pulsanti ----------------------------------------------- #
+
+def _barra():
+    sorgente = _sorgente()
+    inizio = sorgente.index('<div class="barra"')
+    return sorgente[inizio:sorgente.index("</div>", inizio)]
+
+
+def test_nella_barra_c_e_un_primario_solo():
+    """Il sintomo: quattro pulsanti in fila, due minuti e due secondari, nessuno
+    primario. L'azione che si viene a fare pesava quanto "Rianalizza"."""
+    bottoni = re.findall(r"<button([^>]*)>", _barra())
+    assert len(bottoni) == 4, bottoni
+    primari = [b for b in bottoni if "class=" not in b]
+    assert len(primari) == 1, "uno e uno solo senza classe, cioe' primario"
+    assert 'id="scarica-nota"' in primari[0], "il primario e' il documento che si consegna"
+
+
+def test_il_primario_chiude_la_fila():
+    """L'occhio arriva in fondo alla barra: e' li' che deve trovarlo."""
+    bottoni = re.findall(r"<button([^>]*)>", _barra())
+    assert "class=" not in bottoni[-1]
+
+
+def test_rianalizza_e_marcato_come_azione_costosa():
+    """Rifa' l'intera scansione: minuti di attesa e quota API. Non e' un gemello
+    di "Modifica gli URL", che non costa niente."""
+    barra = _barra()
+    assert 'id="rianalizza"' in barra
+    riga = next(b for b in re.findall(r"<button([^>]*)>", barra)
+                if 'id="rianalizza"' in b)
+    assert "costosa" in riga
+    assert "title=" in riga, "il costo va detto, non solo colorato"
+    assert "button.costosa" in _css(), "e la classe deve esistere nel foglio"
+
+
 # --- il sistema grafico ------------------------------------------------------ #
 
 def _css():
