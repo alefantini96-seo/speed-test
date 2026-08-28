@@ -33,7 +33,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .aggregazione import etichetta_pagina, nomi_dichiarati, raggruppa
+from .aggregazione import (etichetta_pagina, nome_in_prosa, nomi_dichiarati,
+                           raggruppa)
 from .masterplan import etichetta_problema, motivo_esclusione
 from .soglie import ETICHETTE, SOGLIA_BUONA_LAB, formatta, giudizio
 
@@ -245,7 +246,9 @@ def quadro(esecuzione: dict) -> dict:
     return {"intestazioni": intestazioni, "righe": righe,
             "modalita": "campo" if con_campo else "laboratorio",
             "pagine_con_campo": len(con_campo), "pagine": len(pagine),
-            "senza_campo": [etichetta_pagina(p) for p in pagine
+            # Finisce dentro una frase, non in una cella: qui serve il nome per
+            # esteso, non il percorso.
+            "senza_campo": [nome_in_prosa(p) for p in pagine
                             if not ((p.get("campo") or {}).get("metriche") or {})]}
 
 

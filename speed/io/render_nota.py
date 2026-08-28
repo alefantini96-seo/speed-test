@@ -20,7 +20,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 from ..core import nota
-from ..core.aggregazione import etichetta_pagina
+from ..core.aggregazione import etichetta_pagina, nome_in_prosa
 from ..core.soglie import ETICHETTE, formatta, giudizio
 
 GRIGIO = RGBColor(0x6B, 0x72, 0x80)
@@ -159,7 +159,7 @@ def _quadro(doc, quadro: dict, esecuzione: dict):
     fallite = [p for p in esecuzione.get("pagine") or [] if p.get("errore")]
     if fallite:
         _p(doc, "Non misurate: " + ", ".join(
-            f"{etichetta_pagina(p)} ({p.get('errore', '')[:80]})" for p in fallite),
+            f"{nome_in_prosa(p)} ({p.get('errore', '')[:80]})" for p in fallite),
            size=9, colore=GRIGIO, corsivo=True, spazio_dopo=8)
 
 

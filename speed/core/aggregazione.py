@@ -65,6 +65,18 @@ def etichetta_pagina(pagina: dict) -> str:
     return etichetta_template(pagina.get("template", ""), pagina.get("url", ""))
 
 
+def nome_in_prosa(pagina: dict) -> str:
+    """Come si nomina una pagina dentro una frase.
+
+    In tabella il percorso basta ed e' compatto. In mezzo a un periodo no: «Senza
+    dati di campo: /.» non si legge come il nome di una pagina. Senza nome
+    dichiarato vale l'URL intero, che e' lungo ma inequivocabile.
+    """
+    nome = (pagina.get("template") or "").strip()
+    url = (pagina.get("url") or "").strip()
+    return nome if nome and nome != url else url
+
+
 @dataclass
 class PerTemplate:
     nome: str
