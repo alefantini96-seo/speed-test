@@ -524,3 +524,54 @@ def test_la_gravita_resta_una_regola_non_un_giudizio():
     for per_taglia in nota.GRAVITA_COMBINATA.values():
         assert set(per_taglia) == {"grossa", "media", "piccola"}
 
+
+# --- le pagine senza dati di campo si dichiarano ------------------------------ #
+
+def _senza_campo_sulla_prima(esecuzione):
+    """Il caso Pluxee: due pagine con CrUX, la terza senza."""
+    pagine, prima = [], True
+    for pagina in esecuzione["pagine"]:
+        if not pagina.get("errore") and prima:
+            prima = False
+            pagine.append({**pagina, "campo": {"livello": "assente", "metriche": {}}})
+        else:
+            pagine.append(pagina)
+    return {**esecuzione, "pagine": pagine}
+
+
+def test_il_quadro_elenca_le_pagine_senza_campo(esecuzione):
+    misto = _senza_campo_sulla_prima(esecuzione)
+    quadro = nota.quadro(misto)
+    assert quadro["modalita"] == "campo", "basta una pagina con CrUX"
+    assert len(quadro["senza_campo"]) == 1
+    assert nota.quadro(esecuzione)["senza_campo"] == []
+
+
+def test_la_nota_dice_quali_pagine_non_hanno_il_campo(tmp_path, esecuzione):
+    """Il sintomo: nel quadro comparivano "n/d", la tabella CrUX elencava solo
+    le altre, e il documento non diceva da nessuna parte cosa comportasse."""
+    misto = _senza_campo_sulla_prima(esecuzione)
+    percorso = tmp_path / "nota.docx"
+    render_nota.nota_docx(misto, percorso)
+    testo = "\n".join(p.text for p in Document(str(percorso)).paragraphs)
+    assert "Senza dati di campo:" in testo
+    assert "non e' calibrata sugli utenti reali" in testo
+    senza = nota.quadro(misto)["senza_campo"][0]
+    assert senza in testo, "la pagina va nominata"
+
+
+def test_senza_pagine_scoperte_la_riga_non_compare(tmp_path, esecuzione):
+    percorso = tmp_path / "nota.docx"
+    render_nota.nota_docx(esecuzione, percorso)
+    testo = "\n".join(p.text for p in Document(str(percorso)).paragraphs)
+    assert "Senza dati di campo:" not in testo
+
+
+def test_senza_campo_ovunque_lo_dice_una_volta_in_testa(tmp_path, senza_campo):
+    """Non pagina per pagina: la nota di lettura lo dichiara una volta sola."""
+    percorso = tmp_path / "nota.docx"
+    render_nota.nota_docx(senza_campo, percorso)
+    testo = "\n".join(p.text for p in Document(str(percorso)).paragraphs)
+    assert "Senza dati di campo:" not in testo
+    assert "CrUX non ha dati di campo" in testo
+

@@ -55,6 +55,16 @@ NOTA_LABORATORIO = (
     "e dopo gli interventi vale la pena confrontare i dati di campo, che sono "
     "quelli che Google usa per il ranking."
 )
+# Quando il campo c'e' su alcune pagine e non su altre. Senza questa riga il
+# documento dichiara che l'ordine poggia sul campo e poi mostra "n/d" nel quadro,
+# lasciando al lettore il compito di capire cosa significhi per quelle pagine.
+SENZA_CAMPO = (
+    "Senza dati di campo: {pagine}. CrUX non li espone quando il traffico non "
+    "basta, ed e' il caso delle pagine nuove o poco visitate. Per queste la "
+    "priorita' degli interventi non e' calibrata sugli utenti reali: vale il "
+    "valore predefinito, «media». Nei conteggi «oltre soglia» si contano a "
+    "parte, sul laboratorio, che e' un'altra misura e non si somma alla prima."
+)
 NOTA_CAMPO = (
     "I valori di laboratorio servono a capire dove si perde il tempo; l'ordine di "
     "priorita' poggia sui dati di campo CrUX, che sono gli utenti reali su 28 "
@@ -203,6 +213,10 @@ def _nota_di_lettura(doc, quadro: dict, esecuzione: dict):
     doc.add_heading("Nota di lettura", level=1)
     _p(doc, NOTA_LABORATORIO if quadro["modalita"] == "laboratorio" else NOTA_CAMPO,
        size=9.5, spazio_dopo=6)
+
+    if quadro["modalita"] == "campo" and quadro["senza_campo"]:
+        _p(doc, SENZA_CAMPO.format(pagine=", ".join(quadro["senza_campo"])),
+           size=9.5, spazio_dopo=6)
 
     if quadro["modalita"] == "campo":
         righe = []
