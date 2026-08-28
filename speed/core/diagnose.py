@@ -113,6 +113,12 @@ class Problema:
     bersagli: list = field(default_factory=list)   # (etichetta, misura, dettaglio)
     metrica: str = ""                # metrica di campo su cui e' calibrata la priorita'
     peso: float = 1.0                # peso di traffico del template (1 = non pesato)
+    # Lo spreco dichiarato da Lighthouse, in numeri grezzi. Sta qui e non solo
+    # dentro l'opportunita' perche' la nota tecnica deve poterlo leggere anche da
+    # un run salvato dalla versione web, che le opportunita' complete le scarta.
+    # Sono due numeri: costano nulla, ed evitano di riparsare le misure formattate.
+    byte_sprecati: float = 0.0
+    ms_sprecati: float = 0.0
 
     @property
     def punteggio(self) -> float:
@@ -291,6 +297,28 @@ def _misura_elemento(elemento) -> str:
     return f"{elemento.misura:.0f} ms"
 
 
+def spreco_dichiarato(opportunita) -> tuple:
+    """(byte, ms) sprecati secondo Lighthouse, sommati sulle righe dell'audit.
+
+    Somma DENTRO un audit — sono risorse diverse dello stesso elenco. Chi mette
+    insieme piu' audit deve invece prendere il massimo: audit diversi misurano lo
+    stesso lavoro con tagli diversi. Vedi `core/nota.py`.
+    """
+    byte = ms = 0.0
+    for risorsa in opportunita.risorse:
+        byte += float(risorsa.byte_sprecati or 0)
+        ms += float(risorsa.ms_sprecati or 0)
+    for voce in opportunita.voci:
+        for chiave, valore in (voce.misure or {}).items():
+            if chiave in ("wastedBytes", "totalBytes", "transferSize",
+                          "resourceBytes", "unusedBytes"):
+                byte += float(valore or 0)
+            elif chiave in ("wastedMs", "duration", "mainThreadTime",
+                            "blockingTime", "reflowTime", "total"):
+                ms += float(valore or 0)
+    return (byte, ms)
+
+
 def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Problema:
     gravita, spiegazione, metrica = priorita_dal_campo(opportunita, campo)
     puo_agire = azionabile(opportunita)
@@ -361,6 +389,8 @@ def da_opportunita(opportunita, campo: dict, massimo_risorse: int = 6) -> Proble
         guadagno_tipo=guadagno[1],
         bersagli=bersagli_di(opportunita),
         metrica=metrica,
+        byte_sprecati=spreco_dichiarato(opportunita)[0],
+        ms_sprecati=spreco_dichiarato(opportunita)[1],
     )
 
 

@@ -9,8 +9,9 @@ Nessuna dipendenza: WSGI e' nella libreria standard. La logica vera sta in
 `speed/web.py`, che e' testabile senza alzare un server.
 
     /                  la pagina
-    POST /api/analizza {url}    -> analisi di una singola pagina
-    POST /api/report   {pagine} -> report Word da scaricare
+    POST /api/analizza {url}              -> analisi di una singola pagina
+    POST /api/report   {pagine, formato}  -> Word da scaricare: il report al
+                                             cliente, o la nota per lo sviluppo
 """
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ from datetime import date
 from pathlib import Path
 
 from speed.errori import ErroreSpeed
-from speed.io import render_docx
+from speed.io import render_docx, render_nota
 from speed.web import LIMITE_PAGINE, analizza_una, serializza, valida_url
 
 RADICE = Path(__file__).resolve().parent
@@ -170,9 +171,23 @@ def _analizza(avvia, richiesta: dict, environ):
     return _json(avvia, "200 OK", risultato)
 
 
+# I due documenti Word che la pagina sa produrre. Il report e' per chi decide, la
+# nota per chi implementa: contenuti diversi, non due vesti dello stesso testo.
+DOCUMENTI = {
+    "cliente": ("Report velocita", "docx_report"),
+    "nota": ("Interventi Performance", "nota_docx"),
+}
+
+
 def _report(avvia, richiesta: dict, environ):
     if _oltre_il_limite(environ):
         return _troppe(avvia)
+
+    formato = richiesta.get("formato") or "cliente"
+    if formato not in DOCUMENTI:
+        return _json(avvia, "400 Bad Request", {
+            "errore": f"Formato sconosciuto: {formato}.",
+            "rimedio": "I valori ammessi sono " + " e ".join(DOCUMENTI) + "."})
 
     pagine = richiesta.get("pagine") or []
     if not pagine:
@@ -192,16 +207,18 @@ def _report(avvia, richiesta: dict, environ):
         "pagine": pagine,
     }
 
+    prefisso, funzione = DOCUMENTI[formato]
+    modulo = render_docx if formato == "cliente" else render_nota
     try:
         with tempfile.TemporaryDirectory() as cartella:
-            percorso = Path(cartella) / "report.docx"
-            render_docx.docx_report(esecuzione, percorso)
+            percorso = Path(cartella) / "documento.docx"
+            getattr(modulo, funzione)(esecuzione, percorso)
             contenuto = percorso.read_bytes()
     except Exception as exc:
         return _json(avvia, "500 Internal Server Error",
                      {"errore": f"Generazione fallita: {str(exc)[:200]}"})
 
-    nome = f"Report velocita {date.today():%d%m%Y}.docx"
+    nome = f"{prefisso} {date.today():%d%m%Y}.docx"
     avvia("200 OK", [("Content-Type", TIPO_DOCX),
                      ("Content-Disposition", f'attachment; filename="{nome}"'),
                      ("Content-Length", str(len(contenuto)))])

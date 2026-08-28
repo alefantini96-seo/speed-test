@@ -194,6 +194,76 @@ def test_lo_stato_riconosce_una_variabile_vuota(monkeypatch):
     assert "vuota" in json.loads(_chiama("/api/stato")[2])["GOOGLE_API_KEY"]
 
 
+# --- i due documenti Word ---------------------------------------------------- #
+
+def test_il_report_scarica_la_nota_tecnica(monkeypatch, pagina):
+    """Il sintomo: dal browser usciva sempre e solo il report al cliente, e la
+    nota sembrava non essere cambiata perche' non era mai stata generata."""
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    stato, intestazioni, corpo = _chiama(
+        "/api/report", "POST", {"pagine": [pagina], "formato": "nota"})
+    assert stato.startswith("200")
+    assert "Interventi Performance" in intestazioni["Content-Disposition"]
+    assert len(corpo) > 10_000
+
+
+def test_i_due_documenti_sono_diversi(monkeypatch, pagina):
+    """Non due vesti dello stesso testo: contenuti diversi, lettori diversi."""
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    _s, _i, cliente = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    _s, _i, nota = _chiama("/api/report", "POST",
+                           {"pagine": [pagina], "formato": "nota"})
+    assert cliente != nota
+
+    def testo(corpo):
+        from docx import Document
+        documento = Document(io.BytesIO(corpo))
+        return "\n".join(p.text for p in documento.paragraphs)
+
+    assert "Dove si perde il tempo dell'LCP" in testo(cliente)
+    assert "nota tecnica per lo sviluppo" in testo(nota)
+    assert "Quadro di sintesi" in testo(nota)
+
+
+def test_il_formato_predefinito_resta_il_report_al_cliente(monkeypatch, pagina):
+    """Chi non passa il formato deve continuare a ricevere quello di prima."""
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    _s, intestazioni, _c = _chiama("/api/report", "POST", {"pagine": [pagina]})
+    assert "Report velocita" in intestazioni["Content-Disposition"]
+
+
+def test_un_formato_sconosciuto_riceve_il_rimedio(monkeypatch, pagina):
+    import app as applicazione
+    monkeypatch.setattr(applicazione, "_conteggio", {})
+    stato, _i, corpo = _chiama("/api/report", "POST",
+                               {"pagine": [pagina], "formato": "pdf"})
+    assert stato.startswith("400")
+    assert "cliente" in json.loads(corpo)["rimedio"]
+
+
+def test_la_nota_si_genera_dal_payload_ridotto(pagina):
+    """La differenza col riferimento Markdown: alla nota bastano i numeri che il
+    payload web porta gia', senza le opportunita' complete."""
+    from speed.core import nota as modello
+    assert "opportunita" not in pagina["fatti"], "il payload resta ridotto"
+    esecuzione = _esecuzione(pagina)
+    quadro = modello.quadro(esecuzione)
+    assert quadro["righe"] and "LCP" in quadro["intestazioni"]
+    temi = modello.temi(esecuzione)
+    assert temi, "senza temi la nota sarebbe vuota"
+    assert any(t.byte_sprecati or t.ms_sprecati for t in temi), \
+        "i numeri devono arrivare, altrimenti i titoli escono senza dato"
+
+
+def test_la_pagina_ha_il_pulsante_della_nota():
+    sorgente = _sorgente()
+    assert 'id="scarica-nota"' in sorgente
+    assert "scarica('nota')" in sorgente
+
+
 # --- protezione della quota -------------------------------------------------- #
 
 def test_il_limite_di_richieste_scatta(monkeypatch):

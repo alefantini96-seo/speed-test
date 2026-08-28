@@ -4,7 +4,8 @@ CLI del tool.
     python -m speed check-config clienti/x.yaml     verifica la copertura CrUX degli URL
     python -m speed run          clienti/x.yaml     scansione completa -> JSON + HTML + DOCX
     python -m speed masterplan   "out/dati ....json"  frammento per lo script che fa l'xlsx
-    python -m speed report --formato md "out/dati ....json"   documento tecnico per gli sviluppatori
+    python -m speed report --formato nota "out/dati ....json" nota tecnica per lo sviluppo (Word)
+    python -m speed report --formato md   "out/dati ....json" riferimento completo (Markdown)
     python -m speed confronta    vecchio.json nuovo.json   cosa e' cambiato fra due scansioni
 
 La scansione e' una tantum: non c'e' database e non c'e' storico da accumulare.
@@ -37,7 +38,7 @@ SIMBOLO = {"buono": "OK", "da_migliorare": "!!", "scarso": "XX", "sconosciuto": 
 # I formati che `run` e `report` sanno emettere. `entrambi` resta il default e
 # resta html+docx: e' il report al cliente, ed e' il significato che aveva prima
 # che esistesse il documento tecnico.
-FORMATI = ("html", "docx", "md", "entrambi", "tutti")
+FORMATI = ("html", "docx", "md", "nota", "entrambi", "tutti")
 
 
 def _console_utf8():
@@ -291,6 +292,13 @@ def _stem_tecnico(stem: str) -> str:
     return f"Interventi tecnici {stem}"
 
 
+def _stem_nota(stem: str) -> str:
+    """La nota di consegna ha il nome con cui questi documenti circolano gia'."""
+    if "Report velocità" in stem:
+        return stem.replace("Report velocità", "Interventi Performance")
+    return f"Interventi Performance {stem}"
+
+
 def _scrivi_report(esecuzione: dict, destinazione: Path, stem: str, formato: str) -> list:
     scritti = []
     if formato in ("html", "entrambi", "tutti"):
@@ -305,6 +313,10 @@ def _scrivi_report(esecuzione: dict, destinazione: Path, stem: str, formato: str
         from .io import render_md
         scritti.append(render_md.scrivi_markdown(
             esecuzione, destinazione / f"{_stem_tecnico(stem)}.md"))
+    if formato in ("nota", "tutti"):
+        from .io import render_nota
+        scritti.append(render_nota.nota_docx(
+            esecuzione, destinazione / f"{_stem_nota(stem)}.docx"))
     return scritti
 
 
@@ -450,8 +462,10 @@ def main(argv=None) -> int:
     p_run.add_argument("config")
     p_run.add_argument("--desktop", action="store_true", help="misura desktop invece di mobile")
     p_run.add_argument("--formato", choices=FORMATI, default="entrambi",
-                       help="html e docx sono il report al cliente; md e' il documento "
-                            "tecnico per chi sviluppa; entrambi = html+docx, tutti = i tre")
+                       help="html e docx sono il report al cliente; nota e' la nota "
+                            "tecnica di consegna per lo sviluppo; md e' il riferimento "
+                            "completo per ticket e PR; entrambi = html+docx, "
+                            "tutti = tutti e quattro")
     p_run.add_argument("--ripetizioni", type=int, default=None,
                        help="misurazioni lab per URL; senza valore decide il tool: "
                             "1 se le fasi LCP arrivano dal campo, altrimenti 3")
@@ -467,8 +481,10 @@ def main(argv=None) -> int:
     p_rep = sub.add_parser("report", help="rigenera i report da un run salvato")
     p_rep.add_argument("json")
     p_rep.add_argument("--formato", choices=FORMATI, default="entrambi",
-                       help="html e docx sono il report al cliente; md e' il documento "
-                            "tecnico per chi sviluppa; entrambi = html+docx, tutti = i tre")
+                       help="html e docx sono il report al cliente; nota e' la nota "
+                            "tecnica di consegna per lo sviluppo; md e' il riferimento "
+                            "completo per ticket e PR; entrambi = html+docx, "
+                            "tutti = tutti e quattro")
 
     args = parser.parse_args(argv)
     # Gli errori previsti portano con se' il rimedio: si stampano, non si

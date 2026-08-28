@@ -72,6 +72,43 @@ da noi. I vincoli che la tengono al suo posto:
   quell'audit, all'imperativo. Non aggiunge raccomandazioni che i dati non
   sostengono, che era il difetto delle prime versioni.
 
+## La terza origine si allarga: frasi, non solo etichette
+
+La nota tecnica per lo sviluppo (`core/nota.py`) ha reso necessario un chiarimento.
+Fino a quel momento le classificazioni nostre erano **etichette**: una parola o
+una riga — «alta», «sviluppo», «LCP: risorsa scoperta tardi». La nota ne produce
+di piu' lunghe, e vale la pena dire perche' restano dentro la terza origine e non
+diventano una quinta:
+
+- **i titoli dei temi** — «Cache del browser: fino a 594 KiB per pagina» — sono un
+  modello fisso riempito con un numero misurato. La forma la decide `_titolo`, il
+  numero lo decide Lighthouse; nessuno dei due viene scritto caso per caso;
+- **l'accorpamento per tema** (`TEMI`) e' una mappa enumerata `audit -> tema`,
+  della stessa natura di `ETICHETTA_PROBLEMA`;
+- **la gravita' `BLOCCANTE`** e' una soglia dichiarata: tre volte il valore che
+  Google considera accettabile, o cinque megabyte su una pagina. Sono due numeri
+  in `FATTORE_BLOCCANTE` e `BYTE_BLOCCANTI`, non un giudizio;
+- **le frasi di sintesi** (`REGOLE_SINTESI`) sono coppie condizione/modello. La
+  condizione guarda solo numeri misurati, il modello viene riempito con quegli
+  stessi numeri. Una frase compare se e solo se i dati la rendono vera.
+
+Il confine che regge: **nessuna di queste cose viene scritta per il singolo
+cliente**. Il giorno che qualcuno aggiungesse una regola per far dire al documento
+quello che serve su un progetto, la regola smetterebbe di essere una regola.
+
+Due vincoli concreti che ne derivano, entrambi presidiati da un test:
+
+- dove il significato di un numero non e' dichiarato, il numero **non si mostra**.
+  In un tema misto i millisecondi arrivano da audit diversi — `mainThreadTime` di
+  un vendor, `wastedMs` di una risorsa — e non esiste una frase vera che li
+  descriva tutti: scrivere «di risparmio stimato» sarebbe comodo e falso. Solo i
+  temi elencati in `SUFFISSO_MS` mostrano un tempo;
+- i titoli **non sono istruzioni**. Dicono cosa non va, non cosa fare: l'azione
+  resta quella di Lighthouse, citata verbatim sotto.
+
+Il documento dichiara tutto questo in testa, in due frasi: cosa viene da
+PageSpeed e cosa viene da noi.
+
 ## Conseguenze
 
 - Serve `locale=it` su ogni chiamata PSI: senza, il report esce in inglese.

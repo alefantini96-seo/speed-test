@@ -1,12 +1,15 @@
 """
-Rigenera l'esempio di documento tecnico committato in docs/.
+Rigenera gli esempi committati in docs/.
 
-    python scripts/esempio_md.py
+    python scripts/esempi.py
 
-L'esempio serve a vedere com'e' fatto il deliverable senza lanciare una scansione
-e senza una chiave API: si compone dai fixture, con la stessa sequenza della CLI.
-Un test verifica che il file committato sia allineato al renderer, quindi dopo
-ogni modifica a render_md.py questo script va rilanciato.
+Due documenti, dagli stessi dati: la nota tecnica di consegna (Word) e il
+riferimento completo (Markdown). Servono a vedere com'e' fatto il deliverable
+senza lanciare una scansione e senza una chiave API: si compongono dai fixture,
+con la stessa sequenza della CLI.
+
+Un test verifica che il Markdown committato sia allineato al renderer, quindi
+dopo ogni modifica ai renderer questo script va rilanciato.
 """
 from __future__ import annotations
 
@@ -19,10 +22,11 @@ sys.path.insert(0, str(RADICE))
 
 from speed.cli import _serializza                      # noqa: E402
 from speed.core import consenso, diagnose, extract, thirdparty   # noqa: E402
-from speed.io import crux, render_md                   # noqa: E402
+from speed.io import crux, render_md, render_nota      # noqa: E402
 
 FIXTURES = RADICE / "fixtures"
 DESTINAZIONE = RADICE / "docs" / "esempio-interventi-tecnici.md"
+DESTINAZIONE_NOTA = RADICE / "docs" / "esempio-interventi-performance.docx"
 
 PROPRI = ["bbci.co.uk"]
 TEMPLATE = (("Home", "https://www.bbc.com/", "psi-bbc-mobile-it.json"),
@@ -67,10 +71,16 @@ def esecuzione_di_prova() -> dict:
 
 
 def main() -> int:
-    testo = render_md.markdown_report(esecuzione_di_prova())
+    esecuzione = esecuzione_di_prova()
     DESTINAZIONE.parent.mkdir(parents=True, exist_ok=True)
+
+    testo = render_md.markdown_report(esecuzione)
     DESTINAZIONE.write_text(testo, encoding="utf-8")
-    print(f"  {DESTINAZIONE}  ({len(testo.splitlines())} righe)")
+    print(f"  {DESTINAZIONE.name}  ({len(testo.splitlines())} righe)")
+
+    render_nota.nota_docx(esecuzione, DESTINAZIONE_NOTA)
+    print(f"  {DESTINAZIONE_NOTA.name}  "
+          f"({DESTINAZIONE_NOTA.stat().st_size // 1024} KB)")
     return 0
 
 

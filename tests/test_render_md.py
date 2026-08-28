@@ -345,16 +345,16 @@ def test_il_nome_del_file_distingue_il_documento_tecnico():
 # --- l'esempio committato resta allineato ------------------------------------ #
 
 def test_l_esempio_committato_e_aggiornato():
-    """Se questo fallisce: `python scripts/esempio_md.py`.
+    """Se questo fallisce: `python scripts/esempi.py`.
 
     L'esempio serve a vedere il deliverable senza lanciare una scansione: se resta
     indietro rispetto al renderer mostra un documento che il tool non produce piu'.
     """
     import sys
     sys.path.insert(0, str(RADICE / "scripts"))
-    from esempio_md import DESTINAZIONE, esecuzione_di_prova
+    from esempi import DESTINAZIONE, esecuzione_di_prova
 
     atteso = render_md.markdown_report(esecuzione_di_prova())
     assert DESTINAZIONE.exists(), "manca docs/esempio-interventi-tecnici.md"
     assert DESTINAZIONE.read_text(encoding="utf-8") == atteso, \
-        "esempio non allineato: rilancia `python scripts/esempio_md.py`"
+        "esempio non allineato: rilancia `python scripts/esempi.py`"
