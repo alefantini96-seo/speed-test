@@ -76,8 +76,8 @@ main { max-width:980px; margin-inline:auto; padding:0 20px; }
 /* --- tipografia ----------------------------------------------------------- */
 .occhiello { font-size:11.5px; text-transform:uppercase; letter-spacing:.05125rem;
              color:var(--blu); font-weight:500; margin:0 0 6px; }
-h1 { font-size:40px; line-height:1.08; font-weight:500; letter-spacing:-.0625rem;
-     margin:0 0 8px; }
+h1 { font-size:clamp(28px, 7vw, 40px); line-height:1.08; font-weight:500;
+     letter-spacing:-.0625rem; margin:0 0 8px; }
 h2 { font-size:19px; font-weight:500; letter-spacing:-.03125rem; margin:0 0 2px; }
 h3 { font-size:11.5px; color:var(--tenue); margin:24px 0 8px; font-weight:500;
      text-transform:uppercase; letter-spacing:.03125rem; }
@@ -210,6 +210,10 @@ th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--bordo-t
 th { font-size:11px; text-transform:uppercase; letter-spacing:.03125rem;
      color:var(--tenue); font-weight:500; border-bottom-color:var(--bordo); }
 td.num { text-align:right; font-variant-numeric:tabular-nums; }
+/* La tabella di campo ha quattro colonne e una di queste e' un URL: sotto i
+   420px o scorre lei, o spinge tutta la pagina. */
+.scorre { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.scorre table { min-width:340px; }
 .pill { display:inline-block; padding:2px 9px; border-radius:var(--raggio);
         font-size:11px; font-weight:500; border:1px solid currentColor;
         text-transform:uppercase; letter-spacing:.03125rem; }
@@ -273,6 +277,26 @@ li { margin:3px 0; }
 .solo-lettori { position:absolute; width:1px; height:1px; overflow:hidden;
                 clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; }
 a { color:var(--blu); }
+
+/* --- schermi stretti ------------------------------------------------------
+   Il link a questo strumento gira su Teams e si apre dal telefono: la barra a
+   quattro pulsanti andava a capo lasciando un pulsante orfano per riga, e le
+   tabelle si comprimevano fino a spezzare le parole. */
+@media (max-width:560px) {
+  main { padding:0 14px; }
+  .testata .dentro { padding:14px; }
+  .testata .reparto { margin-left:0; flex-basis:100%; }
+  .barra { align-items:stretch; }
+  .barra .cosa { margin-right:0; flex-basis:100%; margin-bottom:6px; }
+  .barra button { flex:1 1 auto; }
+  .comandi { align-items:stretch; }
+  .comandi button { width:100%; }
+  th, td { padding:8px 6px; }
+  .intervento { padding:12px; }
+  .intervento .testa { gap:4px; }
+  ul.bersagli li { flex-wrap:wrap; gap:2px; }
+  .verdetto li { flex-wrap:wrap; }
+}
 </style>
 </head>
 <body>
@@ -436,8 +460,8 @@ function tabellaCampo(campo) {
   const nota = periodi.length
     ? `<p class="meta">storico ${esc(periodi[0])} → ${esc(periodi.at(-1))} ·
        ${periodi.length} settimane · delta = ultimo meno primo</p>` : '';
-  return `<table><tr><th>metrica</th><th class="num">p75 reale</th><th></th>
-    <th class="num">delta</th></tr>${righe}</table>${nota}`;
+  return `<div class="scorre"><table><tr><th>metrica</th><th class="num">p75 reale</th>
+    <th></th><th class="num">delta</th></tr>${righe}</table></div>${nota}`;
 }
 
 function fasiLcp(fatti) {

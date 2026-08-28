@@ -553,6 +553,29 @@ def test_l_errore_e_un_alert():
     assert '<div id="errore" role="alert">' in _sorgente()
 
 
+# --- schermi stretti --------------------------------------------------------- #
+
+def test_le_tabelle_scorrono_invece_di_spingere_la_pagina():
+    """Quattro colonne, una delle quali e' un URL: sotto i 420px o scorre la
+    tabella, o scorre tutta la pagina."""
+    assert ".scorre { overflow-x:auto" in _css()
+    assert '<div class="scorre"><table>' in _sorgente()
+
+
+def test_la_barra_non_lascia_pulsanti_orfani_sul_telefono():
+    """Il link a questo strumento gira su Teams e si apre dal telefono."""
+    css = _css()
+    assert "@media (max-width:560px)" in css
+    stretto = css[css.index("@media (max-width:560px)"):]
+    assert ".barra button { flex:1 1 auto; }" in stretto
+    assert ".comandi button { width:100%; }" in stretto
+
+
+def test_il_titolo_scala_da_solo():
+    """Una media query in meno da tenere allineata."""
+    assert "font-size:clamp(28px, 7vw, 40px)" in _css()
+
+
 # --- la gerarchia dei pulsanti ----------------------------------------------- #
 
 def _barra():
