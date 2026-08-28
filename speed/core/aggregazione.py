@@ -34,12 +34,47 @@ from dataclasses import dataclass, field
 ORDINE_GRAVITA = {"alta": 0, "media": 1, "bassa": 2}
 
 
+def etichetta_template(nome: str, url: str) -> str:
+    """Come si chiama una pagina nei documenti.
+
+    Il nome lo dichiara lo YAML del cliente ("Home", "Scheda prodotto"). Dalla
+    versione web quel file non esiste e il template *e'* l'URL: stamparlo due
+    volte nella stessa riga occupa una colonna e non aggiunge niente.
+
+    Senza nome l'etichetta e' il percorso dell'URL. Non e' un nome inventato — e'
+    un pezzo dell'URL misurato, tagliato — e l'URL intero resta comunque nel
+    quadro di sintesi, che e' l'unico posto dove serve per esteso.
+    """
+    nome, url = (nome or "").strip(), (url or "").strip()
+    if nome and nome != url:
+        return nome
+    resto = url.split("://", 1)[-1]
+    percorso = resto[resto.find("/"):] if "/" in resto else ""
+    return percorso or url or nome
+
+
+def nomi_dichiarati(pagine: list) -> bool:
+    """Vero se almeno una pagina porta un nome di template distinto dall'URL."""
+    return any((p.get("template") or "").strip()
+               not in ("", (p.get("url") or "").strip()) for p in pagine)
+
+
+def etichetta_pagina(pagina: dict) -> str:
+    return etichetta_template(pagina.get("template", ""), pagina.get("url", ""))
+
+
 @dataclass
 class PerTemplate:
     nome: str
     url: str
     bersagli: list = field(default_factory=list)   # (nome, misura, dettaglio) — resa
     tutti: list = field(default_factory=list)      # (nome, misura, dettaglio) — confronto
+
+    @property
+    def etichetta(self) -> str:
+        """Il nome per chi legge. `nome` resta la chiave con cui si cerca il
+        problema nel run, e le due cose non devono confondersi."""
+        return etichetta_template(self.nome, self.url)
 
 
 # Le tre forme in cui un problema nomina cio' su cui si mette mano. `bersagli` e'

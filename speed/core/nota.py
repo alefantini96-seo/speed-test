@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .aggregazione import raggruppa
+from .aggregazione import etichetta_pagina, nomi_dichiarati, raggruppa
 from .masterplan import etichetta_problema, motivo_esclusione
 from .soglie import ETICHETTE, SOGLIA_BUONA_LAB, formatta, giudizio
 
@@ -129,8 +129,11 @@ def quadro(esecuzione: dict) -> dict:
     pagine = _riuscite(esecuzione)
     con_campo = [p for p in pagine
                  if ((p.get("campo") or {}).get("metriche") or {})]
+    # Senza nomi dichiarati la colonna «Template» ripeterebbe l'URL riga per riga.
+    con_nome = nomi_dichiarati(pagine)
 
-    intestazioni = ["Template", "URL"] + list(COLONNE_LAB) + ["Peso"]
+    intestazioni = (["Template"] if con_nome else []) + ["URL"]
+    intestazioni += list(COLONNE_LAB) + ["Peso"]
     if con_campo:
         intestazioni += ["LCP campo", "INP campo"]
 
@@ -138,7 +141,7 @@ def quadro(esecuzione: dict) -> dict:
     for pagina in pagine:
         lab = (pagina.get("fatti") or {}).get("metriche_lab") or {}
         campo = (pagina.get("campo") or {}).get("metriche") or {}
-        riga = [pagina.get("template", ""), pagina.get("url", "")]
+        riga = ([etichetta_pagina(pagina)] if con_nome else []) + [pagina.get("url", "")]
         for sigla in COLONNE_LAB:
             valore = lab.get(sigla)
             riga.append("n/d" if valore is None
@@ -154,7 +157,9 @@ def quadro(esecuzione: dict) -> dict:
 
     return {"intestazioni": intestazioni, "righe": righe,
             "modalita": "campo" if con_campo else "laboratorio",
-            "pagine_con_campo": len(con_campo), "pagine": len(pagine)}
+            "pagine_con_campo": len(con_campo), "pagine": len(pagine),
+            "senza_campo": [etichetta_pagina(p) for p in pagine
+                            if not ((p.get("campo") or {}).get("metriche") or {})]}
 
 
 # --------------------------------------------------------------------------- #
@@ -199,7 +204,7 @@ def misure(esecuzione: dict) -> Misure:
     pesi = []
     for pagina in pagine:
         lab = (pagina.get("fatti") or {}).get("metriche_lab") or {}
-        nome = pagina.get("template", "")
+        nome = etichetta_pagina(pagina)
         if lab.get("CLS") is not None and lab["CLS"] <= SOGLIA_BUONA_LAB["CLS"]:
             m.cls_entro_soglia += 1
         if lab.get("TBT") is not None and lab["TBT"] > SOGLIA_BUONA_LAB["TBT"]:
@@ -218,7 +223,8 @@ def misure(esecuzione: dict) -> Misure:
         pesi.sort()
         m.peso_minimo, m.template_leggero = pesi[0]
         m.peso_massimo, m.template_pesante = pesi[-1]
-        pagina = next(p for p in pagine if p.get("template") == m.template_pesante)
+        pagina = next(p for p in pagine
+                      if etichetta_pagina(p) == m.template_pesante)
         per_tipo = _peso_per_tipo_totale(pagina)
         if per_tipo:
             totale = sum(per_tipo.values()) or 1
@@ -420,8 +426,8 @@ def temi(esecuzione: dict) -> list:
             tema.ms_sprecati = max(tema.ms_sprecati, ms)
         tema.audit.append(intervento.codice)
         for template in intervento.template:
-            if template.nome not in tema.template:
-                tema.template.append(template.nome)
+            if template.etichetta not in tema.template:
+                tema.template.append(template.etichetta)
         # Il responsabile e' quello dell'audit messo peggio, non l'unione di
         # tutti: "sviluppo + marketing/tag, sviluppo, marketing/tag" non dice a
         # nessuno di cosa deve occuparsi.
@@ -448,7 +454,7 @@ def temi(esecuzione: dict) -> list:
         for template in intervento.template:
             for nome, misura, _dettaglio in intervento.propri_di(template)[:2]:
                 if misura:
-                    tema.evidenze.append((template.nome,
+                    tema.evidenze.append((template.etichetta,
                                           f"{accorcia(nome)} — {misura}"))
 
         motivo = _motivo_intervento(esecuzione, intervento.codice)

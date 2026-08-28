@@ -303,3 +303,41 @@ def test_il_nome_del_file_e_quello_con_cui_circolano():
     assert _stem_nota("Report velocità 20082026") == "Interventi Performance 20082026"
     assert _stem_nota("Report velocità Ferroli 20082026") == \
         "Interventi Performance Ferroli 20082026"
+
+
+# --- il quadro non ripete l'URL ---------------------------------------------- #
+
+@pytest.fixture(scope="module")
+def dal_browser(esecuzione):
+    """Lo stesso run come arriva dalla versione web: nessun nome di template."""
+    pagine = [{**p, "template": p.get("url", "")} for p in esecuzione["pagine"]]
+    return {**esecuzione, "pagine": pagine}
+
+
+def test_con_i_nomi_la_colonna_template_resta(esecuzione):
+    assert nota.quadro(esecuzione)["intestazioni"][:2] == ["Template", "URL"]
+
+
+def test_senza_nomi_la_colonna_template_sparisce(dal_browser):
+    """Il sintomo: Template e URL contenevano la stessa stringa su ogni riga."""
+    quadro = nota.quadro(dal_browser)
+    assert quadro["intestazioni"][0] == "URL"
+    assert "Template" not in quadro["intestazioni"]
+    for riga in quadro["righe"]:
+        assert riga[0].startswith("http"), "la prima colonna e' l'URL"
+        assert riga.count(riga[0]) == 1, "l'URL non si ripete nella riga"
+
+
+def test_le_intestazioni_e_le_righe_restano_allineate(esecuzione, dal_browser):
+    for run in (esecuzione, dal_browser):
+        quadro = nota.quadro(run)
+        for riga in quadro["righe"]:
+            assert len(riga) == len(quadro["intestazioni"])
+
+
+def test_i_titoli_dei_temi_non_gridano_l_url_intero(dal_browser):
+    """Senza nome il tema si intestava con l'URL completo in maiuscolo."""
+    for tema in nota.temi(dal_browser):
+        for nome in tema.template:
+            assert not nome.startswith("http"), nome
+

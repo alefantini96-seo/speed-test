@@ -260,7 +260,7 @@ def _bersagli_raggruppati(doc, intervento):
         righe.append(("tutti", nome, misura))
     for template in intervento.template:
         for nome, misura, _d in intervento.propri_di(template)[:4]:
-            righe.append((template.nome[:12], nome, misura))
+            righe.append((template.etichetta[:12], nome, misura))
     if not righe:
         return
     tabella = doc.add_table(rows=1, cols=3)
