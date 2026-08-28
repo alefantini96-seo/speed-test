@@ -6,12 +6,11 @@
 <title>Analisi velocità</title>
 <style>
 /* --------------------------------------------------------------------------
-   Sistema grafico Alkemy.
+   Sistema grafico.
 
-   I valori vengono dal sorgente di alkemy.com (agosto 2026), non da un'idea di
-   come dovrebbe essere: #404AFF e' il colore dominante del sito, i pulsanti sono
-   `1px solid` a spigolo vivo, e il `border-radius` sul sito compare solo come 0
-   oppure 50%. Sono i tre segni che rendono una pagina riconoscibile.
+   Tre regole, e sono quelle che rendono una pagina riconoscibile: un colore
+   dominante che porta tutti gli accenti, pulsanti `1px solid` a spigolo vivo, e
+   nessun angolo arrotondato da nessuna parte.
    -------------------------------------------------------------------------- */
 :root {
   --blu:#404AFF;          /* dominante: pulsanti, accenti, link */
@@ -38,11 +37,11 @@
   --medio:#8A5200;
   --scarso:#B42318;
 
-  /* I font del sito sono su licenza e non si possono servire da qui. Se sono
-     installati sulla macchina - o depositati in public/fonts/ con una @font-face
-     da aggiungere sopra - vengono presi; altrimenti si scende su un geometrico
-     di sistema con la stessa aria. Sostituirli e' una riga sola. */
-  --font:'AlkemyBETA','Aeonik','Futura PT','Avenir Next','Century Gothic',
+  /* Un geometrico, chiesto per nome finche' se ne trova uno installato e poi
+     lasciato al sistema. I nomi commerciali servono a chi ha la licenza sulla
+     propria macchina: nessuno di questi file viene servito da qui. Per
+     depositarne uno, una @font-face sopra e il nome in testa a questa riga. */
+  --font:'Aeonik','Futura PT','Avenir Next','Century Gothic',
          ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;
   --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
 
@@ -59,19 +58,9 @@
 
 body { font-family:var(--font); color:var(--testo); background:var(--tela);
        margin:0; padding:0 0 96px; line-height:1.55;
+       border-top:4px solid var(--blu);
        -webkit-font-smoothing:antialiased; }
-main { max-width:980px; margin-inline:auto; padding:0 20px; }
-
-/* --- testata: la pagina dice di chi e' ------------------------------------ */
-.testata { background:var(--nero); color:var(--bianco); margin-bottom:34px; }
-.testata .dentro { max-width:980px; margin-inline:auto; padding:16px 20px;
-                   display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-.testata .marca { display:flex; align-items:center; gap:9px;
-                  font-size:15px; font-weight:500; letter-spacing:.03125rem;
-                  text-transform:uppercase; }
-.testata .logo { height:19px; width:auto; display:block; fill:currentColor; }
-.testata .reparto { margin-left:auto; font-size:12px; color:rgba(255,255,255,.62);
-                    letter-spacing:.03125rem; text-transform:uppercase; }
+main { max-width:980px; margin-inline:auto; padding:34px 20px 0; }
 
 /* --- tipografia ----------------------------------------------------------- */
 .occhiello { font-size:11.5px; text-transform:uppercase; letter-spacing:.05125rem;
@@ -284,8 +273,6 @@ a { color:var(--blu); }
    tabelle si comprimevano fino a spezzare le parole. */
 @media (max-width:560px) {
   main { padding:0 14px; }
-  .testata .dentro { padding:14px; }
-  .testata .reparto { margin-left:0; flex-basis:100%; }
   .barra { align-items:stretch; }
   .barra .cosa { margin-right:0; flex-basis:100%; margin-bottom:6px; }
   .barra button { flex:1 1 auto; }
@@ -300,22 +287,6 @@ a { color:var(--blu); }
 </style>
 </head>
 <body>
-<header class="testata">
-  <div class="dentro">
-    <span class="marca">
-      <!-- Il marchio Alkemy, da assets/images/logo_new.svg. Sta qui dentro e non
-           come file perche' la pagina non fa nessuna richiesta esterna: sono 493
-           byte, e presi da un file separato sarebbero una richiesta in piu'. -->
-      <svg class="logo" viewBox="0 0 169 160" aria-hidden="true" focusable="false">
-        <path d="M34.4304 0V14.1772H18.2278V145.823H34.4304V160H0V0H34.4304Z"/>
-        <path d="M133.67 160V145.823H149.872V14.1772H133.67V0H168.1V160H133.67Z"/>
-        <path d="M112.697 129.62H134.668L91.152 30.396H76.9788L33.4629 129.62H55.4335L63.1824 110.769H104.952L112.701 129.62H112.697ZM70.5221 92.9094L84.0674 59.9575L97.6128 92.9094H70.5262H70.5221Z"/>
-      </svg>
-      Alkemy
-    </span>
-    <span class="reparto">Marketing &amp; Media · SEO</span>
-  </div>
-</header>
 <main>
   <p class="occhiello">Core Web Vitals · PageSpeed Insights</p>
   <h1>Analisi velocità</h1>

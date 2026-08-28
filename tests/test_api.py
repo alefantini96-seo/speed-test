@@ -619,9 +619,9 @@ def _css():
     return sorgente[sorgente.index("<style>") + 7:sorgente.index("</style>")]
 
 
-# I colori del sito, presi dal suo sorgente. Se qualcuno li cambia a mano in un
-# punto solo, questo test se ne accorge.
-MARCA = ("#404AFF", "#4943B8", "#FF4633", "#F3F7FA", "#DEE2E9")
+# I colori del sistema grafico. Se qualcuno ne cambia uno a mano in un punto
+# solo invece che nel token, questo test se ne accorge.
+PALETTE = ("#404AFF", "#4943B8", "#FF4633", "#F3F7FA", "#DEE2E9")
 
 
 def _css_senza_commenti():
@@ -635,22 +635,22 @@ def test_i_token_stanno_in_root_e_non_sparsi():
     """Un colore dichiarato due volte e' un colore che prima o poi diverge."""
     css = _css_senza_commenti()
     radice = css[css.index(":root {"):css.index("}", css.index(":root {"))]
-    for colore in MARCA:
+    for colore in PALETTE:
         assert colore in radice, colore
         assert css.count(colore) == 1, f"{colore} compare {css.count(colore)} volte"
 
 
 def test_il_font_e_una_variabile_sola():
-    """I font del sito sono su licenza: la sostituzione dev'essere una riga."""
+    """Nessun file di font viene servito da qui: si chiedono per nome e si
+    scende sul sistema. La sostituzione dev'essere una riga sola."""
     css = _css()
     assert css.count("--font:") == 1
-    assert "'AlkemyBETA'" in css
     assert css.count("font-family:var(--font)") >= 2, "il resto passa dalla variabile"
 
 
 def test_lo_spigolo_e_vivo_ovunque():
-    """Sul sito il border-radius compare solo come 0 o 50%: e' il segno piu'
-    forte dell'identita', e non deve esserci un solo angolo arrotondato."""
+    """E' il segno piu' forte del sistema grafico: non deve esserci un solo
+    angolo arrotondato."""
     import re
     valori = {v.strip() for v in re.findall(r"border-radius:\s*([^;}]+)", _css())}
     assert valori == {"var(--raggio)"}, valori
@@ -658,8 +658,8 @@ def test_lo_spigolo_e_vivo_ovunque():
 
 
 def test_la_pagina_resta_senza_richieste_esterne():
-    """E' l'unica ragione per cui il logo sta inline: 493 byte contro una
-    richiesta in piu' su una pagina che oggi non ne fa nessuna."""
+    """Un file solo, che si apre anche da disco: nessun CDN, nessun font
+    remoto, nessun foglio di stile esterno."""
     sorgente = _sorgente()
     assert "<link rel=\"stylesheet\"" not in sorgente
     assert "<script src=" not in sorgente
@@ -667,12 +667,13 @@ def test_la_pagina_resta_senza_richieste_esterne():
     assert "url(http" not in _css()
 
 
-def test_il_marchio_e_nella_testata():
-    """Chi apre il link senza sapere cosa sia deve capire di chi e' lo strumento."""
-    sorgente = _sorgente()
-    assert 'class="testata"' in sorgente
-    assert "<svg class=\"logo\"" in sorgente
-    assert 'aria-hidden="true"' in sorgente, "il marchio e' decorativo, il nome e' testo"
+def test_la_pagina_non_nomina_nessuna_azienda():
+    """Lo strumento non porta un marchio: ne' un logo, ne' un nome, ne' un
+    reparto. La palette e le forme restano, i riferimenti no."""
+    sorgente = _sorgente().lower()
+    for riferimento in ("alkemy", "marketing &amp; media", 'class="testata"',
+                        'class="logo"'):
+        assert riferimento not in sorgente, riferimento
 
 
 def test_ogni_id_cercato_dal_javascript_esiste_nel_markup():
