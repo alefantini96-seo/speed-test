@@ -509,7 +509,8 @@ def _titolo(codice_tema: str, titolo_tema: str, tema: Tema) -> str:
             titolo = (f"{titolo_tema} oltre soglia sul campo su "
                       f"{conto.oltre_campo} template di {conto.con_campo}")
             if conto.senza_campo:
-                titolo += f" misurati ({conto.senza_campo} senza dati di campo)"
+                titolo += (f" misurat{'o' if conto.con_campo == 1 else 'i'} "
+                           f"({conto.senza_campo} senza dati di campo)")
             return titolo
         return (f"{titolo_tema} oltre soglia in laboratorio su "
                 f"{conto.oltre_lab} template")
