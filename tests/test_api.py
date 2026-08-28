@@ -506,6 +506,26 @@ def test_l_elenco_resta_riapribile():
     assert "${righe}" in sorgente[inizio:fine], "le righe restano dentro il details"
 
 
+# --- il giudizio non si affida al solo colore -------------------------------- #
+
+def test_il_verdetto_non_dipende_dal_colore():
+    """Per chi non distingue rosso e verde le due righe erano identiche, ed e'
+    la riga che si legge per prima in tutta la pagina."""
+    css = _css()
+    assert ".verdetto .fuori::before" in css
+    assert ".verdetto .dentro::before" in css
+
+
+def test_la_gravita_di_un_intervento_e_scritta():
+    """Stava solo nel filetto colorato a sinistra della scheda. Scritta, e'
+    anche la stessa parola con cui la nota tecnica intesta i suoi temi."""
+    sorgente = _sorgente()
+    assert 'class="gravita"' in sorgente
+    assert "p.gravita || ''" in sorgente
+    from speed.core.nota import ETICHETTA_GRAVITA
+    assert ETICHETTA_GRAVITA["media"] == "MEDIA", "stessa parola, maiuscola"
+
+
 # --- la gerarchia dei pulsanti ----------------------------------------------- #
 
 def _barra():

@@ -190,8 +190,13 @@ button:disabled { opacity:.38; cursor:default; }
 .verdetto li:last-child { border-bottom:none; }
 .verdetto .et { font-weight:500; width:54px; flex:none;
                 letter-spacing:.03125rem; }
-.verdetto .fuori { color:var(--scarso); font-weight:500; }
-.verdetto .dentro { color:var(--buono); font-weight:500; }
+/* Il segno prima della parola: per chi non distingue rosso e verde le due righe
+   erano identiche, ed e' la riga che si legge per prima in tutta la pagina. */
+.verdetto .fuori, .verdetto .dentro { font-weight:500; }
+.verdetto .fuori { color:var(--scarso); }
+.verdetto .dentro { color:var(--buono); }
+.verdetto .fuori::before { content:"\25B2\00A0"; }
+.verdetto .dentro::before { content:"\2713\00A0"; }
 .scoperte { font-size:13px; color:var(--tenue); margin:14px 0 0;
             padding-top:13px; border-top:1px solid var(--bordo); }
 .indice { margin-top:16px; font-size:13px; }
@@ -230,7 +235,8 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .guadagno { flex:none; font-size:13px; font-weight:500; color:var(--tenue);
             font-variant-numeric:tabular-nums; white-space:nowrap; }
 .guadagno.tempo { color:var(--scarso); }
-.chi { margin:3px 0 0; font-size:12px; color:var(--tenue); }
+.chi { margin:4px 0 0; font-size:12px; color:var(--tenue); }
+.chi .gravita { font-weight:500; letter-spacing:.03125rem; color:var(--testo); }
 ul.bersagli { list-style:none; margin:12px 0 0; padding:0; }
 ul.bersagli li { display:flex; justify-content:space-between; gap:12px;
                  font-size:12px; padding:4px 0; border-bottom:1px solid var(--bordo-tenue); }
@@ -558,6 +564,8 @@ function scheda(p, indice) {
   const bersagli = elencoBersagli(p);
   const quanti = p.totale > 1
     ? `<span class="quanti">su ${p.quanti} template su ${p.totale}</span>` : '';
+  // La gravita' stava solo nel filetto colorato a sinistra della scheda. Scritta,
+  // e' anche la stessa parola con cui la nota tecnica intesta i suoi temi.
 
   // Tutto il resto — evidenza, testo di Lighthouse, note metodologiche, provenienza —
   // sta dietro un "perche'": serve a difendere il dato, non a decidere cosa fare.
@@ -572,7 +580,8 @@ function scheda(p, indice) {
     <div class="testa">
       <h4>${esc(p.titolo)}${marchio}</h4>${guadagno}
     </div>
-    <p class="chi">${quanti}${quanti ? ' · ' : ''}${esc(p.responsabile)}</p>
+    <p class="chi"><span class="gravita">${esc((p.gravita || '').toUpperCase())}</span>${
+      quanti ? ' · ' + quanti : ''} · ${esc(p.responsabile)}</p>
     ${bersagli}
     <details class="perche">
       <summary>perché</summary>
