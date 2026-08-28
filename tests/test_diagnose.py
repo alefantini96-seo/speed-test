@@ -245,3 +245,36 @@ def test_il_codice_inline_non_manda_l_intervento_a_marketing(problemi):
     """Un blocco nel documento e' prima parte: dedurne la proprieta' dal dominio
     dava netloc vuoto, quindi terza parte, quindi il lavoro alla squadra sbagliata."""
     assert _per_codice(problemi, "unminified-css").responsabile == diagnose.DEV
+
+
+def test_il_segnaposto_non_arriva_ai_bersagli(fatti):
+    """Su forced-reflow-insight Lighthouse non attribuisce la riga a nessuno:
+    il tempo resta, il bersaglio no."""
+    reflow = next(o for o in fatti.opportunita if o.audit == "forced-reflow-insight")
+    assert any("[senza attributi]" in str(v.etichetta) for v in reflow.voci), \
+        "il caso ha senso solo se il segnaposto e' nei dati"
+    problema = diagnose.da_opportunita(reflow, {})
+    assert problema.bersagli == []
+    assert problema.ms_sprecati > 0, "la misura non si perde con il segnaposto"
+
+
+def test_un_bersaglio_scartato_lascia_posto_al_successivo():
+    """Scartare non deve accorciare la lista: se ci sono altri bersagli veri,
+    devono salire al posto del segnaposto."""
+    class Finta:
+        etichetta = "[senza attributi]"
+        misure = {"wastedMs": 10.0}
+
+    class Vera:
+        etichetta = "davvero.js"
+        misure = {"wastedMs": 5.0}
+
+    class Opportunita:
+        audit = "forced-reflow-insight"
+        elementi = []
+        risorse = []
+        voci = [Finta(), Finta(), Vera()]
+
+    bersagli = diagnose.bersagli_di(Opportunita(), massimo=2)
+    assert [b[0] for b in bersagli] == ["davvero.js"]
+

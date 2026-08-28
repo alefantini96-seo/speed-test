@@ -31,6 +31,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .extract import identifica
+
 ORDINE_GRAVITA = {"alta": 0, "media": 1, "bassa": 2}
 
 
@@ -95,7 +97,7 @@ def _voci_confrontabili(problema: dict) -> list:
     voci, viste = [], set()
 
     def aggiungi(nome, misura, dettaglio):
-        if not isinstance(nome, str) or not nome or nome in viste:
+        if not identifica(nome) or nome in viste:
             return
         viste.add(nome)
         voci.append((nome, misura or "", dettaglio or ""))

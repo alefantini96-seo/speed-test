@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .extract import FASI_IT, FattiPagina
+from .extract import FASI_IT, FattiPagina, identifica
 from .soglie import (CWV, ETICHETTE, fasi_dal_campo, formatta,
                      formatta_risparmio, giudizio)
 
@@ -278,12 +278,16 @@ def bersagli_di(opportunita, massimo: int = 3) -> list:
     in fondo alla scheda dove nessuno arrivava.
     """
     fuori = []
-    for elemento in opportunita.elementi[:massimo]:
-        fuori.append((elemento.riferimento, _misura_elemento(elemento), elemento.percorso))
-    for risorsa in opportunita.risorse[:massimo - len(fuori)]:
-        fuori.append((risorsa.nome, _misura(risorsa), risorsa.url))
-    for voce in opportunita.voci[:massimo - len(fuori)]:
-        fuori.append((voce.etichetta.strip(), _misura_voce(voce), ""))
+    for elemento in opportunita.elementi:
+        if len(fuori) < massimo and identifica(elemento.riferimento):
+            fuori.append((elemento.riferimento, _misura_elemento(elemento),
+                          elemento.percorso))
+    for risorsa in opportunita.risorse:
+        if len(fuori) < massimo and identifica(risorsa.nome):
+            fuori.append((risorsa.nome, _misura(risorsa), risorsa.url))
+    for voce in opportunita.voci:
+        if len(fuori) < massimo and identifica(voce.etichetta.strip()):
+            fuori.append((voce.etichetta.strip(), _misura_voce(voce), ""))
     return fuori[:massimo]
 
 
