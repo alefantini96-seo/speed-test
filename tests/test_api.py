@@ -484,6 +484,88 @@ def test_una_pagina_fallita_manda_al_server_lo_stesso_campo_delle_altre():
     assert "template: url, url," in sorgente
 
 
+# --- il sistema grafico ------------------------------------------------------ #
+
+def _css():
+    sorgente = _sorgente()
+    return sorgente[sorgente.index("<style>") + 7:sorgente.index("</style>")]
+
+
+# I colori del sito, presi dal suo sorgente. Se qualcuno li cambia a mano in un
+# punto solo, questo test se ne accorge.
+MARCA = ("#404AFF", "#4943B8", "#FF4633", "#F3F7FA", "#DEE2E9")
+
+
+def _css_senza_commenti():
+    """Il foglio senza commenti: un colore nominato in prosa non e' una
+    dichiarazione, e contarlo come tale darebbe un falso positivo."""
+    import re
+    return re.sub(r"/\*.*?\*/", "", _css(), flags=re.S)
+
+
+def test_i_token_stanno_in_root_e_non_sparsi():
+    """Un colore dichiarato due volte e' un colore che prima o poi diverge."""
+    css = _css_senza_commenti()
+    radice = css[css.index(":root {"):css.index("}", css.index(":root {"))]
+    for colore in MARCA:
+        assert colore in radice, colore
+        assert css.count(colore) == 1, f"{colore} compare {css.count(colore)} volte"
+
+
+def test_il_font_e_una_variabile_sola():
+    """I font del sito sono su licenza: la sostituzione dev'essere una riga."""
+    css = _css()
+    assert css.count("--font:") == 1
+    assert "'AlkemyBETA'" in css
+    assert css.count("font-family:var(--font)") >= 2, "il resto passa dalla variabile"
+
+
+def test_lo_spigolo_e_vivo_ovunque():
+    """Sul sito il border-radius compare solo come 0 o 50%: e' il segno piu'
+    forte dell'identita', e non deve esserci un solo angolo arrotondato."""
+    import re
+    valori = {v.strip() for v in re.findall(r"border-radius:\s*([^;}]+)", _css())}
+    assert valori == {"var(--raggio)"}, valori
+    assert "--raggio:0" in _css().replace(" ", "")
+
+
+def test_la_pagina_resta_senza_richieste_esterne():
+    """E' l'unica ragione per cui il logo sta inline: 493 byte contro una
+    richiesta in piu' su una pagina che oggi non ne fa nessuna."""
+    sorgente = _sorgente()
+    assert "<link rel=\"stylesheet\"" not in sorgente
+    assert "<script src=" not in sorgente
+    assert "fonts.googleapis" not in sorgente
+    assert "url(http" not in _css()
+
+
+def test_il_marchio_e_nella_testata():
+    """Chi apre il link senza sapere cosa sia deve capire di chi e' lo strumento."""
+    sorgente = _sorgente()
+    assert 'class="testata"' in sorgente
+    assert "<svg class=\"logo\"" in sorgente
+    assert 'aria-hidden="true"' in sorgente, "il marchio e' decorativo, il nome e' testo"
+
+
+def test_ogni_id_cercato_dal_javascript_esiste_nel_markup():
+    """Un $('...') che non trova niente e' un TypeError silenzioso a runtime."""
+    import re
+    sorgente = _sorgente()
+    cercati = set(re.findall(r"\$\('([a-z-]+)'\)", sorgente))
+    dichiarati = set(re.findall(r'id="([a-z-]+)"', sorgente))
+    assert cercati, "il test ha senso solo se ne trova"
+    assert cercati <= dichiarati, sorted(cercati - dichiarati)
+
+
+def test_la_gerarchia_e_dichiarata():
+    """Verdetto, pagina e intervento erano tre riquadri identici e l'occhio non
+    trovava l'ordine di lettura."""
+    css = _css()
+    assert "border-top:3px solid var(--blu)" in css, "il verdetto domina"
+    assert ".riquadro {" in css
+    assert ".intervento {" in css
+
+
 # --- il verdetto non nasconde le pagine che non ha misurato ------------------ #
 
 def test_il_verdetto_dichiara_le_pagine_senza_dati_di_campo():

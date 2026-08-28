@@ -5,146 +5,276 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Analisi velocità</title>
 <style>
-:root { --testo:#1f2328; --tenue:#5c6370; --bordo:#e5e7eb; --sfondo:#fff; --tela:#f6f7f9;
-        --buono:#1a7f4b; --medio:#a16207; --scarso:#b42318; }
+/* --------------------------------------------------------------------------
+   Sistema grafico Alkemy.
+
+   I valori vengono dal sorgente di alkemy.com (agosto 2026), non da un'idea di
+   come dovrebbe essere: #404AFF e' il colore dominante del sito, i pulsanti sono
+   `1px solid` a spigolo vivo, e il `border-radius` sul sito compare solo come 0
+   oppure 50%. Sono i tre segni che rendono una pagina riconoscibile.
+   -------------------------------------------------------------------------- */
+:root {
+  --blu:#404AFF;          /* dominante: pulsanti, accenti, link */
+  --blu-scuro:#4943B8;    /* stato premuto e hover */
+  --corallo:#FF4633;      /* accento secondario */
+  --nero:#000000;
+  --bianco:#FFFFFF;
+  --tela:#F3F7FA;         /* sfondo pagina */
+  --bordo:#DEE2E9;
+  --bordo-tenue:#E8E8E8;
+  --grigio:#999999;
+
+  /* Alias di ruolo: il resto del foglio parla di funzioni, non di colori, cosi'
+     un cambio di palette resta confinato qui sopra. */
+  --testo:var(--nero);
+  --tenue:var(--grigio);
+  --sfondo:var(--bianco);
+
+  /* I tre colori del giudizio restano fuori dalla palette di marca: sono tarati
+     sul contrasto del testo piccolo, e il corallo del brand su fondo bianco non
+     ci arriva. Il corallo entra come accento sui bordi, dove il contrasto del
+     testo non c'entra. */
+  --buono:#0F7A4A;
+  --medio:#8A5200;
+  --scarso:#B42318;
+
+  /* I font del sito sono su licenza e non si possono servire da qui. Se sono
+     installati sulla macchina - o depositati in public/fonts/ con una @font-face
+     da aggiungere sopra - vengono presi; altrimenti si scende su un geometrico
+     di sistema con la stessa aria. Sostituirli e' una riga sola. */
+  --font:'AlkemyBETA','Aeonik','Futura PT','Avenir Next','Century Gothic',
+         ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;
+  --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
+
+  /* Spigolo vivo ovunque. Non e' una preferenza: e' il segno piu' forte
+     dell'identita', e nel foglio non deve comparire nessun altro valore. */
+  --raggio:0;
+}
+
 * { box-sizing:border-box; }
 /* [hidden] e' display:none solo nel foglio del browser: qualsiasi regola
    d'autore che imposta display lo scavalca. Con .barra{display:flex} la barra
    restava visibile a pagina vuota, con dentro 'Rianalizza' e 'Scarica'. */
 [hidden] { display:none !important; }
-body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-       color:var(--testo); background:var(--tela); margin:0; padding:28px 20px 80px;
-       line-height:1.5; }
-main { max-width:940px; margin-inline:auto; }
-h1 { font-size:26px; margin:0 0 4px; }
-.sottotitolo { color:var(--tenue); margin:0 0 26px; font-size:14px; }
-.riquadro { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
-            padding:20px; margin-bottom:18px; }
-label { display:block; font-size:13px; font-weight:600; color:var(--testo); margin:0 0 6px; }
+
+body { font-family:var(--font); color:var(--testo); background:var(--tela);
+       margin:0; padding:0 0 96px; line-height:1.55;
+       -webkit-font-smoothing:antialiased; }
+main { max-width:980px; margin-inline:auto; padding:0 20px; }
+
+/* --- testata: la pagina dice di chi e' ------------------------------------ */
+.testata { background:var(--nero); color:var(--bianco); margin-bottom:34px; }
+.testata .dentro { max-width:980px; margin-inline:auto; padding:16px 20px;
+                   display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+.testata .marca { display:flex; align-items:center; gap:9px;
+                  font-size:15px; font-weight:500; letter-spacing:.03125rem;
+                  text-transform:uppercase; }
+.testata .logo { height:19px; width:auto; display:block; fill:currentColor; }
+.testata .reparto { margin-left:auto; font-size:12px; color:rgba(255,255,255,.62);
+                    letter-spacing:.03125rem; text-transform:uppercase; }
+
+/* --- tipografia ----------------------------------------------------------- */
+.occhiello { font-size:11.5px; text-transform:uppercase; letter-spacing:.05125rem;
+             color:var(--blu); font-weight:500; margin:0 0 6px; }
+h1 { font-size:40px; line-height:1.08; font-weight:500; letter-spacing:-.0625rem;
+     margin:0 0 8px; }
+h2 { font-size:19px; font-weight:500; letter-spacing:-.03125rem; margin:0 0 2px; }
+h3 { font-size:11.5px; color:var(--tenue); margin:24px 0 8px; font-weight:500;
+     text-transform:uppercase; letter-spacing:.03125rem; }
+.sottotitolo { color:var(--tenue); margin:0 0 30px; font-size:14.5px; max-width:62ch; }
+
+/* --- superfici ------------------------------------------------------------ */
+.riquadro { background:var(--sfondo); border:1px solid var(--bordo);
+            border-radius:var(--raggio); padding:22px; margin-bottom:18px; }
+
+/* --- moduli --------------------------------------------------------------- */
+label { display:block; font-size:11.5px; font-weight:500; color:var(--testo);
+        margin:0 0 7px; text-transform:uppercase; letter-spacing:.03125rem; }
 textarea, input[type=text] {
-  width:100%; font-family:ui-monospace,Consolas,monospace; font-size:13px;
-  padding:10px 12px; border:1px solid var(--bordo); border-radius:6px;
+  width:100%; font-family:var(--mono); font-size:13px;
+  padding:11px 13px; border:1px solid var(--bordo); border-radius:var(--raggio);
   background:var(--sfondo); color:var(--testo); }
 textarea { min-height:120px; resize:vertical; }
-:focus-visible { outline:2px solid var(--testo); outline-offset:2px; }
-.aiuto { font-size:12.5px; color:var(--tenue); margin:6px 0 0; }
-.riga { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; }
-.riga > div { flex:1 1 220px; }
-.comandi { display:flex; align-items:center; gap:12px; margin-top:18px; flex-wrap:wrap; }
-button { font:inherit; font-weight:600; padding:10px 20px; border-radius:6px;
-         border:1px solid var(--testo); background:var(--testo); color:#fff; cursor:pointer; }
-button.secondario { background:transparent; color:var(--testo); }
-button.minuto { padding:5px 12px; font-size:13px; font-weight:500;
-                border-color:var(--bordo); background:transparent; color:var(--testo); }
-button.minuto:hover { border-color:var(--testo); }
-button:disabled { opacity:.45; cursor:default; }
-.errore { background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
-          padding:10px 14px; border-radius:6px; font-size:13px; margin-top:14px; }
-.errore .rimedio { color:#7f1d1d; margin-top:4px; }
-h2 { font-size:18px; margin:0 0 2px; }
-.url { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:var(--tenue);
-       word-break:break-all; margin:0 0 4px; }
-.meta { font-size:12px; color:var(--tenue); margin:0; }
-table { width:100%; border-collapse:collapse; font-size:14px; margin:12px 0 4px; }
-th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--bordo); }
-th { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--tenue); }
-td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.pill { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11.5px;
-        font-weight:600; border:1px solid currentColor; }
-h3 { font-size:13px; color:var(--tenue); margin:22px 0 8px; font-weight:600; }
+textarea:focus, input[type=text]:focus { border-color:var(--blu); }
+:focus-visible { outline:2px solid var(--blu); outline-offset:2px; }
+.aiuto { font-size:12.5px; color:var(--tenue); margin:7px 0 0; }
+.riga { display:flex; gap:20px; flex-wrap:wrap; margin-top:20px; }
+.riga > div { flex:1 1 240px; }
+.comandi { display:flex; align-items:center; gap:14px; margin-top:22px; flex-wrap:wrap; }
+
+/* --- pulsanti: tre livelli ------------------------------------------------
+   La regola del sito: 1px solid, spigolo vivo, 0.875rem, letter-spacing 0.5px,
+   transizione su background-color/color/opacity/transform.
+   Primario  = fondo blu, per l'azione che si viene a fare.
+   Secondario = bordo blu, per le alternative.
+   Minuto    = solo testo, per le azioni di servizio. */
+button { font-family:var(--font); font-size:.875rem; font-weight:500;
+         letter-spacing:.03125rem; padding:11px 22px; border-radius:var(--raggio);
+         border:1px solid var(--blu); background:var(--blu); color:var(--bianco);
+         cursor:pointer;
+         transition-property:background-color,color,border-color,opacity,transform;
+         transition-duration:.16s; transition-timing-function:ease-out; }
+button:hover:not(:disabled) { background:var(--blu-scuro); border-color:var(--blu-scuro); }
+button:active:not(:disabled) { transform:translateY(1px); }
+button.secondario { background:transparent; color:var(--blu); }
+button.secondario:hover:not(:disabled) { background:var(--blu); color:var(--bianco); }
+button.minuto { padding:7px 12px; border-color:transparent; background:transparent;
+                color:var(--tenue); }
+button.minuto:hover:not(:disabled) { background:transparent; border-color:transparent;
+                                     color:var(--blu); }
+/* Rianalizza rifa' l'intera scansione e consuma quota: non e' un gemello di
+   "Modifica gli URL" e non deve sembrarlo. */
+button.costosa { color:var(--corallo); }
+button.costosa:hover:not(:disabled) { color:var(--corallo); background:transparent;
+                                      border-color:var(--corallo); }
+button:disabled { opacity:.38; cursor:default; }
+
+/* --- messaggi ------------------------------------------------------------- */
+.errore { background:#fef2f2; border:1px solid #fecaca; border-left:3px solid var(--scarso);
+          color:#7f1d1d; padding:12px 15px; border-radius:var(--raggio);
+          font-size:13px; margin-top:16px; }
+.errore .rimedio { margin-top:5px; }
+.consiglio { background:var(--bianco); border:1px solid var(--bordo);
+             border-left:3px solid var(--corallo); border-radius:var(--raggio);
+             padding:14px 16px; font-size:13px; margin-top:16px; }
+.consiglio button { margin-top:10px; }
 
 /* --- barra compatta: dopo l'analisi il modulo si toglie di mezzo ----------- */
-.barra { display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-         background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
-         padding:12px 16px; margin-bottom:18px; }
-.barra .cosa { font-size:14px; font-weight:600; margin-right:auto; }
+.barra { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+         background:var(--sfondo); border:1px solid var(--bordo);
+         border-radius:var(--raggio); padding:13px 16px; margin-bottom:18px; }
+.barra .cosa { font-size:14px; font-weight:500; margin-right:auto; }
 .barra .cosa span { font-weight:400; color:var(--tenue); }
 
 /* --- avanzamento: una riga per URL, con lo stato di ciascuna --------------- */
-.avanzamento { margin-top:16px; }
 .avanzamento ol { list-style:none; margin:0; padding:0; }
-.avanzamento li { display:flex; align-items:baseline; gap:10px; font-size:13px;
-                  padding:5px 0; border-bottom:1px solid var(--bordo); }
+.avanzamento li { display:flex; align-items:baseline; gap:11px; font-size:13px;
+                  padding:6px 0; border-bottom:1px solid var(--bordo-tenue); }
 .avanzamento li:last-child { border-bottom:none; }
 .avanzamento .segno { flex:none; width:18px; text-align:center; font-weight:700; }
-.avanzamento .indirizzo { font-family:ui-monospace,Consolas,monospace; font-size:12px;
-                          word-break:break-all; }
+.avanzamento .indirizzo { font-family:var(--mono); font-size:12px; word-break:break-all; }
 .avanzamento .tempo { margin-left:auto; flex:none; color:var(--tenue);
                       font-variant-numeric:tabular-nums; font-size:12px; }
 .avanzamento li.coda { color:var(--tenue); }
-.avanzamento li.corso .segno { color:var(--testo); }
+.avanzamento li.corso .segno { color:var(--blu); }
 .avanzamento li.fatto .segno { color:var(--buono); }
 .avanzamento li.errore-riga .segno { color:var(--scarso); }
 @keyframes pulsa { 0%,100% { opacity:1 } 50% { opacity:.25 } }
 .avanzamento li.corso .segno { animation:pulsa 1.1s ease-in-out infinite; }
-@media (prefers-reduced-motion:reduce) { .avanzamento li.corso .segno { animation:none } }
+@media (prefers-reduced-motion:reduce) {
+  .avanzamento li.corso .segno { animation:none }
+  button:active:not(:disabled) { transform:none }
+}
 
-/* --- verdetto: la risposta prima del dettaglio ---------------------------- */
-.verdetto { background:var(--sfondo); border:1px solid var(--bordo); border-radius:8px;
-            padding:20px; margin-bottom:18px; }
-.verdetto h2 { margin-bottom:10px; }
+/* --- verdetto: domina, e' la risposta -------------------------------------
+   La gerarchia e' esplicita: il verdetto ha il filetto blu in testa e il corpo
+   piu' grande, le pagine sono riquadri normali, gli interventi sono righe dentro
+   un riquadro. Prima erano tre scatole bianche identiche e l'occhio non trovava
+   l'ordine di lettura. */
+.verdetto { background:var(--sfondo); border:1px solid var(--bordo);
+            border-top:3px solid var(--blu); border-radius:var(--raggio);
+            padding:24px 22px; margin-bottom:18px; }
+.verdetto h2 { margin-bottom:14px; }
 .verdetto ul { list-style:none; margin:0; padding:0; }
-.verdetto li { display:flex; align-items:baseline; gap:10px; padding:4px 0; font-size:15px; }
-.verdetto .et { font-weight:700; width:52px; flex:none; }
-.verdetto .fuori { color:var(--scarso); font-weight:600; }
-.verdetto .dentro { color:var(--buono); font-weight:600; }
-.scoperte { font-size:13px; color:var(--tenue); margin:10px 0 0;
-            padding-top:10px; border-top:1px solid var(--bordo); }
-.indice { margin-top:14px; font-size:13px; }
-.indice a { color:var(--tenue); text-decoration:none; border-bottom:1px solid var(--bordo); }
-.indice a:hover { color:var(--testo); border-color:var(--testo); }
+.verdetto li { display:flex; align-items:baseline; gap:12px; padding:6px 0;
+               font-size:15.5px; border-bottom:1px solid var(--bordo-tenue); }
+.verdetto li:last-child { border-bottom:none; }
+.verdetto .et { font-weight:500; width:54px; flex:none;
+                letter-spacing:.03125rem; }
+.verdetto .fuori { color:var(--scarso); font-weight:500; }
+.verdetto .dentro { color:var(--buono); font-weight:500; }
+.scoperte { font-size:13px; color:var(--tenue); margin:14px 0 0;
+            padding-top:13px; border-top:1px solid var(--bordo); }
+.indice { margin-top:16px; font-size:13px; }
+.indice a { color:var(--tenue); text-decoration:none;
+            border-bottom:1px solid var(--bordo); }
+.indice a:hover { color:var(--blu); border-color:var(--blu); }
 
-/* --- suggerimento sui domini propri --------------------------------------- */
-.consiglio { background:#fffbeb; border:1px solid #fde68a; border-radius:6px;
-             padding:12px 14px; font-size:13px; margin-top:14px; }
-.consiglio button { margin-top:8px; }
+/* --- tabelle -------------------------------------------------------------- */
+table { width:100%; border-collapse:collapse; font-size:14px; margin:14px 0 4px; }
+th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--bordo-tenue); }
+th { font-size:11px; text-transform:uppercase; letter-spacing:.03125rem;
+     color:var(--tenue); font-weight:500; border-bottom-color:var(--bordo); }
+td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.pill { display:inline-block; padding:2px 9px; border-radius:var(--raggio);
+        font-size:11px; font-weight:500; border:1px solid currentColor;
+        text-transform:uppercase; letter-spacing:.03125rem; }
+.url { font-family:var(--mono); font-size:12px; color:var(--tenue);
+       word-break:break-all; margin:0 0 6px; }
+.meta { font-size:12px; color:var(--tenue); margin:0; }
 
-.fase { display:flex; align-items:center; gap:10px; font-size:13px; margin:3px 0; }
+/* --- fasi LCP ------------------------------------------------------------- */
+.fase { display:flex; align-items:center; gap:10px; font-size:13px; margin:4px 0; }
 .fase .et { flex:1 1 auto; min-width:0; color:var(--tenue); }
-.fase .barra-fase { flex:none; height:9px; background:#dbe1e8; border-radius:2px; }
-.fase .barra-fase.dom { background:var(--scarso); }
+.fase .barra-fase { flex:none; height:9px; background:var(--bordo);
+                    border-radius:var(--raggio); }
+.fase .barra-fase.dom { background:var(--corallo); }
 .fase .pc { flex:none; width:44px; text-align:right; font-variant-numeric:tabular-nums; }
-.intervento { border:1px solid var(--bordo); border-left:3px solid var(--tenue);
-              border-radius:6px; padding:12px 14px; margin:10px 0; }
+
+/* --- interventi ----------------------------------------------------------- */
+.intervento { border:1px solid var(--bordo-tenue); border-left:3px solid var(--tenue);
+              border-radius:var(--raggio); padding:14px 16px; margin:12px 0; }
 .intervento .testa { display:flex; align-items:baseline; gap:12px;
                      justify-content:space-between; flex-wrap:wrap; }
-.intervento h4 { margin:0; font-size:15px; font-weight:600; }
-.guadagno { flex:none; font-size:13px; font-weight:600; color:var(--tenue);
+.intervento h4 { margin:0; font-size:15px; font-weight:500;
+                 letter-spacing:-.0125rem; }
+.guadagno { flex:none; font-size:13px; font-weight:500; color:var(--tenue);
             font-variant-numeric:tabular-nums; white-space:nowrap; }
 .guadagno.tempo { color:var(--scarso); }
-.chi { margin:2px 0 0; font-size:12px; color:var(--tenue); }
-ul.bersagli { list-style:none; margin:10px 0 0; padding:0; }
+.chi { margin:3px 0 0; font-size:12px; color:var(--tenue); }
+ul.bersagli { list-style:none; margin:12px 0 0; padding:0; }
 ul.bersagli li { display:flex; justify-content:space-between; gap:12px;
-                 font-size:12px; padding:3px 0; border-bottom:1px solid var(--bordo); }
+                 font-size:12px; padding:4px 0; border-bottom:1px solid var(--bordo-tenue); }
 /* L'intestazione di gruppo deve distinguersi dalle righe: senza, il
    raggruppamento per template e' invisibile e la lista sembra un elenco piatto. */
-ul.bersagli li.gruppo { display:block; border-bottom:none; padding:10px 0 2px;
-                        font-size:11px; text-transform:uppercase; letter-spacing:.04em;
-                        font-weight:600; color:var(--tenue); }
+ul.bersagli li.gruppo { display:block; border-bottom:none; padding:12px 0 2px;
+                        font-size:10.5px; text-transform:uppercase;
+                        letter-spacing:.03125rem; font-weight:500; color:var(--blu); }
 ul.bersagli li.gruppo:first-child { padding-top:0; }
-ul.bersagli .nome { font-family:ui-monospace,Consolas,monospace;
-                    overflow-wrap:anywhere; min-width:0; }
+ul.bersagli .nome { font-family:var(--mono); overflow-wrap:anywhere; min-width:0; }
 ul.bersagli .misura { flex:none; color:var(--tenue); font-variant-numeric:tabular-nums; }
-details.perche { margin-top:10px; }
+details.perche { margin-top:12px; }
 details.perche > summary { font-size:12px; color:var(--tenue); cursor:pointer;
-                           list-style:none; padding:2px 0; }
-details.perche > summary::before { content:"▸ "; }
-details.perche[open] > summary::before { content:"▾ "; }
-button.ancora { width:100%; margin-top:10px; background:transparent; color:var(--testo);
-                border:1px dashed var(--bordo); font-weight:600; }
-button.ancora:hover { border-color:var(--testo); }
-ul { margin:8px 0 0; padding-left:18px; font-size:14px; }
+                           list-style:none; padding:3px 0;
+                           text-transform:uppercase; letter-spacing:.03125rem; }
+details.perche > summary:hover { color:var(--blu); }
+details.perche > summary::before { content:"+ "; }
+details.perche[open] > summary::before { content:"\2212 "; }
+button.ancora { width:100%; margin-top:12px; background:transparent; color:var(--blu);
+                border:1px solid var(--bordo); }
+button.ancora:hover:not(:disabled) { background:var(--blu); color:var(--bianco);
+                                     border-color:var(--blu); }
+ul { margin:9px 0 0; padding-left:18px; font-size:14px; }
 li { margin:3px 0; }
 .evidenza li { color:var(--tenue); font-size:13px; }
-.nota { font-size:12.5px; color:var(--tenue); font-style:italic; margin-top:8px; }
-.marchio { display:inline-block; margin-left:8px; padding:1px 7px; border-radius:9px;
-           font-size:11px; font-weight:600; color:var(--tenue); border:1px solid #d1d5db;
-           vertical-align:middle; }
-.attesa { color:var(--tenue); font-size:13px; font-style:italic; }
+.nota { font-size:12.5px; color:var(--tenue); margin-top:9px; }
+.marchio { display:inline-block; margin-left:9px; padding:2px 8px;
+           border-radius:var(--raggio); font-size:10.5px; font-weight:500;
+           text-transform:uppercase; letter-spacing:.03125rem;
+           color:var(--tenue); border:1px solid var(--bordo); vertical-align:middle; }
+.attesa { color:var(--tenue); font-size:13px; }
+a { color:var(--blu); }
 </style>
 </head>
 <body>
+<header class="testata">
+  <div class="dentro">
+    <span class="marca">
+      <!-- Il marchio Alkemy, da assets/images/logo_new.svg. Sta qui dentro e non
+           come file perche' la pagina non fa nessuna richiesta esterna: sono 493
+           byte, e presi da un file separato sarebbero una richiesta in piu'. -->
+      <svg class="logo" viewBox="0 0 169 160" aria-hidden="true" focusable="false">
+        <path d="M34.4304 0V14.1772H18.2278V145.823H34.4304V160H0V0H34.4304Z"/>
+        <path d="M133.67 160V145.823H149.872V14.1772H133.67V0H168.1V160H133.67Z"/>
+        <path d="M112.697 129.62H134.668L91.152 30.396H76.9788L33.4629 129.62H55.4335L63.1824 110.769H104.952L112.701 129.62H112.697ZM70.5221 92.9094L84.0674 59.9575L97.6128 92.9094H70.5262H70.5221Z"/>
+      </svg>
+      Alkemy
+    </span>
+    <span class="reparto">Marketing &amp; Media · SEO</span>
+  </div>
+</header>
 <main>
+  <p class="occhiello">Core Web Vitals · PageSpeed Insights</p>
   <h1>Analisi velocità</h1>
   <p class="sottotitolo">Incolla gli URL da analizzare, uno per riga. Ogni pagina viene
     misurata sui dati di campo reali e diagnosticata in laboratorio.</p>
