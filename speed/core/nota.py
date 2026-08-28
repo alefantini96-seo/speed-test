@@ -33,7 +33,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .aggregazione import raggruppa
+from .aggregazione import (etichetta_pagina, nome_in_prosa, nomi_dichiarati,
+                           raggruppa)
 from .masterplan import etichetta_problema, motivo_esclusione
 from .soglie import ETICHETTE, SOGLIA_BUONA_LAB, formatta, giudizio
 
@@ -78,6 +79,61 @@ METRICA_DEL_TEMA = {
     "layout": "CLS", "font": "FCP",
 }
 
+# La metrica di campo che e' la STESSA COSA della sigla di laboratorio. In
+# `diagnose.LAB_A_CAMPO` il TBT e' mappato su INP e lo Speed Index sull'LCP: sono
+# proxy dichiarati, buoni per calibrare una priorita' e non per affermare "TBT
+# oltre soglia", che parlerebbe di un'altra metrica.
+CAMPO_DELLA_SIGLA = {
+    "LCP": "largest_contentful_paint",
+    "CLS": "cumulative_layout_shift",
+    "FCP": "first_contentful_paint",
+    "TTFB": "experimental_time_to_first_byte",
+}
+
+
+@dataclass
+class ContoSoglia:
+    """Quante pagine hanno la metrica oltre soglia, e su quale misura si sa."""
+    oltre_campo: int = 0
+    con_campo: int = 0
+    oltre_lab: int = 0
+    senza_campo: int = 0
+
+    @property
+    def dichiarabile(self) -> bool:
+        return bool(self.oltre_campo or (not self.con_campo and self.oltre_lab))
+
+
+def conta_oltre_soglia(esecuzione: dict, sigla: str) -> ContoSoglia:
+    """Quante pagine hanno davvero quella metrica oltre soglia.
+
+    Il conteggio si fa sul CAMPO dove il campo c'e' (ADR-001). Contare gli audit
+    falliti e chiamarli "LCP oltre soglia su 3 template" mentre CrUX dice che su
+    una di quelle pagine l'LCP reale e' buono e' una contraddizione dentro lo
+    stesso documento: il titolo affermava un fatto sulla metrica partendo da un
+    numero che parla d'altro.
+
+    Le pagine senza campo si contano a parte. Per loro esiste solo il
+    laboratorio, che e' un'altra misura e non si somma alla prima.
+    """
+    conto = ContoSoglia()
+    chiave = CAMPO_DELLA_SIGLA.get(sigla or "")
+    soglia_lab = SOGLIA_BUONA_LAB.get(sigla or "")
+    for pagina in _riuscite(esecuzione):
+        campo = (pagina.get("campo") or {}).get("metriche") or {}
+        valore = campo.get(chiave) if chiave else None
+        if valore is not None:
+            conto.con_campo += 1
+            if giudizio(chiave, valore) != "buono":
+                conto.oltre_campo += 1
+            continue
+        conto.senza_campo += 1
+        lab = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
+        if soglia_lab and lab is not None and lab > soglia_lab:
+            conto.oltre_lab += 1
+    return conto
+
+
 ORDINE_GRAVITA = {"bloccante": 0, "alta": 1, "media": 2, "bassa": 3}
 ETICHETTA_GRAVITA = {"bloccante": "BLOCCANTE", "alta": "ALTA",
                      "media": "MEDIA", "bassa": "BASSA"}
@@ -86,6 +142,38 @@ ETICHETTA_GRAVITA = {"bloccante": "BLOCCANTE", "alta": "ALTA",
 # dichiarata sulla soglia di accettabilita' di Google, e una soglia di peso.
 FATTORE_BLOCCANTE = 3.0
 BYTE_BLOCCANTI = 5 * 1024 * 1024        # 5 MB su una singola pagina
+
+# --------------------------------------------------------------------------- #
+#  Quanto vale un intervento: la taglia
+#
+#  Il giudizio di campo da solo non ordina niente. Dentro un sito e' quasi
+#  costante - CrUX dice "da migliorare" su LCP e INP di tutte le pagine, o
+#  "buono" su tutte - e siccome la gravita' di un audit e' quel giudizio mappato,
+#  tutti gli audit escono con la stessa gravita': su una scansione reale erano
+#  otto MEDIA su nove, e la colonna non diceva da dove cominciare.
+#
+#  La taglia e' l'altra meta': quanto pesa l'intervento, per soglie dichiarate
+#  sui numeri che Lighthouse stesso mette nell'audit. Sono numeri, non giudizi.
+# --------------------------------------------------------------------------- #
+
+BYTE_GROSSO = 1024 * 1024               # 1 MB recuperabili su una pagina
+BYTE_MEDIO = 100 * 1024                 # 100 KiB
+MS_GROSSO = 2000                        # 2 s dichiarati dall'audit
+MS_MEDIO = 500                          # mezzo secondo
+
+# Urgenza (dal campo) x taglia -> gravita'.
+#
+# La riga la sceglie il campo, e questo tiene fermo ADR-001: con il campo
+# "buono" un tema non puo' superare MEDIA, qualunque numero abbia il
+# laboratorio. La colonna la sceglie la taglia, e ordina dentro quella riga.
+# Nessuna delle due da sola basta: la prima appiattisce, la seconda ignorerebbe
+# cio' che Google misura davvero.
+GRAVITA_COMBINATA = {
+    "alta":  {"grossa": "alta",  "media": "alta",  "piccola": "media"},
+    "media": {"grossa": "alta",  "media": "media", "piccola": "bassa"},
+    "bassa": {"grossa": "media", "media": "bassa", "piccola": "bassa"},
+}
+ORDINE_TAGLIA = {"grossa": 0, "media": 1, "piccola": 2}
 
 
 def tema_di(codice: str) -> tuple:
@@ -129,8 +217,11 @@ def quadro(esecuzione: dict) -> dict:
     pagine = _riuscite(esecuzione)
     con_campo = [p for p in pagine
                  if ((p.get("campo") or {}).get("metriche") or {})]
+    # Senza nomi dichiarati la colonna «Template» ripeterebbe l'URL riga per riga.
+    con_nome = nomi_dichiarati(pagine)
 
-    intestazioni = ["Template", "URL"] + list(COLONNE_LAB) + ["Peso"]
+    intestazioni = (["Template"] if con_nome else []) + ["URL"]
+    intestazioni += list(COLONNE_LAB) + ["Peso"]
     if con_campo:
         intestazioni += ["LCP campo", "INP campo"]
 
@@ -138,7 +229,7 @@ def quadro(esecuzione: dict) -> dict:
     for pagina in pagine:
         lab = (pagina.get("fatti") or {}).get("metriche_lab") or {}
         campo = (pagina.get("campo") or {}).get("metriche") or {}
-        riga = [pagina.get("template", ""), pagina.get("url", "")]
+        riga = ([etichetta_pagina(pagina)] if con_nome else []) + [pagina.get("url", "")]
         for sigla in COLONNE_LAB:
             valore = lab.get(sigla)
             riga.append("n/d" if valore is None
@@ -154,7 +245,11 @@ def quadro(esecuzione: dict) -> dict:
 
     return {"intestazioni": intestazioni, "righe": righe,
             "modalita": "campo" if con_campo else "laboratorio",
-            "pagine_con_campo": len(con_campo), "pagine": len(pagine)}
+            "pagine_con_campo": len(con_campo), "pagine": len(pagine),
+            # Finisce dentro una frase, non in una cella: qui serve il nome per
+            # esteso, non il percorso.
+            "senza_campo": [nome_in_prosa(p) for p in pagine
+                            if not ((p.get("campo") or {}).get("metriche") or {})]}
 
 
 # --------------------------------------------------------------------------- #
@@ -199,7 +294,7 @@ def misure(esecuzione: dict) -> Misure:
     pesi = []
     for pagina in pagine:
         lab = (pagina.get("fatti") or {}).get("metriche_lab") or {}
-        nome = pagina.get("template", "")
+        nome = etichetta_pagina(pagina)
         if lab.get("CLS") is not None and lab["CLS"] <= SOGLIA_BUONA_LAB["CLS"]:
             m.cls_entro_soglia += 1
         if lab.get("TBT") is not None and lab["TBT"] > SOGLIA_BUONA_LAB["TBT"]:
@@ -218,7 +313,8 @@ def misure(esecuzione: dict) -> Misure:
         pesi.sort()
         m.peso_minimo, m.template_leggero = pesi[0]
         m.peso_massimo, m.template_pesante = pesi[-1]
-        pagina = next(p for p in pagine if p.get("template") == m.template_pesante)
+        pagina = next(p for p in pagine
+                      if etichetta_pagina(p) == m.template_pesante)
         per_tipo = _peso_per_tipo_totale(pagina)
         if per_tipo:
             totale = sum(per_tipo.values()) or 1
@@ -285,6 +381,10 @@ class Tema:
     byte_sprecati: float = 0.0
     ms_sprecati: float = 0.0
     totale_template: int = 0
+    soglia: ContoSoglia | None = None   # solo per i temi con una metrica propria
+    taglia: str = ""                    # grossa | media | piccola
+    urgenza: str = ""                   # la gravita' che viene dal campo, prima
+                                        # di essere combinata con la taglia
 
 
 # Audit che misurano lo stesso lavoro di un altro con un taglio diverso: sommarli
@@ -329,16 +429,40 @@ def _gravita_tema(codice: str, gravita_audit: str, esecuzione: dict,
     """
     if byte_pagina_massimo >= BYTE_BLOCCANTI:
         return "bloccante"
-    if dal_campo:
-        return gravita_audit
-    sigla = METRICA_DEL_TEMA.get(codice)
-    soglia = SOGLIA_BUONA_LAB.get(sigla or "")
-    if sigla and soglia:
-        for pagina in _riuscite(esecuzione):
-            valore = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
-            if valore is not None and valore >= soglia * FATTORE_BLOCCANTE:
-                return "bloccante"
+    if not dal_campo:
+        sigla = METRICA_DEL_TEMA.get(codice)
+        soglia = SOGLIA_BUONA_LAB.get(sigla or "")
+        if sigla and soglia:
+            for pagina in _riuscite(esecuzione):
+                valore = ((pagina.get("fatti") or {}).get("metriche_lab") or {}).get(sigla)
+                if valore is not None and valore >= soglia * FATTORE_BLOCCANTE:
+                    return "bloccante"
     return gravita_audit
+
+
+def taglia_di(tema: Tema) -> str:
+    """Quanto vale l'intervento: grossa, media o piccola. Solo soglie e numeri.
+
+    Un tema che ha una metrica propria si misura su quella — l'LCP non si pesa in
+    kilobyte — e la misura e' quante pagine ce l'hanno oltre soglia: tutte quelle
+    misurate e' grossa, alcune e' media, nessuna e' piccola. Chi ha anche dei
+    numeri dichiarati prende la piu' grande delle due letture, perche' sono due
+    modi di guardare lo stesso intervento e non due interventi.
+    """
+    letture = []
+    conto = tema.soglia
+    if conto is not None and (conto.con_campo or conto.senza_campo):
+        oltre = conto.oltre_campo if conto.con_campo else conto.oltre_lab
+        misurate = conto.con_campo or conto.senza_campo
+        letture.append("grossa" if oltre and oltre == misurate
+                       else "media" if oltre else "piccola")
+    if tema.byte_sprecati >= BYTE_GROSSO or tema.ms_sprecati >= MS_GROSSO:
+        letture.append("grossa")
+    elif tema.byte_sprecati >= BYTE_MEDIO or tema.ms_sprecati >= MS_MEDIO:
+        letture.append("media")
+    else:
+        letture.append("piccola")
+    return min(letture, key=lambda t: ORDINE_TAGLIA[t])
 
 
 # Un bersaglio piu' lungo di cosi' non si legge in una nota di poche pagine: i
@@ -382,9 +506,17 @@ def _titolo(codice_tema: str, titolo_tema: str, tema: Tema) -> str:
     if tema.ms_sprecati >= 100 and codice_tema in SUFFISSO_MS:
         return (f"{titolo_tema}: fino a {_ms(tema.ms_sprecati)} "
                 f"{SUFFISSO_MS[codice_tema]}")
-    sigla = METRICA_DEL_TEMA.get(codice_tema)
-    if sigla and tema.template:
-        return f"{titolo_tema} oltre soglia su {len(tema.template)} template"
+    conto = tema.soglia
+    if conto is not None and conto.dichiarabile:
+        if conto.con_campo:
+            titolo = (f"{titolo_tema} oltre soglia sul campo su "
+                      f"{conto.oltre_campo} template di {conto.con_campo}")
+            if conto.senza_campo:
+                titolo += (f" misurat{'o' if conto.con_campo == 1 else 'i'} "
+                           f"({conto.senza_campo} senza dati di campo)")
+            return titolo
+        return (f"{titolo_tema} oltre soglia in laboratorio su "
+                f"{conto.oltre_lab} template")
     quanti = len(tema.audit)
     return f"{titolo_tema}: {quanti} audit non superat{'o' if quanti == 1 else 'i'}"
 
@@ -420,8 +552,8 @@ def temi(esecuzione: dict) -> list:
             tema.ms_sprecati = max(tema.ms_sprecati, ms)
         tema.audit.append(intervento.codice)
         for template in intervento.template:
-            if template.nome not in tema.template:
-                tema.template.append(template.nome)
+            if template.etichetta not in tema.template:
+                tema.template.append(template.etichetta)
         # Il responsabile e' quello dell'audit messo peggio, non l'unione di
         # tutti: "sviluppo + marketing/tag, sviluppo, marketing/tag" non dice a
         # nessuno di cosa deve occuparsi.
@@ -432,7 +564,8 @@ def temi(esecuzione: dict) -> list:
         if ORDINE_GRAVITA.get(intervento.gravita, 3) < ORDINE_GRAVITA.get(tema.gravita, 3):
             tema.gravita = intervento.gravita
 
-        # La citazione e' testo di Lighthouse, una per audit accorpato.
+        # La citazione e' testo di Lighthouse, una per audit accorpato. Quelle
+        # identiche si fondono dopo, quando il tema e' completo.
         if intervento.azioni:
             tema.citazioni.append((intervento.titolo, intervento.azioni[0],
                                    intervento.documentazione))
@@ -448,7 +581,7 @@ def temi(esecuzione: dict) -> list:
         for template in intervento.template:
             for nome, misura, _dettaglio in intervento.propri_di(template)[:2]:
                 if misura:
-                    tema.evidenze.append((template.nome,
+                    tema.evidenze.append((template.etichetta,
                                           f"{accorcia(nome)} — {misura}"))
 
         motivo = _motivo_intervento(esecuzione, intervento.codice)
@@ -460,15 +593,46 @@ def temi(esecuzione: dict) -> list:
         tema = gruppi.get(codice)
         if tema is None:
             continue
-        tema.gravita = _gravita_tema(codice, tema.gravita, esecuzione,
+        sigla = METRICA_DEL_TEMA.get(codice)
+        if sigla:
+            tema.soglia = conta_oltre_soglia(esecuzione, sigla)
+        tema.urgenza = _gravita_tema(codice, tema.gravita, esecuzione,
                                      peso_massimo, dal_campo)
+        tema.taglia = taglia_di(tema)
+        # BLOCCANTE ha una soglia sua e non si combina: e' gia' il massimo.
+        tema.gravita = (tema.urgenza if tema.urgenza == "bloccante"
+                        else GRAVITA_COMBINATA[tema.urgenza][tema.taglia])
         tema.titolo = _titolo(codice, titolo_tema, tema)
         tema.evidenze = raggruppa_evidenze(tema.evidenze)
+        tema.citazioni = accorpa_citazioni(tema.citazioni)
         fuori.append(tema)
 
     fuori.sort(key=lambda t: (ORDINE_GRAVITA.get(t.gravita, 3), -len(t.template),
                               -t.byte_sprecati))
     return fuori
+
+
+def accorpa_citazioni(citazioni: list) -> list:
+    """Una raccomandazione ripetuta da piu' audit si legge una volta sola.
+
+    Il confronto e' sul testo e non sul codice dell'audit: `lcp-resourceLoadDelay`
+    e `lcp-resourceLoadDuration` restituiscono la stessa identica frase di
+    Lighthouse, e stamparla due volte fa contare due volte lo stesso lavoro.
+
+    I titoli restano tutti, riserve fra parentesi quadre comprese: dicono da
+    quali audit viene la citazione, e la riserva riguarda una delle due misure.
+    E' un problema della sola nota, che accorpa gli audit per tema; il documento
+    di riferimento li tiene separati apposta.
+    """
+    per_testo: dict = {}
+    for titolo, testo, url in citazioni:
+        titoli, primo_url = per_testo.setdefault(testo, ([], ""))
+        if titolo not in titoli:
+            titoli.append(titolo)
+        if url and not primo_url:
+            per_testo[testo] = (titoli, url)
+    return [(", ".join(titoli), testo, url)
+            for testo, (titoli, url) in per_testo.items()]
 
 
 def raggruppa_evidenze(evidenze: list, massimo: int = 3) -> list:

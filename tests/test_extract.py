@@ -189,3 +189,22 @@ def test_le_risorse_con_un_file_non_cambiano_forma(fatti):
     for risorsa in unused.risorse:
         assert risorsa.etichetta == ""
         assert risorsa.riferimento == risorsa.url
+
+
+# --- segnaposto contro bersagli ---------------------------------------------- #
+
+def test_un_segnaposto_non_e_un_bersaglio():
+    """Il sintomo: forced-reflow-insight stampava "[senza attributi] - 126 ms",
+    una riga che occupa il posto del bersaglio e non dice dove guardare."""
+    assert not extract.identifica("[senza attributi]")
+    assert not extract.identifica("[Senza Attributi]"), "il confronto ignora il caso"
+    assert not extract.identifica("Unattributable")
+    assert not extract.identifica("")
+    assert not extract.identifica(None)
+    assert not extract.identifica(["due", "host"]), "le liste non sono nomi"
+
+
+def test_un_bersaglio_vero_passa():
+    assert extract.identifica("tinypass.min.js")
+    assert extract.identifica("div.coh-container > img")
+

@@ -88,6 +88,12 @@ diventano una quinta:
 - **la gravita' `BLOCCANTE`** e' una soglia dichiarata: tre volte il valore che
   Google considera accettabile, o cinque megabyte su una pagina. Sono due numeri
   in `FATTORE_BLOCCANTE` e `BYTE_BLOCCANTI`, non un giudizio;
+- **la gravita' degli altri temi** e' una tabella a doppia entrata,
+  `GRAVITA_COMBINATA`: la riga viene dal giudizio di campo, la colonna dalla
+  taglia dell'intervento, e la taglia da quattro soglie in byte e millisecondi.
+  Le due entrate sono enumerate e le soglie sono numeri: chi legge il documento
+  puo' rifare il conto. Resta terza origine e non diventa un giudizio proprio
+  perche' nessuna delle due entrate guarda di quale cliente si tratta;
 - **le frasi di sintesi** (`REGOLE_SINTESI`) sono coppie condizione/modello. La
   condizione guarda solo numeri misurati, il modello viene riempito con quegli
   stessi numeri. Una frase compare se e solo se i dati la rendono vera.

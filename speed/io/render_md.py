@@ -32,6 +32,7 @@ da una scansione di mesi fa senza rifare nessuna chiamata.
 """
 from __future__ import annotations
 
+from ..core.aggregazione import etichetta_pagina
 from ..core.extract import FASI_IT
 from ..core.masterplan import motivo_esclusione
 from ..core.soglie import (fasi_dal_campo, formatta, formatta_risparmio,
@@ -171,7 +172,7 @@ def _testata(esecuzione: dict) -> list:
         fatti = pagina.get("fatti") or {}
         campo = pagina.get("campo") or {}
         righe.append([
-            pagina.get("template", ""),
+            etichetta_pagina(pagina),
             _codice(fatti.get("timestamp", "")) or "n/d",
             _plurale(pagina.get("misurazioni", 1), "distinta", "distinte") + ", " +
             _plurale(pagina.get("concordi", 1), "concorde", "concordi"),
@@ -207,7 +208,7 @@ def _elenco_pagine(esecuzione: dict) -> list:
         if pagina.get("errore"):
             # Il messaggio sta nella sezione della pagina: qui allargherebbe una
             # colonna di metriche fino a rendere illeggibile tutta la tabella.
-            righe.append([pagina.get("template", ""), _codice(pagina.get("url", "")),
+            righe.append([etichetta_pagina(pagina), _codice(pagina.get("url", "")),
                           "**non riuscita**", "—", "—", "—", "—", "—"])
             continue
         campo = pagina.get("campo") or {}
@@ -215,7 +216,7 @@ def _elenco_pagine(esecuzione: dict) -> list:
         totali = terze.get("byte_totali") or 0
         quota = (terze.get("byte_terzi", 0) / totali * 100) if totali else 0
         righe.append([
-            pagina.get("template", ""),
+            etichetta_pagina(pagina),
             _codice(pagina.get("url", "")),
             LIVELLO_CAMPO.get(campo.get("livello", "assente"), campo.get("livello", "")),
             _metrica(campo, "largest_contentful_paint"),
@@ -488,7 +489,7 @@ def _intervento(problema: dict, opportunita: dict | None) -> list:
 # --------------------------------------------------------------------------- #
 
 def _pagina(pagina: dict) -> list:
-    titolo = pagina.get("template") or pagina.get("url", "")
+    titolo = etichetta_pagina(pagina) or pagina.get("url", "")
     if pagina.get("errore"):
         return [f"## {titolo}", "", _codice(pagina.get("url", "")), "",
                 f"**Misurazione non riuscita.** {_testo(pagina['errore'])}", ""]

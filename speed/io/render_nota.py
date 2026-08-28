@@ -20,6 +20,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 
 from ..core import nota
+from ..core.aggregazione import etichetta_pagina, nome_in_prosa
 from ..core.soglie import ETICHETTE, formatta, giudizio
 
 GRIGIO = RGBColor(0x6B, 0x72, 0x80)
@@ -53,6 +54,16 @@ NOTA_LABORATORIO = (
     "sufficiente — quindi l'ordine di priorita' qui poggia sul laboratorio. Prima "
     "e dopo gli interventi vale la pena confrontare i dati di campo, che sono "
     "quelli che Google usa per il ranking."
+)
+# Quando il campo c'e' su alcune pagine e non su altre. Senza questa riga il
+# documento dichiara che l'ordine poggia sul campo e poi mostra "n/d" nel quadro,
+# lasciando al lettore il compito di capire cosa significhi per quelle pagine.
+SENZA_CAMPO = (
+    "Senza dati di campo: {pagine}. CrUX non li espone quando il traffico non "
+    "basta, ed e' il caso delle pagine nuove o poco visitate. Per queste la "
+    "priorita' degli interventi non e' calibrata sugli utenti reali: vale il "
+    "valore predefinito, «media». Nei conteggi «oltre soglia» si contano a "
+    "parte, sul laboratorio, che e' un'altra misura e non si somma alla prima."
 )
 NOTA_CAMPO = (
     "I valori di laboratorio servono a capire dove si perde il tempo; l'ordine di "
@@ -148,7 +159,7 @@ def _quadro(doc, quadro: dict, esecuzione: dict):
     fallite = [p for p in esecuzione.get("pagine") or [] if p.get("errore")]
     if fallite:
         _p(doc, "Non misurate: " + ", ".join(
-            f"{p.get('template', '')} ({p.get('errore', '')[:80]})" for p in fallite),
+            f"{nome_in_prosa(p)} ({p.get('errore', '')[:80]})" for p in fallite),
            size=9, colore=GRIGIO, corsivo=True, spazio_dopo=8)
 
 
@@ -188,9 +199,12 @@ def _tema(doc, indice: int, tema, esecuzione: dict):
 
 def _ordine(doc, temi_ordinati: list):
     doc.add_heading("Ordine di lavorazione", level=1)
-    _p(doc, "L'ordine viene dalla gravita' e da quanti template sono toccati. "
-            "«Fino a» perche' il valore e' il massimo fra gli audit del tema e "
-            "fra le pagine, non una somma.", size=9, colore=GRIGIO, spazio_dopo=6)
+    _p(doc, "La gravita' combina due cose misurate: cosa dicono di quella "
+            "metrica gli utenti reali su CrUX, e quanto pesa l'intervento "
+            "secondo i numeri di Lighthouse. Con il campo «buono» un tema non "
+            "supera MEDIA, per quanto grosso sia in laboratorio. «Fino a» "
+            "perche' il valore e' il massimo fra gli audit del tema e fra le "
+            "pagine, non una somma.", size=9, colore=GRIGIO, spazio_dopo=6)
     _tabella(doc, ["#", "Intervento", "Pagine", "Gravita'", "Peso del problema"],
              nota.ordine_di_lavorazione(temi_ordinati))
 
@@ -200,6 +214,10 @@ def _nota_di_lettura(doc, quadro: dict, esecuzione: dict):
     _p(doc, NOTA_LABORATORIO if quadro["modalita"] == "laboratorio" else NOTA_CAMPO,
        size=9.5, spazio_dopo=6)
 
+    if quadro["modalita"] == "campo" and quadro["senza_campo"]:
+        _p(doc, SENZA_CAMPO.format(pagine=", ".join(quadro["senza_campo"])),
+           size=9.5, spazio_dopo=6)
+
     if quadro["modalita"] == "campo":
         righe = []
         for pagina in [p for p in esecuzione.get("pagine") or [] if not p.get("errore")]:
@@ -208,7 +226,7 @@ def _nota_di_lettura(doc, quadro: dict, esecuzione: dict):
                             "cumulative_layout_shift"):
                 valore = campo.get(metrica)
                 if valore is not None:
-                    righe.append([pagina.get("template", ""), ETICHETTE[metrica],
+                    righe.append([etichetta_pagina(pagina), ETICHETTE[metrica],
                                   formatta(metrica, valore),
                                   giudizio(metrica, valore).replace("_", " ")])
         if righe:

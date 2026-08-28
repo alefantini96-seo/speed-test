@@ -245,3 +245,66 @@ def test_il_codice_inline_non_manda_l_intervento_a_marketing(problemi):
     """Un blocco nel documento e' prima parte: dedurne la proprieta' dal dominio
     dava netloc vuoto, quindi terza parte, quindi il lavoro alla squadra sbagliata."""
     assert _per_codice(problemi, "unminified-css").responsabile == diagnose.DEV
+
+
+def test_il_segnaposto_non_arriva_ai_bersagli(fatti):
+    """Su forced-reflow-insight Lighthouse non attribuisce la riga a nessuno:
+    il tempo resta, il bersaglio no."""
+    reflow = next(o for o in fatti.opportunita if o.audit == "forced-reflow-insight")
+    assert any("[senza attributi]" in str(v.etichetta) for v in reflow.voci), \
+        "il caso ha senso solo se il segnaposto e' nei dati"
+    problema = diagnose.da_opportunita(reflow, {})
+    assert problema.bersagli == []
+    assert problema.ms_sprecati > 0, "la misura non si perde con il segnaposto"
+
+
+def test_un_bersaglio_scartato_lascia_posto_al_successivo():
+    """Scartare non deve accorciare la lista: se ci sono altri bersagli veri,
+    devono salire al posto del segnaposto."""
+    class Finta:
+        etichetta = "[senza attributi]"
+        misure = {"wastedMs": 10.0}
+
+    class Vera:
+        etichetta = "davvero.js"
+        misure = {"wastedMs": 5.0}
+
+    class Opportunita:
+        audit = "forced-reflow-insight"
+        elementi = []
+        risorse = []
+        voci = [Finta(), Finta(), Vera()]
+
+    bersagli = diagnose.bersagli_di(Opportunita(), massimo=2)
+    assert [b[0] for b in bersagli] == ["davvero.js"]
+
+
+# --- la quota di una fase LCP porta il tempo che vale ------------------------- #
+
+def test_la_quota_di_una_fase_porta_il_valore_assoluto():
+    """Il sintomo: "39% del tempo LCP" e basta. Il 39% di 8,1 s e il 39% di
+    12,3 s sono due problemi diversi, e l'LCP sta in un'altra tabella."""
+    fasi = {"timeToFirstByte": 100.0, "resourceLoadDelay": 900.0}
+    assert diagnose.quota_lcp(fasi, "resourceLoadDelay") == "90% (900 ms)"
+
+
+def test_sopra_il_secondo_la_quota_si_legge_in_secondi():
+    fasi = {"timeToFirstByte": 1000.0, "elementRenderDelay": 3000.0}
+    assert diagnose.quota_lcp(fasi, "elementRenderDelay") == "75% (3,0 s)"
+
+
+def test_il_bersaglio_dell_lcp_non_e_piu_una_percentuale_nuda(fatti):
+    problema = diagnose.classifica_lcp(fatti, {})
+    assert problema is not None
+    _nome, misura, _dettaglio = problema.bersagli[0]
+    assert "del tempo LCP" in misura
+    assert "(" in misura and ("ms)" in misura or "s)" in misura), misura
+
+
+def test_anche_la_fase_dominante_dichiara_il_tempo(fatti):
+    """La stessa riga finisce nel report al cliente attraverso il master plan:
+    li' la percentuale nuda aveva lo stesso difetto."""
+    problema = diagnose.classifica_lcp(fatti, {})
+    riga = next(e for e in problema.evidenza if e.startswith("Fase dominante"))
+    assert "% (" in riga, riga
+

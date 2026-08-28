@@ -10,7 +10,8 @@ from pathlib import Path
 
 from speed.core import consenso, diagnose, extract, thirdparty
 from speed.io import crux
-from speed.core.aggregazione import Intervento, raggruppa
+from speed.core.aggregazione import (Intervento, PerTemplate, etichetta_template,
+                                     nomi_dichiarati, raggruppa)
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -310,3 +311,41 @@ def test_sui_fixture_il_bundle_condiviso_si_vede():
     assert "require.js" not in resa, "il caso ha senso solo se e' fuori dalla resa"
     assert "require.js" in bootup.comuni
     assert bootup.misura_di("require.js")[1], "deve arrivare con il suo impatto"
+
+
+# --- come si chiama una pagina nel documento --------------------------------- #
+
+def test_il_nome_dichiarato_vince_sempre():
+    assert etichetta_template("Home", "https://www.pluxee.it/") == "Home"
+
+
+def test_senza_nome_si_usa_il_percorso_non_l_url_intero():
+    """Il sintomo: dalla versione web il template E' l'URL, e la nota stampava
+    la stessa stringa nella colonna Template e nella colonna URL."""
+    url = "https://www.pluxee.it/prodotti/aziende/buoni-pasto/"
+    assert etichetta_template(url, url) == "/prodotti/aziende/buoni-pasto/"
+    assert etichetta_template("", url) == "/prodotti/aziende/buoni-pasto/"
+
+
+def test_la_home_senza_nome_resta_riconoscibile():
+    assert etichetta_template("", "https://www.pluxee.it/") == "/"
+
+
+def test_un_url_senza_percorso_non_diventa_vuoto():
+    assert etichetta_template("", "https://www.pluxee.it") == "https://www.pluxee.it"
+
+
+def test_nomi_dichiarati_distingue_i_due_casi():
+    dal_web = [{"template": "https://x.it/", "url": "https://x.it/"}]
+    da_yaml = [{"template": "Home", "url": "https://x.it/"}]
+    assert not nomi_dichiarati(dal_web)
+    assert nomi_dichiarati(da_yaml)
+    assert not nomi_dichiarati([{"template": "", "url": "https://x.it/"}])
+
+
+def test_il_template_porta_la_sua_etichetta():
+    """`nome` resta la chiave di ricerca, `etichetta` e' cio' che si stampa."""
+    voce = PerTemplate(nome="https://x.it/blog/", url="https://x.it/blog/")
+    assert voce.nome == "https://x.it/blog/", "la chiave non cambia"
+    assert voce.etichetta == "/blog/"
+

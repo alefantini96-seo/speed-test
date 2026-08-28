@@ -152,6 +152,23 @@ class Risorsa:
         return f"{self.etichetta}: {self.url}" if self.etichetta else self.url
 
 
+# Cio' che Lighthouse scrive quando NON e' riuscito ad attribuire la riga a un
+# file o a un nodo. Sono segnaposto, non bersagli: stamparli occupa la riga del
+# bersaglio e non dice a nessuno dove guardare. La misura accanto resta valida ed
+# e' quella che finisce nel titolo del tema.
+#
+# `[senza attributi]` compare in forced-reflow-insight con locale=it, che e'
+# quello che il tool chiede sempre; `Unattributable` resta in inglese anche li'.
+SEGNAPOSTO = ("[senza attributi]", "[unattributed]", "unattributable")
+
+
+def identifica(nome) -> bool:
+    """Falso se il nome e' un segnaposto di Lighthouse invece di un bersaglio."""
+    if not isinstance(nome, str) or not nome.strip():
+        return False
+    return nome.strip().lower() not in SEGNAPOSTO
+
+
 @dataclass
 class Elemento:
     """Un nodo del DOM che Lighthouse indica come responsabile.
