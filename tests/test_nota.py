@@ -341,3 +341,45 @@ def test_i_titoli_dei_temi_non_gridano_l_url_intero(dal_browser):
         for nome in tema.template:
             assert not nome.startswith("http"), nome
 
+
+# --- una raccomandazione, una riga -------------------------------------------- #
+
+def test_due_audit_con_la_stessa_frase_si_leggono_una_volta():
+    """Il sintomo: nel tema LCP comparivano due righe consecutive con la stessa
+    identica citazione, "Deve essere applicata fetchpriority=high"."""
+    frase = "Deve essere applicata fetchpriority=high"
+    accorpate = nota.accorpa_citazioni([
+        ("Il browser scopre la risorsa LCP tardi", frase, "https://g.dev/a"),
+        ("Il tempo se ne va nel download della risorsa LCP", frase, ""),
+    ])
+    assert len(accorpate) == 1
+    titolo, testo, url = accorpate[0]
+    assert testo == frase
+    assert "scopre la risorsa LCP tardi" in titolo
+    assert "download della risorsa LCP" in titolo
+    assert url == "https://g.dev/a", "il primo link utile non si perde"
+
+
+def test_la_riserva_sopravvive_all_accorpamento():
+    """La riserva riguarda una delle due misure e va detta lo stesso."""
+    frase = "Deve essere applicata fetchpriority=high"
+    accorpate = nota.accorpa_citazioni([
+        ("Il browser scopre la risorsa LCP tardi", frase, ""),
+        ("Il tempo se ne va nel download [misurazioni discordanti]", frase, ""),
+    ])
+    assert "[misurazioni discordanti]" in accorpate[0][0]
+
+
+def test_citazioni_diverse_restano_distinte():
+    accorpate = nota.accorpa_citazioni([
+        ("Riduci il CSS", "Riduci le regole inutilizzate.", "https://g.dev/css"),
+        ("Minimizza CSS", "Minimizza i file CSS.", "https://g.dev/min"),
+    ])
+    assert len(accorpate) == 2
+
+
+def test_nessun_tema_ripete_una_citazione(esecuzione):
+    for tema in nota.temi(esecuzione):
+        testi = [testo for _titolo, testo, _url in tema.citazioni]
+        assert len(testi) == len(set(testi)), tema.codice
+

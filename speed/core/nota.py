@@ -438,7 +438,8 @@ def temi(esecuzione: dict) -> list:
         if ORDINE_GRAVITA.get(intervento.gravita, 3) < ORDINE_GRAVITA.get(tema.gravita, 3):
             tema.gravita = intervento.gravita
 
-        # La citazione e' testo di Lighthouse, una per audit accorpato.
+        # La citazione e' testo di Lighthouse, una per audit accorpato. Quelle
+        # identiche si fondono dopo, quando il tema e' completo.
         if intervento.azioni:
             tema.citazioni.append((intervento.titolo, intervento.azioni[0],
                                    intervento.documentazione))
@@ -470,11 +471,35 @@ def temi(esecuzione: dict) -> list:
                                      peso_massimo, dal_campo)
         tema.titolo = _titolo(codice, titolo_tema, tema)
         tema.evidenze = raggruppa_evidenze(tema.evidenze)
+        tema.citazioni = accorpa_citazioni(tema.citazioni)
         fuori.append(tema)
 
     fuori.sort(key=lambda t: (ORDINE_GRAVITA.get(t.gravita, 3), -len(t.template),
                               -t.byte_sprecati))
     return fuori
+
+
+def accorpa_citazioni(citazioni: list) -> list:
+    """Una raccomandazione ripetuta da piu' audit si legge una volta sola.
+
+    Il confronto e' sul testo e non sul codice dell'audit: `lcp-resourceLoadDelay`
+    e `lcp-resourceLoadDuration` restituiscono la stessa identica frase di
+    Lighthouse, e stamparla due volte fa contare due volte lo stesso lavoro.
+
+    I titoli restano tutti, riserve fra parentesi quadre comprese: dicono da
+    quali audit viene la citazione, e la riserva riguarda una delle due misure.
+    E' un problema della sola nota, che accorpa gli audit per tema; il documento
+    di riferimento li tiene separati apposta.
+    """
+    per_testo: dict = {}
+    for titolo, testo, url in citazioni:
+        titoli, primo_url = per_testo.setdefault(testo, ([], ""))
+        if titolo not in titoli:
+            titoli.append(titolo)
+        if url and not primo_url:
+            per_testo[testo] = (titoli, url)
+    return [(", ".join(titoli), testo, url)
+            for testo, (titoli, url) in per_testo.items()]
 
 
 def raggruppa_evidenze(evidenze: list, massimo: int = 3) -> list:
