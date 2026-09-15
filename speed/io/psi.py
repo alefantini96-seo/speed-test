@@ -20,6 +20,7 @@ import asyncio
 
 import httpx
 
+from ..core.extract import CATEGORIE
 from ..errori import da_risposta_google
 from .google import richiedi
 
@@ -33,12 +34,24 @@ TIMEOUT = 120.0
 async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
                    strategy: str = "mobile", locale: str = "it",
                    tentativi: int = 3, attesa_iniziale: float = 2.0,
-                   timeout: float = TIMEOUT) -> dict:
-    """Una misurazione di laboratorio, con riprova sui codici transitori."""
+                   timeout: float = TIMEOUT, categorie=CATEGORIE) -> dict:
+    """Una misurazione di laboratorio, con riprova sui codici transitori.
+
+    Le categorie chieste sono quattro. Accessibilita', best practice e SEO non
+    entrano in nessuna valutazione — valgono quanto il punteggio prestazioni,
+    cioe' come riferimento (ADR-001) — ma sono gia' dentro la stessa risposta e
+    sono il numero che il cliente vede aprendo pagespeed.web.dev.
+
+    Non costano un'altra misurazione: Lighthouse riusa il trace che ha gia'
+    raccolto e calcola audit in piu'. Misurato su www.pluxee.it: 46 s con la sola
+    performance, 32 s con tutte e quattro — la variabilita' fra due run supera il
+    costo delle categorie. Cresce invece il corpo della risposta, da 874 KB a
+    1,1 MB, che e' traffico del server e non del browser.
+    """
     risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
         "url": url,
         "strategy": strategy,
-        "category": "performance",
+        "category": list(categorie),
         "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
         "key": api_key,
     }, timeout=timeout), tentativi, attesa_iniziale)
@@ -61,7 +74,7 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
                          ripetizioni: int = 3, attesa_fra_giri: float = 90.0,
                          avviso=None, tentativi: int = 3,
                          attesa_iniziale: float = 2.0,
-                         timeout: float = TIMEOUT) -> dict:
+                         timeout: float = TIMEOUT, categorie=CATEGORIE) -> dict:
     """Ritorna {url: [risposta | Exception, ...]}.
 
     Le ripetizioni servono perche' la ripartizione in fasi dell'LCP e' instabile
@@ -89,7 +102,7 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
                 try:
                     risultati[url].append(await analizza(
                         client, api_key, url, strategy, locale,
-                        tentativi, attesa_iniziale, timeout))
+                        tentativi, attesa_iniziale, timeout, categorie))
                 except Exception as exc:   # la singola pagina non deve fermare il run
                     risultati[url].append(exc)
 

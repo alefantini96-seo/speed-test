@@ -33,8 +33,9 @@ class ClienteFinto:
         self.risposte = list(risposte)
         self.chiamate = 0
 
-    async def get(self, *_a, **_k):
+    async def get(self, *_a, **kwargs):
         self.chiamate += 1
+        self.parametri = kwargs.get("params", {})
         return self.risposte[min(self.chiamate - 1, len(self.risposte) - 1)]
 
 
@@ -51,6 +52,22 @@ def test_risposta_valida():
     cliente = ClienteFinto(RispostaFinta(200, OK))
     assert _analizza(cliente) == OK
     assert cliente.chiamate == 1, "niente riprove quando va bene"
+
+
+def test_chiede_tutte_e_quattro_le_categorie():
+    """Accessibilita', best practice e SEO viaggiano nella stessa risposta e non
+    costano un'altra misurazione. Il punteggio di nessuna entra in una
+    valutazione: compaiono come riferimento, come quello delle prestazioni."""
+    cliente = ClienteFinto(RispostaFinta(200, OK))
+    _analizza(cliente)
+    assert cliente.parametri["category"] == [
+        "performance", "accessibility", "best-practices", "seo"]
+
+
+def test_le_categorie_si_possono_restringere():
+    cliente = ClienteFinto(RispostaFinta(200, OK))
+    _analizza(cliente, categorie=("performance",))
+    assert cliente.parametri["category"] == ["performance"]
 
 
 def test_riprova_sui_codici_transitori():
