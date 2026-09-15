@@ -621,7 +621,12 @@ def _css():
 
 # I colori del sistema grafico. Se qualcuno ne cambia uno a mano in un punto
 # solo invece che nel token, questo test se ne accorge.
-PALETTE = ("#404AFF", "#4943B8", "#FF4633", "#F3F7FA", "#DEE2E9")
+#
+# I tre vivi sono l'accento e basta; gli altri sono neutrali puri, non virati di
+# blu come prima: e' quello che fa leggere l'interfaccia come pulita, perche'
+# lascia al contenuto l'unico colore della pagina.
+PALETTE = ("#404AFF", "#4943B8", "#FF4633",
+           "#FAFAFA", "#EAEAEA", "#F0F0F0", "#666666")
 
 
 def _css_senza_commenti():
@@ -648,13 +653,20 @@ def test_il_font_e_una_variabile_sola():
     assert css.count("font-family:var(--font)") >= 2, "il resto passa dalla variabile"
 
 
-def test_lo_spigolo_e_vivo_ovunque():
-    """E' il segno piu' forte del sistema grafico: non deve esserci un solo
-    angolo arrotondato."""
+def test_il_raggio_passa_da_un_token_solo():
+    """Gli angoli si cambiano in una riga e in nessun altro punto.
+
+    Fino al 15/09/2026 il token valeva 0 e il test si chiamava "lo spigolo e'
+    vivo ovunque": lo spigolo era il segno piu' forte di un sistema grafico che
+    aveva anche un marchio. Tolto quello, l'interfaccia e' stata riportata sui
+    modi di una dashboard - neutrali puri, angoli appena smussati - e il valore
+    e' tornato a essere una preferenza. La proprieta' che vale la pena
+    presidiare non e' quel numero, e' che sia **uno solo**: due raggi diversi
+    divergono al primo componente nuovo."""
     import re
     valori = {v.strip() for v in re.findall(r"border-radius:\s*([^;}]+)", _css())}
     assert valori == {"var(--raggio)"}, valori
-    assert "--raggio:0" in _css().replace(" ", "")
+    assert re.search(r"--raggio:\s*\S+;", _css()), "il token deve esistere"
 
 
 def test_la_pagina_resta_senza_richieste_esterne():
@@ -693,6 +705,58 @@ def test_la_gerarchia_e_dichiarata():
     assert "border-top:3px solid var(--blu)" in css, "il verdetto domina"
     assert ".riquadro {" in css
     assert ".intervento {" in css
+
+
+# --- le schede dentro la scheda --------------------------------------------- #
+
+def test_le_sezioni_di_una_pagina_stanno_in_schede():
+    """Sei blocchi impilati erano 3.400 pixel a template."""
+    sorgente = _sorgente()
+    assert "function schede(" in sorgente
+    assert 'role="tablist"' in sorgente and 'role="tabpanel"' in sorgente
+    for nome in ("Sintesi", "Fotogrammi", "Cascata", "Laboratorio"):
+        assert f"nome: '{nome}'" in sorgente, nome
+
+
+def test_una_linguetta_senza_contenuto_non_si_crea():
+    """Su un payload senza `caricamento` restano le sezioni che ci sono, e se ne
+    resta una sola non compare nemmeno la barra: una linguetta unica non e' una
+    scelta."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function schede("):sorgente.index("function apriLinguetta(")]
+    assert "filter(v => (v.html || '').trim())" in corpo
+    assert "if (piene.length < 2) return" in corpo
+
+
+def test_ogni_linguetta_e_legata_al_suo_pannello():
+    """`aria-controls` e `aria-labelledby` si costruiscono con lo stesso indice:
+    se divergono, chi naviga a voce sente il nome di una sezione e il contenuto
+    di un'altra."""
+    corpo = _sorgente()
+    corpo = corpo[corpo.index("function schede("):corpo.index("function apriLinguetta(")]
+    assert 'id="ling-${idPagina}-${i}"' in corpo
+    assert 'aria-controls="pan-${idPagina}-${i}"' in corpo
+    assert 'id="pan-${idPagina}-${i}"' in corpo
+    assert 'aria-labelledby="ling-${idPagina}-${i}"' in corpo
+    assert "${i ? ' hidden' : ''}" in corpo, "aperta la prima, chiuse le altre"
+
+
+def test_le_linguette_si_scorrono_da_tastiera():
+    """Con `tabindex=-1` sulle non attive - che e' la regola di un tablist - senza
+    le frecce da tastiera si raggiungerebbe solo la prima."""
+    sorgente = _sorgente()
+    assert "addEventListener('keydown'" in sorgente
+    assert "ArrowRight: 1, ArrowLeft: -1" in sorgente
+    assert "prossima.focus();" in sorgente
+
+
+def test_in_stampa_le_schede_chiuse_non_spariscono():
+    """`hidden` toglierebbe dalla carta meta' della pagina senza dire di averlo
+    fatto."""
+    css = _css()
+    assert "@media print" in css
+    stampa = css[css.index("@media print"):]
+    assert "[role=tabpanel][hidden] { display:block !important }" in stampa
 
 
 # --- il verdetto non nasconde le pagine che non ha misurato ------------------ #

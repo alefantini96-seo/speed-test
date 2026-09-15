@@ -104,7 +104,11 @@ una richiesta.
 ## Versione online
 
 Oltre alla CLI c'è un'interfaccia web pensata per Vercel: incolli gli URL, il browser
-li manda **uno alla volta** e i risultati compaiono mano a mano. Una pagina richiede
+li manda **uno alla volta** e i risultati compaiono mano a mano. Ogni pagina misurata
+è una scheda con quattro linguette — sintesi, fotogrammi, cascata, laboratorio —
+perché i sei blocchi impilati facevano 3.400 pixel a template, e con tre template la
+cascata del primo e il verdetto del terzo non stavano nella stessa schermata. Il
+report HTML, che si legge di fila e si stampa, resta invece tutto aperto. Una pagina richiede
 45-165 secondi — due giri di PageSpeed quando le fasi LCP non arrivano dal campo, che
 è il caso frequente — senza code né database.
 

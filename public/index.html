@@ -8,9 +8,14 @@
 /* --------------------------------------------------------------------------
    Sistema grafico.
 
-   Tre regole, e sono quelle che rendono una pagina riconoscibile: un colore
-   dominante che porta tutti gli accenti, pulsanti `1px solid` a spigolo vivo, e
-   nessun angolo arrotondato da nessuna parte.
+   Tre regole: **neutrali puri** per tutto cio' che non e' contenuto, **un solo
+   accento** che porta tutti i colori vivi, e **un raggio solo** dichiarato una
+   volta sola.
+
+   I grigi sono neutri e non virati di blu: e' quello che fa leggere una
+   interfaccia come pulita piu' di qualunque altra scelta, perche' lascia al
+   contenuto l'unico colore della pagina. I dati - verde, ambra, rosso del
+   giudizio - restano gli unici punti saturi.
    -------------------------------------------------------------------------- */
 :root {
   --blu:#404AFF;          /* dominante: pulsanti, accenti, link */
@@ -18,10 +23,10 @@
   --corallo:#FF4633;      /* accento secondario */
   --nero:#000000;
   --bianco:#FFFFFF;
-  --tela:#F3F7FA;         /* sfondo pagina */
-  --bordo:#DEE2E9;
-  --bordo-tenue:#E8E8E8;
-  --grigio:#999999;
+  --tela:#FAFAFA;         /* sfondo pagina */
+  --bordo:#EAEAEA;
+  --bordo-tenue:#F0F0F0;
+  --grigio:#666666;       /* testo secondario: legge, non sussurra */
 
   /* Alias di ruolo: il resto del foglio parla di funzioni, non di colori, cosi'
      un cambio di palette resta confinato qui sopra. */
@@ -37,17 +42,18 @@
   --medio:#8A5200;
   --scarso:#B42318;
 
-  /* Un geometrico, chiesto per nome finche' se ne trova uno installato e poi
-     lasciato al sistema. I nomi commerciali servono a chi ha la licenza sulla
-     propria macchina: nessuno di questi file viene servito da qui. Per
+  /* Un grottesco neutro, preso dal sistema. Nessun file di font viene servito
+     da qui: si chiedono per nome e si scende sul sistema operativo. Per
      depositarne uno, una @font-face sopra e il nome in testa a questa riga. */
-  --font:'Aeonik','Futura PT','Avenir Next','Century Gothic',
-         ui-sans-serif,system-ui,'Segoe UI',Roboto,sans-serif;
+  --font:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,
+         'Helvetica Neue',Arial,sans-serif;
   --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
 
-  /* Spigolo vivo ovunque. Non e' una preferenza: e' il segno piu' forte
-     dell'identita', e nel foglio non deve comparire nessun altro valore. */
-  --raggio:0;
+  /* Un raggio solo, dichiarato qui e ripreso ovunque con var(--raggio): nel
+     foglio non deve comparire nessun altro valore, altrimenti gli angoli
+     cominciano a divergere fra un componente e l'altro. A 0 l'interfaccia torna
+     a spigolo vivo cambiando questa riga e nient'altro. */
+  --raggio:6px;
 }
 
 * { box-sizing:border-box; }
@@ -60,21 +66,25 @@ body { font-family:var(--font); color:var(--testo); background:var(--tela);
        margin:0; padding:0 0 96px; line-height:1.55;
        border-top:4px solid var(--blu);
        -webkit-font-smoothing:antialiased; }
-main { max-width:980px; margin-inline:auto; padding:34px 20px 0; }
+main { max-width:1080px; margin-inline:auto; padding:40px 24px 0; }
 
 /* --- tipografia ----------------------------------------------------------- */
 .occhiello { font-size:11.5px; text-transform:uppercase; letter-spacing:.05125rem;
              color:var(--blu); font-weight:500; margin:0 0 6px; }
-h1 { font-size:clamp(28px, 7vw, 40px); line-height:1.08; font-weight:500;
+h1 { font-size:clamp(28px, 7vw, 40px); line-height:1.08; font-weight:600;
      letter-spacing:-.0625rem; margin:0 0 8px; }
-h2 { font-size:19px; font-weight:500; letter-spacing:-.03125rem; margin:0 0 2px; }
-h3 { font-size:11.5px; color:var(--tenue); margin:24px 0 8px; font-weight:500;
-     text-transform:uppercase; letter-spacing:.03125rem; }
+h2 { font-size:19px; font-weight:600; letter-spacing:-.03125rem; margin:0 0 2px; }
+/* I titoletti di sezione non gridano piu': dentro una scheda a schede sono
+   divisori, non intestazioni di pari grado col nome del template. */
+h3 { font-size:12px; color:var(--tenue); margin:26px 0 8px; font-weight:500;
+     letter-spacing:0; }
+h3:first-child { margin-top:4px; }
 .sottotitolo { color:var(--tenue); margin:0 0 30px; font-size:14.5px; max-width:62ch; }
 
 /* --- superfici ------------------------------------------------------------ */
 .riquadro { background:var(--sfondo); border:1px solid var(--bordo);
-            border-radius:var(--raggio); padding:22px; margin-bottom:18px; }
+            border-radius:var(--raggio); padding:26px 28px; margin-bottom:20px; }
+@media (max-width:560px) { .riquadro { padding:20px 18px; } }
 
 /* --- moduli --------------------------------------------------------------- */
 label { display:block; font-size:11.5px; font-weight:500; color:var(--testo);
@@ -131,7 +141,8 @@ button:disabled { opacity:.38; cursor:default; }
 /* --- barra compatta: dopo l'analisi il modulo si toglie di mezzo ----------- */
 .barra { display:flex; align-items:center; gap:10px; flex-wrap:wrap;
          background:var(--sfondo); border:1px solid var(--bordo);
-         border-radius:var(--raggio); padding:13px 16px; margin-bottom:18px; }
+         border-radius:var(--raggio); padding:12px 16px; margin-bottom:20px;
+         position:sticky; top:0; z-index:5; }
 .barra .cosa { font-size:14px; font-weight:500; margin-right:auto; }
 .barra .cosa span { font-weight:400; color:var(--tenue); }
 
@@ -171,7 +182,7 @@ button:disabled { opacity:.38; cursor:default; }
    l'ordine di lettura. */
 .verdetto { background:var(--sfondo); border:1px solid var(--bordo);
             border-top:3px solid var(--blu); border-radius:var(--raggio);
-            padding:24px 22px; margin-bottom:18px; }
+            padding:26px 28px; margin-bottom:20px; }
 .verdetto h2 { margin-bottom:14px; }
 .verdetto ul { list-style:none; margin:0; padding:0; }
 .verdetto li { display:flex; align-items:baseline; gap:12px; padding:6px 0;
@@ -192,6 +203,34 @@ button:disabled { opacity:.38; cursor:default; }
 .indice a { color:var(--tenue); text-decoration:none;
             border-bottom:1px solid var(--bordo); }
 .indice a:hover { color:var(--blu); border-color:var(--blu); }
+
+/* --- schede dentro la scheda ----------------------------------------------
+   Una pagina misurata produce sei blocchi lunghi - campo, fotogrammi, fasi,
+   peso, cascata, laboratorio - e impilati facevano 3.400 pixel a template:
+   con tre template la cascata del primo e il verdetto del terzo non stavano
+   nella stessa giornata di scrolling. Le schede tengono il blocco che si sta
+   leggendo alto quanto uno schermo.
+
+   Sottolineatura invece di linguette: e' il segno piu' leggero che distingue
+   l'attiva, e non chiede un secondo colore alla palette. */
+.testa-scheda { display:flex; align-items:flex-start; justify-content:space-between;
+                gap:16px; flex-wrap:wrap; }
+.testa-scheda .quando { flex:none; font-size:12px; color:var(--tenue);
+                        font-variant-numeric:tabular-nums; }
+[role=tablist] { display:flex; gap:24px; margin:18px 0 0;
+                 border-bottom:1px solid var(--bordo); overflow-x:auto;
+                 -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+[role=tablist]::-webkit-scrollbar { display:none; }
+[role=tab] { flex:none; appearance:none; background:none; border:none;
+             border-bottom:2px solid transparent;
+             font-family:var(--font); font-size:13.5px; font-weight:500;
+             letter-spacing:0; color:var(--tenue); cursor:pointer;
+             padding:0 0 11px; margin-bottom:-1px; transition:color .14s ease-out; }
+[role=tab]:hover { color:var(--testo); background:none; }
+[role=tab][aria-selected=true] { color:var(--testo); border-bottom-color:var(--testo); }
+[role=tabpanel] { padding-top:6px; }
+/* Stampando, le schede nascoste sparirebbero senza dire di esistere. */
+@media print { [role=tablist] { display:none } [role=tabpanel][hidden] { display:block !important } }
 
 /* --- tabelle -------------------------------------------------------------- */
 table { width:100%; border-collapse:collapse; font-size:14px; margin:14px 0 4px; }
@@ -244,7 +283,10 @@ table.cascata tr:nth-child(even) td { background:var(--tela); }
 table.cascata td.nome { font-family:var(--mono); overflow:hidden;
                         text-overflow:ellipsis; white-space:nowrap; }
 table.cascata td.nome .tag { color:var(--tenue); }
-.scorre table.cascata { min-width:520px; }
+/* La cascata ha bisogno di larghezza: sotto i 640px le etichette del righello
+   si sovrappongono fra loro anche girando su tre righe. Scorre, non si
+   comprime. */
+.scorre table.cascata { min-width:640px; }
 /* nowrap: le tre parti della barra sommano al 100% della cella e il minimo
    garantito al tratto puo' sforare di un decimo. Senza, la riga va a capo. */
 .linea { position:relative; height:11px; white-space:nowrap; overflow:hidden; }
@@ -708,8 +750,8 @@ function cascata(caricamento) {
           ${nascoste.map(rigaCascata).join('')}</table></div></details>`
     : '';
   const lente = [...barre].sort((a, b) => b.durata_ms - a.durata_ms).slice(0, 5);
-  return `<h3>Cascata delle richieste</h3>
-    <div class="scorre"><table class="cascata">${testa}${visibili}</table></div>${resto}
+  // Niente titolo: la linguetta sopra dice gia' "Cascata".
+  return `<div class="scorre"><table class="cascata">${testa}${visibili}</table></div>${resto}
     <p class="nota">${barre.length} richieste su una scala di
       ${esc(durata(disegno.scala_ms))}. I tempi sono quelli osservati dal trace, non le
       metriche riportate da Lighthouse, che sono simulate su un\'altra scala: la cascata
@@ -739,6 +781,43 @@ function punteggi(caricamento) {
     <p class="nota">Riferimento, non valutazione: sono i numeri che compaiono aprendo
       pagespeed.web.dev, e variano fra due misurazioni identiche. Accessibilità, best
       practice e SEO arrivano dalla stessa misurazione e non sono state analizzate.</p>`;
+}
+
+// --- schede dentro la scheda ----------------------------------------------- //
+//
+// Una pagina misurata produce sei blocchi lunghi: impilati erano 3.400 pixel a
+// template, e con tre template la cascata del primo e il verdetto del terzo non
+// si vedevano nella stessa schermata. Le linguette tengono alto quanto uno
+// schermo il blocco che si sta leggendo, senza togliere niente.
+//
+// Una linguetta senza contenuto non si crea: su un payload senza `caricamento` -
+// un risultato vecchio ripescato - restano le sezioni che ci sono. E se ne resta
+// una sola, non compare nemmeno la barra: una linguetta unica non e' una scelta.
+
+function schede(idPagina, nome, voci) {
+  const piene = voci.filter(v => (v.html || '').trim());
+  if (piene.length < 2) return piene.map(v => v.html).join('');
+  const linguette = piene.map((v, i) => `
+    <button type="button" role="tab" id="ling-${idPagina}-${i}"
+            aria-controls="pan-${idPagina}-${i}" aria-selected="${i === 0}"
+            tabindex="${i === 0 ? 0 : -1}">${esc(v.nome)}</button>`).join('');
+  const pannelli = piene.map((v, i) => `
+    <div role="tabpanel" id="pan-${idPagina}-${i}"
+         aria-labelledby="ling-${idPagina}-${i}"${i ? ' hidden' : ''}>${v.html}</div>`).join('');
+  // Il nome nell'etichetta: con tre template in pagina ci sono tre barre
+  // identiche, e a voce "Sezioni della pagina" non dice di quale.
+  return `<div role="tablist" aria-label="Sezioni di ${esc(nome)}">${linguette}</div>${pannelli}`;
+}
+
+function apriLinguetta(linguetta) {
+  const barra = linguetta.closest('[role=tablist]');
+  for (const altra of barra.querySelectorAll('[role=tab]')) {
+    const attiva = altra === linguetta;
+    altra.setAttribute('aria-selected', String(attiva));
+    altra.tabIndex = attiva ? 0 : -1;
+    const pannello = document.getElementById(altra.getAttribute('aria-controls'));
+    if (pannello) pannello.hidden = !attiva;
+  }
 }
 
 function scheda(p, indice) {
@@ -843,11 +922,8 @@ function disegna(pagina) {
   div.className = 'riquadro';
   div.id = `template-${indicePagina}`;
   div.dataset.url = pagina.url;
-  div.innerHTML = `
-    <h2>${esc(etichettaTemplate(pagina.url))}</h2>
-    <p class="url">${esc(pagina.url)}</p>
+  const sintesi = `
     ${tabellaCampo(pagina.campo)}
-    ${filmstrip(pagina.caricamento)}
     ${fasiLcp(pagina.fatti)}
     <h3>Peso della pagina</h3>
     ${dettagliPagina(pagina)}
@@ -855,9 +931,9 @@ function disegna(pagina) {
        terze parti (${Math.round(quota*100)}%)</strong>.</p>
     ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
       Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
-        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
-    ${catenaRedirect(pagina.caricamento)}
-    ${cascata(pagina.caricamento)}
+        .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}`;
+
+  const laboratorio = `
     ${misureLab(pagina)}
     ${punteggi(pagina.caricamento)}
     <details class="perche">
@@ -865,6 +941,23 @@ function disegna(pagina) {
       <p class="nota">${plurale(pagina.misurazioni || 1, 'misurazione', 'misurazioni')}
         di laboratorio. ${esc(pagina.consenso || '')}</p>
     </details>`;
+
+  div.innerHTML = `
+    <div class="testa-scheda">
+      <div class="chi-e">
+        <h2>${esc(etichettaTemplate(pagina.url))}</h2>
+        <p class="url">${esc(pagina.url)}</p>
+      </div>
+      <span class="quando">${plurale(pagina.misurazioni || 1,
+        'misurazione', 'misurazioni')} di laboratorio</span>
+    </div>
+    ${schede(indicePagina, etichettaTemplate(pagina.url), [
+      { nome: 'Sintesi', html: sintesi },
+      { nome: 'Fotogrammi', html: filmstrip(pagina.caricamento)
+                                 + catenaRedirect(pagina.caricamento) },
+      { nome: 'Cascata', html: cascata(pagina.caricamento) },
+      { nome: 'Laboratorio', html: laboratorio },
+    ])}`;
   $('risultati').appendChild(div);
 }
 
@@ -1274,8 +1367,30 @@ $('risultati').addEventListener('click', (evento) => {
     bottone.remove();
     return;
   }
+  const linguetta = evento.target.closest('[role=tab]');
+  if (linguetta) {
+    apriLinguetta(linguetta);
+    return;
+  }
   const ritenta = evento.target.closest('.riprova');
   if (ritenta) riprova(ritenta.dataset.url);
+});
+
+// Le frecce scorrono le linguette come in ogni altro set di schede: senza, con
+// tabindex -1 sulle non attive, da tastiera si raggiungerebbe solo la prima.
+$('risultati').addEventListener('keydown', (evento) => {
+  const corrente = evento.target.closest('[role=tab]');
+  if (!corrente) return;
+  const tutte = [...corrente.closest('[role=tablist]').querySelectorAll('[role=tab]')];
+  const passo = { ArrowRight: 1, ArrowLeft: -1 }[evento.key];
+  const estremo = { Home: 0, End: tutte.length - 1 }[evento.key];
+  const prossima = passo !== undefined
+    ? tutte[(tutte.indexOf(corrente) + passo + tutte.length) % tutte.length]
+    : tutte[estremo];
+  if (!prossima || prossima === corrente) return;
+  evento.preventDefault();
+  apriLinguetta(prossima);
+  prossima.focus();
 });
 
 $('consiglio').addEventListener('click', (evento) => {
