@@ -10,7 +10,10 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-from ..core.extract import FASI_IT
+from dataclasses import fields
+
+from ..core.cascata import cascata, piu_lente
+from ..core.extract import FASI_IT, Richiesta
 from ..core.soglie import ETICHETTE, SOGLIE, formatta, giudizio
 from ..core.aggregazione import raggruppa
 from ..core.thirdparty import etichetta_tipo
@@ -65,6 +68,40 @@ table.risorse td.risorsa { font-family:ui-monospace,Consolas,monospace; font-siz
 table.risorse .percorso { color:var(--tenue); font-size:10px; }
 .avviso { background:#fffbeb; border:1px solid #fde68a; border-radius:4px;
           padding:10px 14px; font-size:13px; margin:14px 0; }
+.tessere { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0 4px; }
+.tessera { border:1px solid var(--bordo); border-radius:4px; padding:8px 12px; min-width:104px; }
+.tessera .et { display:block; font-size:10px; text-transform:uppercase;
+               letter-spacing:.04em; color:var(--tenue); }
+.tessera .val { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+.filmstrip { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 4px; }
+.filmstrip figure { margin:0; width:104px; }
+.filmstrip img { width:104px; height:auto; border:1px solid var(--bordo); border-radius:3px;
+                 display:block; }
+.filmstrip figcaption { font-size:10px; color:var(--tenue); text-align:center; margin-top:3px;
+                        font-variant-numeric:tabular-nums; }
+.finale { max-width:260px; border:1px solid var(--bordo); border-radius:3px; }
+ol.catena { font-size:13px; padding-left:18px; }
+ol.catena code { font-family:ui-monospace,Consolas,monospace; font-size:11px; word-break:break-all; }
+table.cascata { font-size:11px; table-layout:fixed; }
+table.cascata th,table.cascata td { padding:2px 6px; border-bottom:none; }
+table.cascata tr:nth-child(even) td { background:#fafbfc; }
+table.cascata td.nome { font-family:ui-monospace,Consolas,monospace; overflow:hidden;
+                        text-overflow:ellipsis; white-space:nowrap; }
+table.cascata td.nome .terza { color:var(--tenue); }
+.linea { position:relative; height:10px; white-space:nowrap; overflow:hidden; }
+/* nowrap: le tre parti della barra sommano al 100% della cella, e il minimo
+   garantito al tratto puo' sforare di un decimo - senza, la riga andrebbe a capo */
+.linea .coda { display:inline-block; height:7px; background:#e5e7eb; vertical-align:middle; }
+.linea .tratto { display:inline-block; height:7px; background:#1f2328; vertical-align:middle;
+                 min-width:1px; border-radius:1px; }
+.linea .tratto.terza { background:#a16207; }
+.righello { position:relative; height:26px; font-size:9px; color:var(--tenue);
+            font-weight:400; text-transform:none; letter-spacing:0; }
+.righello span { position:absolute; top:0; white-space:nowrap;
+                 border-left:1px solid var(--bordo); padding-left:2px; }
+.righello span.giu { top:13px; }
+.righello span.destra { border-left:none; border-right:1px solid var(--bordo);
+                        padding-left:0; padding-right:2px; }
 footer { margin-top:44px; padding-top:14px; border-top:1px solid var(--bordo);
          font-size:12px; color:var(--tenue); }
 @media print {
@@ -72,6 +109,8 @@ footer { margin-top:44px; padding-top:14px; border-top:1px solid var(--bordo);
   h2 { break-before:page; }
   h2:first-of-type { break-before:avoid; }
   .problema { break-inside:avoid; }
+  .filmstrip, table.cascata { break-inside:avoid; }
+  details.lunga { display:none; }
 }
 """
 
@@ -329,6 +368,198 @@ def _trasversale(pagine: list) -> str:
             f"va data ai template con piu' traffico.</div>")
 
 
+
+# --------------------------------------------------------------------------- #
+#  Cio' che si vede del caricamento: fotogrammi, redirect, cascata delle
+#  richieste, numeri di riferimento. Tutto da una misurazione di laboratorio, e
+#  il report lo dichiara ogni volta: la metrica resta il campo (ADR-001).
+# --------------------------------------------------------------------------- #
+
+# Quante righe di cascata restano a vista. Oltre, la lista continua dentro un
+# `<details>`: su una pagina reale sono 126 richieste, e stamparle tutte
+# occuperebbe tre pagine di PDF per un dettaglio che si guarda a schermo.
+CASCATA_VISIBILI = 30
+
+LAB_IN_VETRINA = ("FCP", "SI", "TTI", "TTFB")
+
+
+def _durata(ms) -> str:
+    if ms is None:
+        return "n/d"
+    ms = float(ms)
+    if ms < 1000:
+        return f"{ms:.0f} ms"
+    return f"{ms / 1000:.1f} s".replace(".", ",")
+
+
+def _peso(byte) -> str:
+    byte = float(byte or 0)
+    if byte < 1024:
+        return f"{byte:.0f} B"
+    if byte < 1024 * 1024:
+        return f"{byte / 1024:.0f} KB"
+    return f"{byte / 1048576:.1f} MB".replace(".", ",")
+
+
+def _tessere(voci: list) -> str:
+    """Righe di numeri con la loro etichetta: la forma in cui questi valori si
+    leggono ovunque, da PageSpeed in giu'."""
+    if not voci:
+        return ""
+    celle = "".join(f'<div class="tessera"><span class="et">{_e(et)}</span>'
+                    f'<span class="val">{_e(val)}</span></div>' for et, val in voci)
+    return f'<div class="tessere">{celle}</div>'
+
+
+def _richieste(fatti: dict) -> list:
+    """Le richieste tornano oggetti dopo il giro dal JSON.
+
+    Le chiavi si filtrano sui campi della dataclass: un run salvato prima che
+    esistessero i tempi non deve far fallire la rigenerazione del report, e uno
+    salvato dopo un'aggiunta futura nemmeno.
+    """
+    campi = {f.name for f in fields(Richiesta)}
+    return [Richiesta(**{k: v for k, v in r.items() if k in campi})
+            for r in (fatti.get("richieste") or []) if isinstance(r, dict)]
+
+
+def _dettagli_pagina(fatti: dict, terze: dict) -> str:
+    """Peso, richieste e quanto ha impiegato quel caricamento a chiudersi."""
+    tempi = fatti.get("tempi_osservati") or {}
+    voci = [("richieste", str(terze.get("richieste_totali", 0))),
+            ("peso", _peso(terze.get("byte_totali", 0)))]
+    if tempi.get("Caricata"):
+        voci.append(("caricata in", _durata(tempi["Caricata"])))
+    if tempi.get("DOM pronto"):
+        voci.append(("DOM pronto", _durata(tempi["DOM pronto"])))
+    return _tessere(voci)
+
+
+def _metriche_lab(fatti: dict) -> str:
+    """Le quattro misure che completano il quadro e non hanno un pari sul campo.
+
+    Il TTFB va letto sapendo da dove arriva: Lighthouse gira dai server Google, e
+    su una pagina italiana riportava 10 ms contro i 403 ms misurati sugli utenti
+    reali. Quello vero sta nella tabella di campo.
+    """
+    lab = fatti.get("metriche_lab") or {}
+    voci = [(sigla, _durata(lab[sigla])) for sigla in LAB_IN_VETRINA if lab.get(sigla)]
+    if not voci:
+        return ""
+    return ("<h3>Altre misure di laboratorio</h3>" + _tessere(voci) +
+            '<p class="nota">Misurate da un data center Google su una rete simulata: '
+            "servono a confrontare due misurazioni fra loro, non a dire quanto aspetta "
+            "un utente. Il TTFB reale e&#39; quello della tabella di campo.</p>")
+
+
+def _categorie(fatti: dict) -> str:
+    """I punteggi di Lighthouse, dichiarati per quello che sono."""
+    categorie = fatti.get("categorie") or []
+    voci = [(c.get("titolo", ""), f"{c.get('punteggio')}")
+            for c in categorie if c.get("punteggio") is not None]
+    if len(voci) < 2:
+        return ""
+    return ("<h3>Punteggi Lighthouse</h3>" + _tessere(voci) +
+            '<p class="nota">Riferimento, non valutazione: sono i numeri che compaiono '
+            "aprendo pagespeed.web.dev, e variano fra due misurazioni identiche. "
+            "Accessibilita&#39;, best practice e SEO arrivano dalla stessa misurazione "
+            "e non sono state analizzate in questo documento.</p>")
+
+
+def _catena_redirect(fatti: dict) -> str:
+    salti = fatti.get("redirect") or []
+    if not salti:
+        return ""
+    perso = sum(float(s.get("ms") or 0) for s in salti)
+    righe = []
+    for s in salti:
+        speso = f" &middot; {_durata(s.get('ms'))}" if s.get("ms") else ""
+        righe.append(f'<li><strong>{_e(s.get("stato"))}</strong> '
+                     f'<code>{_e(s.get("da"))}</code> &rarr; '
+                     f'<code>{_e(s.get("a"))}</code>{speso}</li>')
+    return (f"<h3>Prima del documento</h3>"
+            f'<ol class="catena">{"".join(righe)}</ol>'
+            f'<p class="nota">{len(salti)} redirect prima di arrivare alla pagina, '
+            f"{_durata(perso)} spesi in laboratorio prima che il documento cominci ad "
+            f"arrivare. E&#39; tempo che precede qualunque intervento sulla pagina.</p>")
+
+
+def _filmstrip(fatti: dict) -> str:
+    fotogrammi = fatti.get("filmstrip") or []
+    if not fotogrammi:
+        return ""
+    figure = "".join(
+        f'<figure><img src="{_e(f.get("immagine"))}" alt="La pagina a '
+        f'{_durata(f.get("ms"))} dall&#39;inizio del caricamento">'
+        f'<figcaption>{_durata(f.get("ms"))}</figcaption></figure>'
+        for f in fotogrammi)
+    return ("<h3>Come si vede la pagina mentre carica</h3>"
+            f'<div class="filmstrip">{figure}</div>')
+
+
+def _riga_cascata(barra) -> str:
+    tag = "3P" if barra.terza_parte else "1P"
+    dettaglio = (f"{barra.url} - {barra.tipo} - {barra.protocollo} - "
+                 f"priorita {barra.priorita}")
+    coda = (f'<span class="coda" style="width:{barra.coda_pc:.2f}%"></span>'
+            if barra.coda_pc > 0.05 else "")
+    classe = "tratto terza" if barra.terza_parte else "tratto"
+    return (f'<tr><td class="nome" title="{_e(dettaglio)}">'
+            f'<span class="terza">{tag}</span> {_e(barra.nome)}</td>'
+            f'<td class="linea"><span style="display:inline-block;'
+            f'width:{barra.inizio_pc:.2f}%"></span>{coda}'
+            f'<span class="{classe}" style="width:{max(barra.durata_pc, 0.15):.2f}%"></span>'
+            f'</td><td class="num">{_e(_peso(barra.byte))}</td>'
+            f'<td class="num">{_e(_durata(barra.durata_ms))}</td></tr>')
+
+
+def _cascata(fatti: dict, url: str) -> str:
+    """La cascata delle richieste, nell'ordine in cui la pagina le ha chieste."""
+    disegno = cascata(_richieste(fatti), fatti.get("tempi_osservati") or {}, url)
+    if not disegno.barre:
+        return ""
+
+    # Le etichette si alternano su due righe e quelle oltre meta' scala si
+    # appendono a destra: cinque riferimenti su una riga sola si sovrappongono,
+    # e l'ultimo - che cade al 100% - uscirebbe dal grafico.
+    marchi = []
+    for i, r in enumerate(disegno.riferimenti):
+        classi = ["giu"] if i % 2 else []
+        if r.pc > 60:
+            classi.append("destra")
+            posa = f"right:{100 - r.pc:.2f}%"
+        else:
+            posa = f"left:{r.pc:.2f}%"
+        classe = f' class="{" ".join(classi)}"' if classi else ""
+        marchi.append(f'<span{classe} style="{posa}">{_e(r.etichetta)} '
+                      f'{_e(_durata(r.ms))}</span>')
+    righello = "".join(marchi)
+    testa = ('<colgroup><col style="width:30%"><col><col style="width:11%">'
+             '<col style="width:11%"></colgroup>'
+             f'<tr><th>richiesta</th><th><div class="righello">{righello}</div></th>'
+             f'<th class="num">peso</th><th class="num">in rete</th></tr>')
+    visibili = "".join(_riga_cascata(b) for b in disegno.barre[:CASCATA_VISIBILI])
+    resto = ""
+    nascoste = disegno.barre[CASCATA_VISIBILI:]
+    if nascoste:
+        righe = "".join(_riga_cascata(b) for b in nascoste)
+        resto = (f'<details class="lunga"><summary>le altre {len(nascoste)} richieste'
+                 f'</summary><table class="cascata">{testa}{righe}</table></details>')
+
+    elenco = "".join(
+        f"<li>{_e(b.nome)} &middot; {_e(_durata(b.durata_ms))} &middot; {_e(_peso(b.byte))}"
+        f"{' &middot; terza parte' if b.terza_parte else ''}</li>"
+        for b in piu_lente(disegno, 5))
+    return ("<h3>Cascata delle richieste</h3>"
+            f'<table class="cascata">{testa}{visibili}</table>{resto}'
+            f'<p class="nota">{disegno.quante} richieste su una scala di '
+            f"{_durata(disegno.scala_ms)}. I tempi sono quelli osservati dal trace, non "
+            "le metriche riportate da Lighthouse, che sono simulate su un&#39;altra "
+            "scala. La cascata dice in quale ordine la pagina si carica e cosa aspetta "
+            "cosa; quanto aspetta un utente vero lo dice il campo.</p>"
+            f"<h3>Le richieste piu&#39; lunghe in rete</h3><ul>{elenco}</ul>")
+
+
 def html_report(esecuzione: dict) -> str:
     pagine = esecuzione.get("pagine", [])
     sezioni = []
@@ -346,13 +577,18 @@ def html_report(esecuzione: dict) -> str:
             f'<p class="meta">{_e(p.get("misurazioni", 1))} misurazioni di laboratorio'
             f'{" &middot; " + _e(p["consenso"]) if p.get("consenso") else ""}</p>'
             f"{_tabella_campo(p.get('campo') or {})}"
+            f"{_filmstrip(fatti)}"
             f"{_fasi_lcp(fatti)}"
             f"<h3>Peso della pagina</h3>"
-            f"<p>{terze.get('byte_totali', 0) / 1024:.0f} KB su "
-            f"{terze.get('richieste_totali', 0)} richieste, di cui "
-            f"<strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB di terze parti "
+            f"{_dettagli_pagina(fatti, terze)}"
+            f"<p>Di {terze.get('byte_totali', 0) / 1024:.0f} KB complessivi, "
+            f"<strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB sono di terze parti "
             f"({quota * 100:.0f}%)</strong>.</p>"
             f"{_peso_per_tipo(p.get('peso_per_tipo') or {})}"
+            f"{_catena_redirect(fatti)}"
+            f"{_cascata(fatti, p['url'])}"
+            f"{_metriche_lab(fatti)}"
+            f"{_categorie(fatti)}"
             )
 
     vetrina = ", ".join(

@@ -87,6 +87,86 @@ def test_html_dichiara_quante_misurazioni(esecuzione):
     assert "misurazioni di laboratorio" in render.html_report(esecuzione)
 
 
+# --- cio' che si vede del caricamento --------------------------------------- #
+
+@pytest.fixture(scope="module")
+def con_redirect():
+    """Un run a un template dalla risposta con redirect e quattro categorie."""
+    fatti = extract.estrai(_carica("psi-bbc-redirect-categorie.json"),
+                           "http://bbc.com/", "PHONE", PROPRI)
+    riepilogo = thirdparty.riepiloga(fatti.richieste, URL, PROPRI)
+    esecuzione = {
+        "cliente": "Esempio", "sito": URL, "data": "2026-09-15", "form_factor": "PHONE",
+        "pagine": [{"template": "Home", "url": "http://bbc.com/", "fatti": fatti,
+                    "campo": _campo(), "terze_parti": riepilogo, "problemi": [],
+                    "misurazioni": 1, "concordi": 1, "consenso": ""}],
+    }
+    from speed.cli import _serializza
+    return json.loads(json.dumps(esecuzione, default=_serializza, ensure_ascii=False))
+
+
+def test_il_filmstrip_resta_self_contained(esecuzione):
+    """I fotogrammi arrivano gia' come data URI: il report non punta a file."""
+    h = render.html_report(esecuzione)
+    assert "Come si vede la pagina mentre carica" in h
+    assert 'src="data:image/jpeg;base64,' in h
+    assert "<img src=\"http" not in h
+
+
+def test_la_cascata_ha_una_barra_per_richiesta(esecuzione):
+    h = render.html_report(esecuzione)
+    assert "Cascata delle richieste" in h
+    fatti = esecuzione["pagine"][0]["fatti"]
+    assert h.count('class="linea"') == len(fatti["richieste"])
+
+
+def test_nessuna_barra_della_cascata_esce_dal_grafico(esecuzione):
+    """Le percentuali finiscono in uno `style`, dove un errore non si vede:
+    la somma delle tre parti di ogni barra deve stare dentro la cella."""
+    import re
+    h = render.html_report(esecuzione)
+    for cella in re.findall(r'<td class="linea">(.*?)</td>', h):
+        larghezze = [float(x) for x in re.findall(r"width:([0-9.]+)%", cella)]
+        assert sum(larghezze) <= 100.2, cella[:120]
+
+
+def test_la_cascata_dichiara_che_i_tempi_sono_osservati(esecuzione):
+    """Sono un'altra scala rispetto alle metriche riportate da Lighthouse.
+    Senza la riga, il lettore confronta numeri che non si confrontano."""
+    h = render.html_report(esecuzione).replace("\n", " ")
+    assert "osservati dal trace" in h
+    assert "simulate" in h
+
+
+def test_le_misure_di_laboratorio_dicono_da_dove_arriva_il_ttfb(esecuzione):
+    h = render.html_report(esecuzione).replace("\n", " ")
+    assert "Altre misure di laboratorio" in h
+    assert "data center Google" in h
+
+
+def test_la_catena_di_redirect_compare_col_tempo_perso(con_redirect):
+    h = render.html_report(con_redirect)
+    assert "Prima del documento" in h
+    assert "http://bbc.com/" in h and "https://www.bbc.com/" in h
+    assert "301" in h
+
+
+def test_senza_redirect_la_sezione_non_compare(esecuzione):
+    assert "Prima del documento" not in render.html_report(esecuzione)
+
+
+def test_i_punteggi_delle_altre_categorie_sono_dichiarati_riferimento(con_redirect):
+    h = render.html_report(con_redirect).replace("\n", " ")
+    assert "Punteggi Lighthouse" in h
+    assert "Accessibilit" in h and "Best practice" in h
+    assert "Riferimento, non valutazione" in h
+
+
+def test_con_la_sola_performance_i_punteggi_non_compaiono(esecuzione):
+    """Un riquadro con un numero solo non e' un confronto: non si stampa."""
+    assert "Punteggi Lighthouse" not in render.html_report(esecuzione)
+
+
 # --- DOCX ------------------------------------------------------------------ #
 
 def _testo_docx(percorso):
