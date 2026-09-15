@@ -55,8 +55,8 @@ def test_le_chiamate_a_pagespeed_sono_due_comunque_si_giri():
     costano lo stesso. Contare giri PER tentativi obbligava a stringere il
     timeout a 55 s, e 55 s non bastano a una home vera."""
     budget = web.BUDGET
-    assert budget.tentativi(2) == 1
-    assert budget.tentativi(1) == 2
+    assert budget.chiamate_per_giro(2) == 1
+    assert budget.chiamate_per_giro(1) == 2
     assert budget.peggior_caso(1) < web.MAX_DURATA_VERCEL
     assert budget.peggior_caso(2) < web.MAX_DURATA_VERCEL
 
@@ -76,6 +76,13 @@ def test_i_due_rami_costano_quasi_uguale():
     budget = web.BUDGET
     differenza = budget.peggior_caso(1) - budget.peggior_caso(2)
     assert abs(differenza) <= budget.psi_backoff, differenza
+
+
+def test_la_scadenza_lascia_il_margine_sotto_il_tetto():
+    """La scadenza e' un tetto vero, non una somma di previsioni: sotto ci
+    stanno l'avvio a freddo, la lettura di 1,1 MB di JSON e l'estrazione."""
+    assert web.BUDGET.margine >= 30
+    assert web.MAX_DURATA_VERCEL - web.BUDGET.margine > web.BUDGET.psi_timeout * 2
 
 
 # --- i parametri che arrivano davvero ai client ------------------------------ #
@@ -106,7 +113,7 @@ def test_il_percorso_web_passa_il_suo_budget_ai_client(monkeypatch):
     visto = _analisi_finta(monkeypatch)
     budget = web.BUDGET
     assert visto["psi"]["timeout"] == budget.psi_timeout
-    assert visto["psi"]["tentativi"] == budget.tentativi(visto["psi"]["ripetizioni"])
+    assert visto["psi"]["chiamate"] == budget.chiamate_per_giro(visto["psi"]["ripetizioni"])
     assert visto["psi"]["attesa_iniziale"] == budget.psi_backoff
     assert visto["psi"]["attesa_fra_giri"] == budget.psi_attesa_fra_giri
     assert visto["crux"]["timeout_record"] == budget.crux_timeout_record
@@ -119,7 +126,7 @@ def test_dai_parametri_passati_il_conto_torna_sotto_il_tetto(monkeypatch):
     li' che il tempo si consuma davvero."""
     visto = _analisi_finta(monkeypatch)
     effettivo = web.Budget(
-        psi_chiamate=visto["psi"]["tentativi"] * visto["psi"]["ripetizioni"],
+        psi_chiamate=visto["psi"]["chiamate"] * visto["psi"]["ripetizioni"],
         psi_timeout=visto["psi"]["timeout"],
         psi_backoff=visto["psi"]["attesa_iniziale"],
         psi_attesa_fra_giri=visto["psi"]["attesa_fra_giri"],
@@ -131,6 +138,27 @@ def test_dai_parametri_passati_il_conto_torna_sotto_il_tetto(monkeypatch):
         crux_backoff=visto["crux"]["attesa_iniziale"],
     )
     assert effettivo.peggior_caso() < web.MAX_DURATA_VERCEL
+
+
+def test_il_percorso_web_passa_una_scadenza_vera(monkeypatch):
+    """Senza, dopo uno scadere la riprova puo' sforare il tetto: la piattaforma
+    uccide la funzione e l'utente perde l'errore con rimedio."""
+    visto = _analisi_finta(monkeypatch)
+    secondi = visto["psi"]["secondi"]
+    assert secondi is not None
+    assert secondi <= web.MAX_DURATA_VERCEL - web.BUDGET.margine
+    assert secondi > web.BUDGET.psi_timeout, "deve bastare per piu' di una chiamata"
+
+
+def test_i_parametri_del_web_entrano_nella_firma_vera(monkeypatch):
+    """I test sostituiscono `analizza_molte` con una finta che accetta **kwargs:
+    un nome cambiato da una parte e non dall'altra passerebbe inosservato fino
+    alla prima richiesta vera. Qui si prova a legarli alla firma autentica."""
+    import inspect
+
+    visto = _analisi_finta(monkeypatch)
+    firma = inspect.signature(psi.analizza_molte)
+    firma.bind("chiave", ["https://x.it/"], "mobile", **visto["psi"])
 
 
 def test_il_ramo_costoso_e_quello_a_due_giri(monkeypatch):

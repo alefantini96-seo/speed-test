@@ -22,7 +22,7 @@ import httpx
 
 from ..core.extract import CATEGORIE
 from ..errori import da_attesa_scaduta, da_rete, da_risposta_google
-from .google import richiedi
+from .google import CODICI_RIPROVABILI, richiedi
 
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
@@ -30,12 +30,36 @@ ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 # puo' permettersi di aspettare, il percorso web no e passa il suo (vedi web.py).
 TIMEOUT = 120.0
 
+# Sotto questa soglia non si tenta nemmeno: la misurazione piu' rapida mai vista
+# su una pagina vera e' stata 24,3 s, quindi con meno tempo di cosi' si
+# spenderebbe l'attesa per un fallimento sicuro.
+MINIMO_UTILE = 30.0
+
 
 async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
                    strategy: str = "mobile", locale: str = "it",
-                   tentativi: int = 3, attesa_iniziale: float = 2.0,
-                   timeout: float = TIMEOUT, categorie=CATEGORIE) -> dict:
-    """Una misurazione di laboratorio, con riprova sui codici transitori.
+                   chiamate: int = 3, attesa_iniziale: float = 2.0,
+                   timeout: float = TIMEOUT, categorie=CATEGORIE,
+                   scadenza: float | None = None) -> dict:
+    """Una misurazione di laboratorio, con al massimo `chiamate` tentativi.
+
+    Il budget e' sulle **chiamate**, non sul motivo per cui una e' andata male:
+    una risposta transitoria (500, 503) e una scadenza costano uguale e pescano
+    dallo stesso gruzzolo. Contarle separatamente faceva sprecare il tentativo
+    piu' utile — dopo uno scadere non si riprovava affatto, e la pagina falliva
+    con meta' del tempo ancora disponibile.
+
+    **Riprovare dopo uno scadere e' un secondo sorteggio, non il recupero del
+    primo.** Misurato il 15/09/2026: abbandonata una chiamata a 15 s e richiesta
+    la stessa URL dopo 45 e dopo 90 secondi, la risposta e' arrivata in 41,0 e
+    32,5 s, con una marca temporale nuova. PSI non tiene il lavoro che nessuno ha
+    ritirato. Il sorteggio pero' conviene lo stesso: su nove misurazioni di tre
+    URL la mediana era 33,9 s e nessuna oltre i 51, quindi una lenta oltre ogni
+    misura e' l'eccezione e la seconda pesca quasi sempre meglio.
+
+    `scadenza` e' il tempo del ciclo di eventi oltre il quale non si comincia una
+    chiamata nuova: chi gira in una funzione serverless ha un tetto di durata, e
+    una riprova che sfora fa uccidere la funzione invece di consegnare l'errore.
 
     Le categorie chieste sono quattro. Accessibilita', best practice e SEO non
     entrano in nessuna valutazione — valgono quanto il punteggio prestazioni,
@@ -48,42 +72,66 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
     costo delle categorie. Cresce invece il corpo della risposta, da 874 KB a
     1,1 MB, che e' traffico del server e non del browser.
     """
-    # Le eccezioni di rete di httpx vanno tradotte QUI, dove si sa quanto si e'
-    # aspettato e su quale URL. Piu' in la' restano quello che sono: `ReadTimeout`
-    # ha il messaggio vuoto, e un errore vuoto arrivava al browser come
-    # "Errore 502" - uno status, nessuna causa, nessun rimedio.
-    try:
-        risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
-            "url": url,
-            "strategy": strategy,
-            "category": list(categorie),
-            "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
-            "key": api_key,
-        }, timeout=timeout), tentativi, attesa_iniziale)
-    except httpx.TimeoutException:
-        raise da_attesa_scaduta("PageSpeed Insights", timeout, url) from None
-    except httpx.HTTPError as guasto:
-        raise da_rete("PageSpeed Insights", guasto, url) from None
-    if dati is not None and "error" in dati:
-        err = dati["error"]
-        raise da_risposta_google("PageSpeed Insights", err.get("code"),
-                                 err.get("message", ""), url)
-    if risposta.status_code >= 400:
-        raise da_risposta_google("PageSpeed Insights", risposta.status_code,
-                                 (risposta.text or "")[:200], url)
-    if dati is None:
-        raise da_risposta_google(
-            "PageSpeed Insights", risposta.status_code,
-            "la risposta non e' in formato JSON", url)
-    return dati
+    orologio = asyncio.get_event_loop().time
+    scaduta = None
+
+    for numero in range(1, max(1, chiamate) + 1):
+        quanto = timeout
+        if scadenza is not None:
+            quanto = min(timeout, scadenza - orologio())
+            if quanto < MINIMO_UTILE:
+                # La prima si tenta comunque, col tempo che c'e': l'errore dira'
+                # quanto si e' aspettato davvero. E' la riprova che non comincia,
+                # perche' sforerebbe il tetto e la funzione verrebbe uccisa dalla
+                # piattaforma prima di consegnare l'errore con il rimedio.
+                if numero > 1:
+                    break
+                quanto = max(quanto, 1.0)
+
+        try:
+            risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
+                "url": url,
+                "strategy": strategy,
+                "category": list(categorie),
+                "locale": locale,   # titoli, descrizioni e checklist gia' in italiano
+                "key": api_key,
+            }, timeout=quanto), 1, 0.0)
+        except httpx.TimeoutException:
+            scaduta = quanto
+            continue          # un secondo sorteggio, se il budget lo paga ancora
+        except httpx.HTTPError as guasto:
+            # La rete caduta non e' la pagina lenta, e non si riprova: sarebbe lo
+            # stesso guasto un istante dopo.
+            raise da_rete("PageSpeed Insights", guasto, url) from None
+
+        codice = risposta.status_code
+        messaggio = ""
+        if dati is not None and "error" in dati:
+            codice = dati["error"].get("code", codice)
+            messaggio = dati["error"].get("message", "")
+        elif codice < 400 and dati is not None:
+            return dati
+        elif codice < 400:
+            messaggio = "la risposta non e' in formato JSON"
+
+        if codice in CODICI_RIPROVABILI and numero < chiamate:
+            await asyncio.sleep(attesa_iniziale * 2 ** (numero - 1))
+            continue
+        raise da_risposta_google("PageSpeed Insights", codice,
+                                 messaggio or (risposta.text or "")[:200], url)
+
+    if scaduta is not None:
+        raise da_attesa_scaduta("PageSpeed Insights", scaduta, url)
+    raise da_attesa_scaduta("PageSpeed Insights", timeout, url)
 
 
 async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
                          parallelismo: int = 4, locale: str = "it",
                          ripetizioni: int = 3, attesa_fra_giri: float = 90.0,
-                         avviso=None, tentativi: int = 3,
+                         avviso=None, chiamate: int = 3,
                          attesa_iniziale: float = 2.0,
-                         timeout: float = TIMEOUT, categorie=CATEGORIE) -> dict:
+                         timeout: float = TIMEOUT, categorie=CATEGORIE,
+                         secondi: float | None = None) -> dict:
     """Ritorna {url: [risposta | Exception, ...]}.
 
     Le ripetizioni servono perche' la ripartizione in fasi dell'LCP e' instabile
@@ -98,12 +146,17 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
     Il parallelismo resta basso: la quota non e' il vincolo (240 richieste al
     minuto), lo e' la pazienza di PSI.
 
-    `tentativi`, `attesa_iniziale` e `timeout` valgono per la singola chiamata e
+    `chiamate`, `attesa_iniziale` e `timeout` valgono per la singola misurazione e
     li decide il chiamante: chi gira dentro una funzione serverless ha un tetto di
     durata e deve stare sotto (vedi `web.Budget`), la CLI no.
+
+    `secondi` e' quanto tempo c'e' in tutto: da li' esce la scadenza che le
+    chiamate rispettano, e un giro nuovo non comincia se non ci sta.
     """
     sem = asyncio.Semaphore(parallelismo)
     risultati: dict = {u: [] for u in urls}
+    orologio = asyncio.get_event_loop().time
+    scadenza = orologio() + secondi if secondi is not None else None
 
     async with httpx.AsyncClient() as client:
         async def uno(url: str):
@@ -111,11 +164,10 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
                 try:
                     risultati[url].append(await analizza(
                         client, api_key, url, strategy, locale,
-                        tentativi, attesa_iniziale, timeout, categorie))
+                        chiamate, attesa_iniziale, timeout, categorie, scadenza))
                 except Exception as exc:   # la singola pagina non deve fermare il run
                     risultati[url].append(exc)
 
-        orologio = asyncio.get_event_loop().time
         for giro in range(ripetizioni):
             inizio = orologio()
             if avviso:
@@ -123,6 +175,11 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
             await asyncio.gather(*(uno(u) for u in urls))
 
             if giro == ripetizioni - 1:
+                break
+            # Un giro in piu' serve al consenso sulle fasi LCP, ma vale meno di
+            # una misurazione consegnata: se non ci sta nella scadenza si tiene
+            # quello che c'e' e il report dichiara "una misurazione".
+            if scadenza is not None and orologio() + MINIMO_UTILE > scadenza:
                 break
             residuo = attesa_fra_giri - (orologio() - inizio)
             if residuo > 0:

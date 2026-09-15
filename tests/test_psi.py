@@ -28,16 +28,25 @@ class RispostaFinta:
 
 
 class ClienteFinto:
-    """Restituisce le risposte in sequenza e conta le chiamate."""
+    """Restituisce le risposte in sequenza e conta le chiamate.
+
+    Una risposta che e' un'eccezione viene sollevata invece che restituita: e'
+    cosi' che si provano le cadute di rete e le scadenze.
+    """
 
     def __init__(self, *risposte):
         self.risposte = list(risposte)
         self.chiamate = 0
+        self.attese = []
 
     async def get(self, *_a, **kwargs):
         self.chiamate += 1
         self.parametri = kwargs.get("params", {})
-        return self.risposte[min(self.chiamate - 1, len(self.risposte) - 1)]
+        self.attese.append(kwargs.get("timeout"))
+        esito = self.risposte[min(self.chiamate - 1, len(self.risposte) - 1)]
+        if isinstance(esito, Exception):
+            raise esito
+        return esito
 
 
 def _analizza(cliente, **kwargs):
@@ -172,3 +181,64 @@ def test_nessun_errore_di_rete_resta_senza_messaggio():
             asyncio.run(psi.analizza(ClienteCheCade(eccezione), "chiave", "https://x.it/"))
         assert caduta.value.messaggio.strip()
         assert caduta.value.rimedio.strip()
+
+# --- riprovare dopo uno scadere --------------------------------------------- #
+#
+# Il caso visto in produzione: una misurazione scaduta a 120 s faceva fallire la
+# pagina con meta' del budget ancora in mano. Il gruzzolo e' sulle CHIAMATE, e
+# una scadenza deve poterne spendere una come la spenderebbe un 503.
+#
+# Non e' il recupero della prima: misurato il 15/09/2026, abbandonata una
+# chiamata a 15 s e richiesta la stessa URL dopo 45 e dopo 90 secondi, la
+# risposta e' arrivata in 41,0 e 32,5 s con una marca temporale nuova. PSI non
+# tiene il lavoro che nessuno ha ritirato: e' un secondo sorteggio, e conviene
+# perche' la coda lenta e' l'eccezione.
+
+def test_dopo_uno_scadere_si_riprova():
+    cliente = ClienteFinto(httpx.ReadTimeout(""), RispostaFinta(200, OK))
+    assert _analizza(cliente, chiamate=2) == OK
+    assert cliente.chiamate == 2
+
+
+def test_con_una_chiamata_sola_non_si_riprova():
+    """Chi ha comprato una chiamata ne ha una: la seconda la deve pagare il
+    budget, non la buona volonta' del client."""
+    cliente = ClienteFinto(httpx.ReadTimeout(""), RispostaFinta(200, OK))
+    with pytest.raises(ErroreSpeed):
+        _analizza(cliente, chiamate=1)
+    assert cliente.chiamate == 1
+
+
+def test_due_scadenze_di_fila_restano_un_errore_con_rimedio():
+    cliente = ClienteFinto(httpx.ReadTimeout(""), httpx.ReadTimeout(""))
+    with pytest.raises(ErroreSpeed) as caduta:
+        _analizza(cliente, chiamate=2)
+    assert cliente.chiamate == 2
+    assert caduta.value.rimedio
+
+
+def test_la_riprova_non_comincia_se_il_tempo_non_basta():
+    """Una chiamata che sfora il tetto fa uccidere la funzione dalla piattaforma,
+    e l'utente perde l'errore con rimedio invece di riceverlo."""
+    cliente = ClienteFinto(httpx.ReadTimeout(""), RispostaFinta(200, OK))
+    fra_poco = asyncio.new_event_loop().time() + 5
+    with pytest.raises(ErroreSpeed):
+        asyncio.run(psi.analizza(cliente, "chiave", "https://x.it/",
+                                 chiamate=3, attesa_iniziale=0, scadenza=fra_poco))
+    assert cliente.chiamate == 1, "la seconda non parte: non ci sarebbe stata"
+
+
+def test_la_scadenza_accorcia_l_attesa_dell_ultima_chiamata():
+    """Meglio una chiamata piu' corta che una che sfora: il tempo che resta e'
+    quello, e chiederne di piu' non lo fa comparire."""
+    cliente = ClienteFinto(RispostaFinta(200, OK))
+    fra_poco = asyncio.new_event_loop().time() + 40
+    asyncio.run(psi.analizza(cliente, "chiave", "https://x.it/", timeout=120.0,
+                             attesa_iniziale=0, scadenza=fra_poco))
+    assert cliente.attese[0] <= 40
+
+
+def test_senza_scadenza_la_cli_tiene_il_suo_timeout():
+    cliente = ClienteFinto(RispostaFinta(200, OK))
+    asyncio.run(psi.analizza(cliente, "chiave", "https://x.it/", timeout=120.0))
+    assert cliente.attese[0] == 120.0

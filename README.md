@@ -51,9 +51,13 @@ più d'una, riporta la mediana e dichiara quante concordano. Se non concordano l
 invece di scegliere.
 
 Il numero di misurazioni è deciso dal tool: **una** se le fasi arrivano dal campo, **tre**
-altrimenti. `--ripetizioni` lo forza a mano. Attenzione: PSI serve dalla cache le chiamate
-ravvicinate — tre risposte identiche non sono tre misurazioni, e il tool le deduplica per
-`analysisUTCTimestamp` invece di contarle.
+altrimenti. `--ripetizioni` lo forza a mano. Attenzione: PSI **a volte** serve dalla cache
+le chiamate ravvicinate, e due risposte identiche non sono due misurazioni. Non è una
+regola su cui contare in nessuna delle due direzioni — misurato il 15/09/2026 sulla stessa
+URL: una chiamata fatta subito dopo una riuscita ha prodotto una misurazione **nuova**, con
+marca temporale diversa, mentre in un'altra sessione era tornata in 0,2 s con la stessa
+marca. Per questo il tool deduplica per `analysisUTCTimestamp` invece di contare le
+risposte: la protezione serve quando la cache c'è, e non costa niente quando non c'è.
 
 L'elemento LCP e la checklist di scopribilità sono invece stabili in ogni caso: sono
 proprietà dell'HTML, non della rete.
@@ -144,6 +148,26 @@ tetto della piattaforma — e le eccezioni di rete vengono tradotte in `errori.p
 si sa quanto si è aspettato e su quale URL. Il rimedio cambia col servizio: PageSpeed
 **misura** la pagina e una pagina pesante può metterci troppo, CrUX **legge** dati già
 raccolti e se non risponde è la rete.
+
+**Dopo uno scadere si riprova, se il budget lo paga ancora.** Il gruzzolo è sulle
+*chiamate* e non sul motivo per cui una è andata male: una risposta transitoria (500,
+503) e una scadenza costano uguale. Contarle separatamente faceva sprecare il tentativo
+più utile — una misurazione scaduta a 120 secondi faceva fallire la pagina con metà del
+budget ancora in mano, ed è esattamente il caso visto in produzione su `www.pluxee.it/`.
+
+Riprovare **non recupera** la prima misurazione: è un secondo sorteggio. Misurato il
+15/09/2026, abbandonata una chiamata a 15 secondi e richiesta la stessa URL dopo 45 e
+dopo 90: le risposte sono arrivate in 41,0 e 32,5 secondi, con marca temporale nuova.
+PSI non tiene il lavoro che nessuno ha ritirato. Il sorteggio però conviene, perché la
+coda lenta è l'eccezione: su nove misurazioni la mediana era 33,9 s e nessuna oltre i 51.
+
+La riprova non può però sforare il tetto, o la funzione viene uccisa dalla piattaforma
+prima di consegnare l'errore col rimedio. Per questo il percorso web passa ai client una
+**scadenza vera** — `MAX_DURATA_VERCEL` meno il margine, meno quello che il campo ha già
+consumato — e non una somma di timeout previsti: sotto i 30 secondi residui una chiamata
+nuova non comincia, perché la misurazione più rapida mai vista su una pagina vera è stata
+24,3 secondi. Per lo stesso motivo un secondo giro non parte se non ci sta: serve al
+consenso sulle fasi LCP, che vale meno di una misurazione consegnata.
 
 ```
 app.py               applicazione WSGI: instrada tutto, nessuna dipendenza

@@ -75,6 +75,10 @@ class Budget:
     """
     psi_chiamate: int = 2
     psi_timeout: float = 120.0
+    # Quanto si lascia libero sotto il tetto della piattaforma: avvio a freddo,
+    # rete, lettura del JSON (1,1 MB), estrazione e serializzazione della
+    # risposta. E' anche il margine che la scadenza passata ai client rispetta.
+    margine: float = 40.0
     psi_backoff: float = 2.0
     psi_attesa_fra_giri: float = 45.0
     psi_giri_massimi: int = 2
@@ -89,15 +93,20 @@ class Budget:
         """Le attese fra un tentativo e l'altro: iniziale, poi il doppio, ecc."""
         return iniziale * (2 ** (tentativi - 1) - 1) if tentativi > 1 else 0.0
 
-    def tentativi(self, giri: int = 1) -> int:
-        """Quanti tentativi dentro un giro, sapendo quanti giri si faranno."""
+    def chiamate_per_giro(self, giri: int = 1) -> int:
+        """Quante chiamate a PSI dentro un giro, sapendo quanti giri si faranno.
+
+        Il gruzzolo e' unico e non distingue il motivo: una risposta transitoria
+        e una scadenza costano uguale. E' il cambio che ha reso possibile
+        riprovare dopo uno scadere senza chiedere tempo in piu'.
+        """
         return max(1, self.psi_chiamate // max(1, giri))
 
     def giro_psi(self, giri: int = 1) -> float:
         """Il caso peggiore di UN giro, quando i giri in tutto saranno `giri`."""
-        tentativi = self.tentativi(giri)
-        return (tentativi * self.psi_timeout
-                + self._backoff_totale(tentativi, self.psi_backoff))
+        chiamate = self.chiamate_per_giro(giri)
+        return (chiamate * self.psi_timeout
+                + self._backoff_totale(chiamate, self.psi_backoff))
 
     @property
     def campo(self) -> float:
@@ -266,6 +275,9 @@ async def analizza_una(api_key: str, url: str, form_factor: str,
     superava il tetto di durata della piattaforma e l'utente vedeva un 504
     anonimo al posto dell'errore con rimedio.
     """
+    orologio = asyncio.get_event_loop().time
+    inizio = orologio()
+
     async with httpx.AsyncClient() as client:
         voce_campo = await crux.raccogli(
             client, api_key, url, form_factor,
@@ -280,12 +292,17 @@ async def analizza_una(api_key: str, url: str, form_factor: str,
     metriche = voce_campo.get("metriche") or {}
     ripetizioni = 1 if fasi_dal_campo(metriche) else budget.psi_giri_massimi
 
+    # Quanto resta davvero, non quanto era previsto: il campo ha gia' consumato
+    # la sua parte, e una riprova che sfora il tetto fa uccidere la funzione
+    # dalla piattaforma invece di consegnare l'errore con il rimedio.
     strategy = "desktop" if form_factor == "DESKTOP" else "mobile"
     risposte = await psi.analizza_molte(
         api_key, [url], strategy, ripetizioni=ripetizioni,
         attesa_fra_giri=budget.psi_attesa_fra_giri,
-        tentativi=budget.tentativi(ripetizioni), attesa_iniziale=budget.psi_backoff,
-        timeout=budget.psi_timeout)
+        chiamate=budget.chiamate_per_giro(ripetizioni),
+        attesa_iniziale=budget.psi_backoff,
+        timeout=budget.psi_timeout,
+        secondi=MAX_DURATA_VERCEL - budget.margine - (orologio() - inizio))
     riuscite = [r for r in risposte[url] if not isinstance(r, Exception)]
     if not riuscite:
         fallita = next((r for r in risposte[url] if isinstance(r, Exception)), None)
