@@ -34,6 +34,28 @@ class Richiesta:
     stato: int = 0        # statusCode: 206 su piu' richieste dello stesso file dice
                           # che una risorsa e' servita a pezzi, ed e' un fatto che
                           # nessun audit riporta
+    # I tempi sono millisecondi dall'inizio della navigazione, come li da'
+    # `network-requests`. Servono alla cascata: senza, una richiesta si sa quanto
+    # pesa ma non quando e' partita, e il peso da solo non dice cosa sta in coda.
+    chiesta: float = 0.0     # rendererStartTime: quando la pagina l'ha chiesta
+    partita: float = 0.0     # networkRequestTime: quando e' uscita in rete
+    finita: float = 0.0      # networkEndTime
+    protocollo: str = ""
+    priorita: str = ""
+    cache: str = ""          # "none" quando e' stata scaricata davvero
+    mime: str = ""
+    byte_decompressi: int = 0
+    completa: bool = True    # finished: false = la misurazione si e' chiusa prima
+
+    @property
+    def durata(self) -> float:
+        """Quanto e' durata in rete."""
+        return max(0.0, self.finita - self.partita)
+
+    @property
+    def coda(self) -> float:
+        """Quanto e' rimasta ferma fra la richiesta della pagina e la partenza."""
+        return max(0.0, self.partita - self.chiesta)
 
 
 @dataclass
@@ -54,6 +76,11 @@ class FattiPagina:
     metriche_lab: dict = field(default_factory=dict)
     campo_psi: dict = field(default_factory=dict)
     campo_psi_origin_fallback: bool = False
+    tempi_osservati: dict = field(default_factory=dict)
+    redirect: list = field(default_factory=list)
+    filmstrip: list = field(default_factory=list)
+    screenshot: "Fotogramma | None" = None
+    categorie: list = field(default_factory=list)
 
     @property
     def lcp_fase_dominante(self):
@@ -588,13 +615,33 @@ def ammesso(aid: str, score, risparmi: dict, ha_contenuto: bool) -> bool:
     return bool(risparmi)         # audit senza esito: vale il risparmio
 
 
+def audit_di_performance(psi: dict) -> set:
+    """Gli id degli audit che Lighthouse conta dentro la categoria Prestazioni.
+
+    Serve da quando la chiamata chiede anche accessibilita', best practice e SEO:
+    quelle tre portano nello stesso dizionario `audits` un centinaio di voci in
+    piu' — 47 audit contro 153, misurato su una risposta reale — e senza filtro
+    un contrasto di colore insufficiente finirebbe fra gli interventi di
+    velocita'. Le altre categorie si leggono solo come punteggio.
+
+    Sulle risposte con la sola performance il filtro non toglie niente: i 14
+    interventi del fixture storico stanno tutti dentro `auditRefs`.
+    """
+    refs = (psi.get("lighthouseResult", {}).get("categories", {})
+            .get("performance", {}).get("auditRefs") or [])
+    return {r.get("id") for r in refs if isinstance(r, dict) and r.get("id")}
+
+
 def estrai_opportunita(psi: dict, dominio_sito: str = "", domini_propri=()) -> list:
     """Audit da portare nel report, con le risorse, i nodi e le voci che li causano."""
     from .thirdparty import _propri, e_prima_parte   # import locale: evita il ciclo
 
     propri = _propri(dominio_sito, domini_propri) if dominio_sito else set()
+    di_performance = audit_di_performance(psi)
     out = []
     for aid, audit in _audits(psi).items():
+        if di_performance and aid not in di_performance:
+            continue
         risparmi = {k: float(v) for k, v in (audit.get("metricSavings") or {}).items()
                     if isinstance(v, (int, float)) and v > 0}
 
@@ -660,8 +707,151 @@ def estrai_richieste(psi: dict) -> list:
             tipo=str(r.get("resourceType") or "?"),
             entita=str(entita or ""),
             stato=int(r.get("statusCode") or 0),
+            chiesta=float(r.get("rendererStartTime") or 0.0),
+            partita=float(r.get("networkRequestTime") or 0.0),
+            finita=float(r.get("networkEndTime") or 0.0),
+            protocollo=str(r.get("protocol") or ""),
+            priorita=str(r.get("priority") or ""),
+            cache=str(r.get("cache") or ""),
+            mime=str(r.get("mimeType") or ""),
+            byte_decompressi=int(r.get("resourceSize") or 0),
+            completa=bool(r.get("finished", True)),
         ))
     return out
+
+
+# --------------------------------------------------------------------------- #
+#  Cio' che il JSON di PSI porta gia' e che il tool non leggeva: i tempi
+#  osservati, la catena di redirect, i fotogrammi del caricamento, le categorie.
+#  Nessuna chiamata in piu': sono tutti dentro la stessa risposta.
+# --------------------------------------------------------------------------- #
+
+# I tempi che il trace ha OSSERVATO, in ordine di comparsa. Sono la scala su cui
+# si disegna la cascata, e i soli confrontabili con i tempi delle richieste:
+# le metriche che Lighthouse riporta (`metriche_lab`) sono invece simulate con
+# throttling e vivono su un'altra scala — lo stesso scarto che il README dichiara
+# per le fasi dell'LCP. Mescolarle disegnerebbe un LCP dopo l'ultima richiesta.
+TEMPI_OSSERVATI = {
+    "observedFirstContentfulPaint": "FCP osservato",
+    "observedLargestContentfulPaint": "LCP osservato",
+    "observedDomContentLoaded": "DOM pronto",
+    "observedLoad": "Caricata",
+    "observedLastVisualChange": "Ultimo cambio visivo",
+}
+
+
+def estrai_tempi_osservati(psi: dict) -> dict:
+    """{etichetta: ms} dai tempi che il trace ha osservato durante il caricamento.
+
+    Non sono Core Web Vitals e non si confrontano col campo: sono quanto ha
+    impiegato quel singolo caricamento di laboratorio. Servono a dire "caricata
+    in X", che e' la domanda che un cliente fa guardando la pagina, e a mettere
+    i riferimenti sulla cascata. Vanno dichiarati come laboratorio (ADR-001).
+    """
+    items = _audits(psi).get("metrics", {}).get("details", {}).get("items") or []
+    primo = items[0] if items and isinstance(items[0], dict) else {}
+    return {etichetta: float(primo[chiave])
+            for chiave, etichetta in TEMPI_OSSERVATI.items()
+            if isinstance(primo.get(chiave), (int, float))}
+
+
+@dataclass
+class Salto:
+    """Un passaggio della catena di redirect."""
+    da: str
+    a: str
+    stato: int = 0
+    ms: float = 0.0
+
+
+def estrai_redirect(psi: dict) -> list:
+    """La catena di redirect del documento, salto per salto.
+
+    Le due meta' del fatto stanno in due audit diversi: `redirects` elenca gli
+    URL attraversati con i millisecondi persi su ciascuno, mentre lo stato HTTP
+    sta in `network-requests`, dove i 3xx compaiono senza `resourceType`. Si
+    incrociano sull'URL.
+
+    Verificato su una risposta reale (`fixtures/psi-bbc-redirect-categorie.json`):
+    tre tappe, due salti 301, 1.110 ms persi in tutto.
+    """
+    tappe = _audits(psi).get("redirects", {}).get("details", {}).get("items") or []
+    tappe = [t for t in tappe if isinstance(t, dict) and t.get("url")]
+    if len(tappe) < 2:
+        return []
+    stati = {}
+    for r in _audits(psi).get("network-requests", {}).get("details", {}).get("items") or []:
+        if isinstance(r, dict) and r.get("url") not in stati:
+            stati[r.get("url")] = int(r.get("statusCode") or 0)
+    return [Salto(da=prima["url"], a=dopo["url"], stato=stati.get(prima["url"], 0),
+                  ms=float(prima.get("wastedMs") or 0.0))
+            for prima, dopo in zip(tappe, tappe[1:])]
+
+
+@dataclass
+class Fotogramma:
+    ms: float
+    immagine: str        # data URI jpeg, come lo consegna Lighthouse
+
+
+def _fotogramma(voce: dict) -> "Fotogramma | None":
+    dati = voce.get("data")
+    if not isinstance(dati, str) or not dati.startswith("data:image"):
+        return None
+    return Fotogramma(ms=float(voce.get("timing") or 0.0), immagine=dati)
+
+
+def estrai_filmstrip(psi: dict) -> list:
+    """I fotogrammi del caricamento, gia' pronti da mostrare.
+
+    Lighthouse li consegna come data URI dentro `screenshot-thumbnails`: otto
+    jpeg a passo costante, circa 250 KB in tutto. Nel report HTML vanno inline,
+    perche' quel file deve restare autonomo; nel percorso web restano al browser
+    e non tornano indietro, che e' il motivo per cui `web.fatti_essenziali` non
+    li porta (il corpo di una richiesta Vercel si ferma a 4,5 MB).
+    """
+    items = _audits(psi).get("screenshot-thumbnails", {}).get("details", {}).get("items") or []
+    fotogrammi = [_fotogramma(v) for v in items if isinstance(v, dict)]
+    return [f for f in fotogrammi if f is not None]
+
+
+def estrai_screenshot(psi: dict) -> "Fotogramma | None":
+    """L'ultima immagine della pagina caricata, a risoluzione piena."""
+    dettagli = _audits(psi).get("final-screenshot", {}).get("details") or {}
+    return _fotogramma(dettagli) if dettagli else None
+
+
+# L'ordine in cui le categorie compaiono nel report, e quello in cui si chiedono
+# a PSI: `io/psi.py` importa questa tupla per non tenerne una copia propria.
+CATEGORIE = ("performance", "accessibility", "best-practices", "seo")
+
+
+@dataclass
+class Categoria:
+    chiave: str
+    titolo: str
+    punteggio: "int | None" = None
+
+
+def estrai_categorie(psi: dict) -> list:
+    """Le categorie che Lighthouse ha valutato in questa misurazione.
+
+    Il titolo arriva gia' localizzato e si usa com'e' (ADR-004). Nessuno di
+    questi punteggi entra in una valutazione: valgono quanto il punteggio
+    prestazioni, cioe' come riferimento (ADR-001). Se la chiamata ha chiesto la
+    sola performance, la lista ha una voce e il report non stampa il riquadro.
+    """
+    ordine = {chiave: i for i, chiave in enumerate(CATEGORIE)}
+    categorie = psi.get("lighthouseResult", {}).get("categories", {}) or {}
+    out = []
+    for chiave, categoria in categorie.items():
+        punteggio = categoria.get("score")
+        out.append(Categoria(
+            chiave=chiave,
+            titolo=categoria.get("title", chiave),
+            punteggio=None if not isinstance(punteggio, (int, float))
+                      else round(punteggio * 100)))
+    return sorted(out, key=lambda c: ordine.get(c.chiave, len(ordine)))
 
 
 def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagina:
@@ -687,4 +877,9 @@ def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagi
         metriche_lab=estrai_metriche_lab(psi),
         campo_psi=campo.get("metrics", {}) or {},
         campo_psi_origin_fallback=bool(campo.get("origin_fallback")),
+        tempi_osservati=estrai_tempi_osservati(psi),
+        redirect=estrai_redirect(psi),
+        filmstrip=estrai_filmstrip(psi),
+        screenshot=estrai_screenshot(psi),
+        categorie=estrai_categorie(psi),
     )
