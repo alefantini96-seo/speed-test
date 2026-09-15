@@ -15,7 +15,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 
 import httpx
 
-from .core import consenso, diagnose, extract, thirdparty
+from .core import cascata, consenso, diagnose, extract, thirdparty
 from .core.soglie import fasi_dal_campo
 from .io import crux, psi
 
@@ -130,6 +130,32 @@ def fatti_essenziali(fatti) -> dict:
     }
 
 
+def caricamento(fatti, url: str, domini_propri) -> dict:
+    """Cio' che si vede del caricamento: fotogrammi, cascata, redirect, punteggi.
+
+    Sta **fuori** da `fatti_essenziali` apposta. Il browser lo usa per disegnare
+    e non lo rimanda indietro: i soli fotogrammi sono 250 KB a pagina, e a
+    quaranta pagine sarebbero 10 MB contro i 4,5 del corpo di una richiesta.
+
+    La cascata si calcola qui e non nel browser: le proporzioni sono le stesse
+    del report HTML perche' le produce la stessa funzione, e non c'e' una
+    seconda versione della logica da tenere allineata.
+    """
+    disegno = cascata.cascata(fatti.richieste, fatti.tempi_osservati, url, domini_propri)
+    return {
+        "tempi": fatti.tempi_osservati,
+        "redirect": [asdict(salto) for salto in fatti.redirect],
+        "filmstrip": [asdict(f) for f in fatti.filmstrip],
+        "screenshot": asdict(fatti.screenshot) if fatti.screenshot else None,
+        "categorie": [asdict(c) for c in fatti.categorie],
+        "cascata": {
+            "scala_ms": disegno.scala_ms,
+            "riferimenti": [asdict(r) for r in disegno.riferimenti],
+            "barre": [asdict(b) for b in disegno.barre],
+        },
+    }
+
+
 def terze_essenziali(riepilogo) -> dict:
     return {
         "byte_totali": riepilogo.byte_totali,
@@ -184,6 +210,7 @@ async def analizza_una(api_key: str, url: str, form_factor: str,
         "template": url,
         "url": url,
         "fatti": fatti_essenziali(fatti),
+        "caricamento": caricamento(fatti, url, domini_propri),
         "campo": voce_campo,
         "terze_parti": terze_essenziali(riepilogo),
         "peso_per_tipo": thirdparty.peso_per_tipo(fatti.richieste),

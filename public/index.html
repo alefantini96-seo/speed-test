@@ -218,6 +218,50 @@ td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .fase .barra-fase.dom { background:var(--corallo); }
 .fase .pc { flex:none; width:44px; text-align:right; font-variant-numeric:tabular-nums; }
 
+/* --- il caricamento: fotogrammi, cascata, riferimenti ---------------------
+   Stesse proporzioni del report HTML: le percentuali delle barre arrivano dal
+   server gia' calcolate, cosi' i due disegni non possono divergere. */
+.tessere { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0 4px; }
+.tessera { border:1px solid var(--bordo-tenue); border-radius:var(--raggio);
+           padding:10px 14px; flex:1 1 108px; }
+.tessera .et { display:block; font-size:10.5px; text-transform:uppercase;
+               letter-spacing:.03125rem; color:var(--tenue); }
+.tessera .val { font-size:18px; font-weight:500; font-variant-numeric:tabular-nums; }
+/* I fotogrammi scorrono in orizzontale invece di andare a capo: sono una
+   sequenza, e spezzarla su due righe la fa leggere come due sequenze. */
+.filmstrip { display:flex; gap:8px; overflow-x:auto; margin:12px 0 4px;
+             -webkit-overflow-scrolling:touch; }
+.filmstrip figure { margin:0; flex:none; width:108px; }
+.filmstrip img { width:108px; height:auto; display:block;
+                 border:1px solid var(--bordo); border-radius:var(--raggio); }
+.filmstrip figcaption { font-size:10.5px; color:var(--tenue); text-align:center;
+                        margin-top:4px; font-variant-numeric:tabular-nums; }
+ol.catena { font-size:13px; padding-left:20px; margin:10px 0 0; }
+ol.catena code { font-family:var(--mono); font-size:11.5px; overflow-wrap:anywhere; }
+table.cascata { font-size:11.5px; table-layout:fixed; margin:10px 0 0; }
+table.cascata th, table.cascata td { padding:3px 8px; border-bottom:none; }
+table.cascata tr:nth-child(even) td { background:var(--tela); }
+table.cascata td.nome { font-family:var(--mono); overflow:hidden;
+                        text-overflow:ellipsis; white-space:nowrap; }
+table.cascata td.nome .tag { color:var(--tenue); }
+.scorre table.cascata { min-width:520px; }
+/* nowrap: le tre parti della barra sommano al 100% della cella e il minimo
+   garantito al tratto puo' sforare di un decimo. Senza, la riga va a capo. */
+.linea { position:relative; height:11px; white-space:nowrap; overflow:hidden; }
+.linea .coda { display:inline-block; height:7px; background:var(--bordo);
+               vertical-align:middle; }
+.linea .tratto { display:inline-block; height:7px; background:var(--blu);
+                 vertical-align:middle; min-width:1px; }
+.linea .tratto.terza { background:var(--corallo); }
+.righello { position:relative; height:38px; font-size:9.5px; color:var(--tenue);
+            font-weight:400; text-transform:none; letter-spacing:0; }
+.righello span { position:absolute; top:0; white-space:nowrap;
+                 border-left:1px solid var(--bordo); padding-left:3px; }
+.righello span.r1 { top:12px; }
+.righello span.r2 { top:24px; }
+.righello span.destra { border-left:none; border-right:1px solid var(--bordo);
+                        padding-left:0; padding-right:3px; }
+
 /* --- interventi ----------------------------------------------------------- */
 .intervento { border:1px solid var(--bordo-tenue); border-left:3px solid var(--tenue);
               border-radius:var(--raggio); padding:14px 16px; margin:12px 0; }
@@ -558,6 +602,145 @@ function voceBersaglio(nome, misura, dettaglio) {
     ${misura ? `<span class="misura">${esc(misura)}</span>` : ''}</li>`;
 }
 
+// --- cio' che si vede del caricamento ------------------------------------- //
+//
+// Il server manda il blocco `caricamento` accanto ai fatti: fotogrammi, cascata
+// gia' in percentuale, catena di redirect, punteggi. Resta qui e non torna
+// indietro con il payload del Word (vedi senzaCaricamento).
+
+const LAB_VETRINA = ['FCP', 'SI', 'TTI', 'TTFB'];
+const CASCATA_VISIBILI = 30;
+
+function durata(ms) {
+  if (ms == null) return 'n/d';
+  return ms < 1000 ? `${Math.round(ms)} ms`
+                   : `${(ms / 1000).toFixed(1).replace('.', ',')} s`;
+}
+
+function peso(byte) {
+  const b = Number(byte) || 0;
+  if (b < 1024) return `${Math.round(b)} B`;
+  if (b < 1048576) return `${Math.round(b / 1024)} KB`;
+  return `${(b / 1048576).toFixed(1).replace('.', ',')} MB`;
+}
+
+function tessere(voci) {
+  if (!voci.length) return '';
+  return `<div class="tessere">${voci.map(([et, val]) =>
+    `<div class="tessera"><span class="et">${esc(et)}</span>
+       <span class="val">${esc(val)}</span></div>`).join('')}</div>`;
+}
+
+function dettagliPagina(pagina) {
+  const terze = pagina.terze_parti || {};
+  const tempi = pagina.caricamento?.tempi || {};
+  const voci = [['richieste', String(terze.richieste_totali || 0)],
+                ['peso', peso(terze.byte_totali)]];
+  if (tempi['Caricata']) voci.push(['caricata in', durata(tempi['Caricata'])]);
+  if (tempi['DOM pronto']) voci.push(['DOM pronto', durata(tempi['DOM pronto'])]);
+  return tessere(voci);
+}
+
+function filmstrip(caricamento) {
+  const fotogrammi = caricamento?.filmstrip || [];
+  if (!fotogrammi.length) return '';
+  const figure = fotogrammi.map(f =>
+    `<figure><img src="${esc(f.immagine)}" loading="lazy"
+       alt="La pagina a ${esc(durata(f.ms))} dall\'inizio del caricamento">
+     <figcaption>${esc(durata(f.ms))}</figcaption></figure>`).join('');
+  return `<h3>Come si vede la pagina mentre carica</h3>
+    <div class="filmstrip">${figure}</div>`;
+}
+
+function catenaRedirect(caricamento) {
+  const salti = caricamento?.redirect || [];
+  if (!salti.length) return '';
+  const perso = salti.reduce((a, s) => a + (s.ms || 0), 0);
+  const righe = salti.map(s =>
+    `<li><strong>${esc(s.stato)}</strong> <code>${esc(s.da)}</code> &rarr;
+      <code>${esc(s.a)}</code>${s.ms ? ` · ${esc(durata(s.ms))}` : ''}</li>`).join('');
+  return `<h3>Prima del documento</h3><ol class="catena">${righe}</ol>
+    <p class="nota">${plurale(salti.length, 'redirect', 'redirect')} prima di arrivare
+      alla pagina, ${esc(durata(perso))} spesi in laboratorio prima che il documento
+      cominci ad arrivare. È tempo che precede qualunque intervento sulla pagina.</p>`;
+}
+
+function rigaCascata(b) {
+  const dettaglio = `${b.url} - ${b.tipo} - ${b.protocollo} - priorità ${b.priorita}`;
+  const coda = b.coda_pc > 0.05
+    ? `<span class="coda" style="width:${b.coda_pc.toFixed(2)}%"></span>` : '';
+  return `<tr><td class="nome" title="${esc(dettaglio)}">
+      <span class="tag">${b.terza_parte ? '3P' : '1P'}</span> ${esc(b.nome)}</td>
+    <td class="linea"><span style="display:inline-block;width:${b.inizio_pc.toFixed(2)}%"></span>${coda}<span
+      class="tratto${b.terza_parte ? ' terza' : ''}"
+      style="width:${Math.max(b.durata_pc, 0.15).toFixed(2)}%"></span></td>
+    <td class="num">${esc(peso(b.byte))}</td>
+    <td class="num">${esc(durata(b.durata_ms))}</td></tr>`;
+}
+
+function cascata(caricamento) {
+  const disegno = caricamento?.cascata;
+  const barre = disegno?.barre || [];
+  if (!barre.length) return '';
+
+  // Le etichette girano su tre righe e quelle oltre metà scala si appendono a
+  // destra: su una riga sola si sovrappongono - "FCP osservato" e "DOM pronto"
+  // distano meno della loro larghezza - e l'ultima, che cade al 100%, uscirebbe
+  // dal grafico.
+  const righello = (disegno.riferimenti || []).map((r, i) => {
+    const classi = i % 3 ? [`r${i % 3}`] : [];
+    if (r.pc > 60) classi.push('destra');
+    const posa = r.pc > 60 ? `right:${(100 - r.pc).toFixed(2)}%`
+                           : `left:${r.pc.toFixed(2)}%`;
+    return `<span class="${classi.join(' ')}" style="${posa}">${esc(r.etichetta)}
+      ${esc(durata(r.ms))}</span>`;
+  }).join('');
+
+  const testa = `<colgroup><col style="width:30%"><col>
+    <col style="width:12%"><col style="width:12%"></colgroup>
+    <tr><th>richiesta</th><th><div class="righello">${righello}</div></th>
+      <th class="num">peso</th><th class="num">in rete</th></tr>`;
+  const visibili = barre.slice(0, CASCATA_VISIBILI).map(rigaCascata).join('');
+  const nascoste = barre.slice(CASCATA_VISIBILI);
+  const resto = nascoste.length
+    ? `<details class="perche"><summary>le altre ${nascoste.length} richieste</summary>
+        <div class="scorre"><table class="cascata">${testa}
+          ${nascoste.map(rigaCascata).join('')}</table></div></details>`
+    : '';
+  const lente = [...barre].sort((a, b) => b.durata_ms - a.durata_ms).slice(0, 5);
+  return `<h3>Cascata delle richieste</h3>
+    <div class="scorre"><table class="cascata">${testa}${visibili}</table></div>${resto}
+    <p class="nota">${barre.length} richieste su una scala di
+      ${esc(durata(disegno.scala_ms))}. I tempi sono quelli osservati dal trace, non le
+      metriche riportate da Lighthouse, che sono simulate su un\'altra scala: la cascata
+      dice in quale ordine la pagina si carica e cosa aspetta cosa, quanto aspetta un
+      utente vero lo dice il campo.</p>
+    <h3>Le richieste più lunghe in rete</h3>
+    <ul>${lente.map(b => `<li>${esc(b.nome)} · ${esc(durata(b.durata_ms))} ·
+      ${esc(peso(b.byte))}${b.terza_parte ? ' · terza parte' : ''}</li>`).join('')}</ul>`;
+}
+
+function misureLab(pagina) {
+  const lab = pagina.fatti?.metriche_lab || {};
+  const voci = LAB_VETRINA.filter(s => lab[s]).map(s => [s, durata(lab[s])]);
+  if (!voci.length) return '';
+  return `<h3>Altre misure di laboratorio</h3>${tessere(voci)}
+    <p class="nota">Misurate da un data center Google su una rete simulata: servono a
+      confrontare due misurazioni fra loro, non a dire quanto aspetta un utente. FCP e
+      TTFB compaiono anche nella tabella di campo qui sopra: là sono gli utenti reali,
+      qui il laboratorio, e i due numeri non si confrontano.</p>`;
+}
+
+function punteggi(caricamento) {
+  const voci = (caricamento?.categorie || [])
+    .filter(c => c.punteggio != null).map(c => [c.titolo, String(c.punteggio)]);
+  if (voci.length < 2) return '';
+  return `<h3>Punteggi Lighthouse</h3>${tessere(voci)}
+    <p class="nota">Riferimento, non valutazione: sono i numeri che compaiono aprendo
+      pagespeed.web.dev, e variano fra due misurazioni identiche. Accessibilità, best
+      practice e SEO arrivano dalla stessa misurazione e non sono state analizzate.</p>`;
+}
+
 function scheda(p, indice) {
   const colore = { alta:'var(--scarso)', media:'var(--medio)' }[p.gravita] || 'var(--tenue)';
   // Il guadagno e' il numero che fa decidere: sta accanto al titolo, non sepolto.
@@ -664,14 +847,19 @@ function disegna(pagina) {
     <h2>${esc(etichettaTemplate(pagina.url))}</h2>
     <p class="url">${esc(pagina.url)}</p>
     ${tabellaCampo(pagina.campo)}
+    ${filmstrip(pagina.caricamento)}
     ${fasiLcp(pagina.fatti)}
     <h3>Peso della pagina</h3>
-    <p>${Math.round((terze.byte_totali||0)/1024)} KB su ${terze.richieste_totali||0} richieste,
-       di cui <strong>${Math.round((terze.byte_terzi||0)/1024)} KB di terze parti
-       (${Math.round(quota*100)}%)</strong>.</p>
+    ${dettagliPagina(pagina)}
+    <p>Di quel peso, <strong>${Math.round((terze.byte_terzi||0)/1024)} KB sono di
+       terze parti (${Math.round(quota*100)}%)</strong>.</p>
     ${Object.keys(pagina.peso_per_tipo||{}).length ? `<p class="meta">${
       Object.entries(pagina.peso_per_tipo).slice(0,6).filter(([,b])=>b)
         .map(([t,b]) => `${esc(TIPI[t]||t)} ${Math.round(b/1024)} KB`).join(' · ')}</p>` : ''}
+    ${catenaRedirect(pagina.caricamento)}
+    ${cascata(pagina.caricamento)}
+    ${misureLab(pagina)}
+    ${punteggi(pagina.caricamento)}
     <details class="perche">
       <summary>come è stata misurata</summary>
       <p class="nota">${plurale(pagina.misurazioni || 1, 'misurazione', 'misurazioni')}
@@ -1025,6 +1213,11 @@ const DOCUMENTI = {
   nota:    { bottone: 'scarica-nota', nome: 'Interventi Performance' },
 };
 
+// Il blocco `caricamento` serve solo a disegnare qui: i fotogrammi da soli sono
+// 250 KB a pagina, e a quaranta pagine il corpo della richiesta sfonderebbe i
+// 4,5 MB di Vercel. Il Word non lo usa, quindi non torna indietro.
+const senzaCaricamento = ({ caricamento, ...resto }) => resto;
+
 async function scarica(formato = 'cliente') {
   const { bottone, nome } = DOCUMENTI[formato];
   const tasto = $(bottone);
@@ -1038,7 +1231,7 @@ async function scarica(formato = 'cliente') {
       body: JSON.stringify({
         // Anche le pagine mancate: il documento deve dire quali sono, non
         // presentare una lista piu' corta come se fosse completa.
-        pagine: [...risultati, ...falliti],
+        pagine: [...risultati, ...falliti].map(senzaCaricamento),
         desktop: $('desktop').checked,
         formato,
       }),

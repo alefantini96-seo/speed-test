@@ -73,9 +73,12 @@ table.risorse .percorso { color:var(--tenue); font-size:10px; }
 .tessera .et { display:block; font-size:10px; text-transform:uppercase;
                letter-spacing:.04em; color:var(--tenue); }
 .tessera .val { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
-.filmstrip { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 4px; }
-.filmstrip figure { margin:0; width:104px; }
-.filmstrip img { width:104px; height:auto; border:1px solid var(--bordo); border-radius:3px;
+.filmstrip { display:flex; gap:5px; margin:8px 0 4px; }
+/* I fotogrammi si dividono la riga invece di avere una larghezza fissa: otto da
+   104px sforavano di 18px la larghezza del testo e l'ultimo andava a capo da
+   solo, facendo leggere la sequenza come due sequenze. */
+.filmstrip figure { margin:0; flex:1 1 0; min-width:0; }
+.filmstrip img { width:100%; height:auto; border:1px solid var(--bordo);
                  display:block; }
 .filmstrip figcaption { font-size:10px; color:var(--tenue); text-align:center; margin-top:3px;
                         font-variant-numeric:tabular-nums; }
@@ -95,11 +98,12 @@ table.cascata td.nome .terza { color:var(--tenue); }
 .linea .tratto { display:inline-block; height:7px; background:#1f2328; vertical-align:middle;
                  min-width:1px; border-radius:1px; }
 .linea .tratto.terza { background:#a16207; }
-.righello { position:relative; height:26px; font-size:9px; color:var(--tenue);
+.righello { position:relative; height:34px; font-size:9px; color:var(--tenue);
             font-weight:400; text-transform:none; letter-spacing:0; }
 .righello span { position:absolute; top:0; white-space:nowrap;
                  border-left:1px solid var(--bordo); padding-left:2px; }
-.righello span.giu { top:13px; }
+.righello span.r1 { top:11px; }
+.righello span.r2 { top:22px; }
 .righello span.destra { border-left:none; border-right:1px solid var(--bordo);
                         padding-left:0; padding-right:2px; }
 footer { margin-top:44px; padding-top:14px; border-top:1px solid var(--bordo);
@@ -449,7 +453,9 @@ def _metriche_lab(fatti: dict) -> str:
     return ("<h3>Altre misure di laboratorio</h3>" + _tessere(voci) +
             '<p class="nota">Misurate da un data center Google su una rete simulata: '
             "servono a confrontare due misurazioni fra loro, non a dire quanto aspetta "
-            "un utente. Il TTFB reale e&#39; quello della tabella di campo.</p>")
+            "un utente. FCP e TTFB compaiono anche nella tabella di campo qui sopra: "
+            "quelli sono gli utenti reali, questi il laboratorio, e i due numeri non si "
+            "confrontano.</p>")
 
 
 def _categorie(fatti: dict) -> str:
@@ -519,12 +525,15 @@ def _cascata(fatti: dict, url: str) -> str:
     if not disegno.barre:
         return ""
 
-    # Le etichette si alternano su due righe e quelle oltre meta' scala si
-    # appendono a destra: cinque riferimenti su una riga sola si sovrappongono,
-    # e l'ultimo - che cade al 100% - uscirebbe dal grafico.
+    # Le etichette girano su tre righe e quelle oltre meta' scala si appendono a
+    # destra. Cinque riferimenti su una riga sola si sovrappongono - misurato:
+    # "FCP osservato 279 ms" e "DOM pronto 850 ms" distano 17 punti di scala,
+    # cioe' meno della meta' della loro larghezza - e l'ultimo, che cade al 100%,
+    # uscirebbe dal grafico. Su tre righe due etichette vicine non si toccano mai:
+    # servirebbero tre riferimenti dentro la larghezza di una parola.
     marchi = []
     for i, r in enumerate(disegno.riferimenti):
-        classi = ["giu"] if i % 2 else []
+        classi = [f"r{i % 3}"] if i % 3 else []
         if r.pc > 60:
             classi.append("destra")
             posa = f"right:{100 - r.pc:.2f}%"
@@ -581,9 +590,8 @@ def html_report(esecuzione: dict) -> str:
             f"{_fasi_lcp(fatti)}"
             f"<h3>Peso della pagina</h3>"
             f"{_dettagli_pagina(fatti, terze)}"
-            f"<p>Di {terze.get('byte_totali', 0) / 1024:.0f} KB complessivi, "
-            f"<strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB sono di terze parti "
-            f"({quota * 100:.0f}%)</strong>.</p>"
+            f"<p>Di quel peso, <strong>{terze.get('byte_terzi', 0) / 1024:.0f} KB "
+            f"sono di terze parti ({quota * 100:.0f}%)</strong>.</p>"
             f"{_peso_per_tipo(p.get('peso_per_tipo') or {})}"
             f"{_catena_redirect(fatti)}"
             f"{_cascata(fatti, p['url'])}"

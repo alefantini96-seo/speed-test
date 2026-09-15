@@ -16,7 +16,7 @@ import pytest
 from docx import Document
 
 from speed import web
-from speed.core import consenso, diagnose, extract, thirdparty
+from speed.core import cascata, consenso, diagnose, extract, thirdparty
 from speed.io import crux, render, render_docx
 from speed.web import fatti_essenziali, serializza, terze_essenziali, valida_url
 
@@ -897,3 +897,59 @@ def test_errore_e_consiglio_stanno_fuori_dal_modulo():
                       sorgente.index('<!-- Fuori dal modulo')]
     assert 'id="errore"' not in modulo and 'id="consiglio"' not in modulo
     assert 'id="errore"' in sorgente and 'id="consiglio"' in sorgente
+
+
+# --- il caricamento: arriva al browser, non torna indietro ------------------ #
+
+def _fatti_del_caricamento():
+    psi = json.loads((FIXTURES / "psi-bbc-redirect-categorie.json").read_text(encoding="utf-8"))
+    return extract.estrai(psi, "http://bbc.com/", "PHONE", PROPRI)
+
+
+def test_il_blocco_caricamento_ha_tutto_quello_che_serve_a_disegnare():
+    fatti = _fatti_del_caricamento()
+    blocco = web.caricamento(fatti, "http://bbc.com/", PROPRI)
+    assert set(blocco) == {"tempi", "redirect", "filmstrip", "screenshot",
+                           "categorie", "cascata"}
+    assert len(blocco["filmstrip"]) == 8
+    assert len(blocco["cascata"]["barre"]) == len(fatti.richieste)
+    for barra in blocco["cascata"]["barre"]:
+        assert barra["inizio_pc"] + barra["coda_pc"] + barra["durata_pc"] <= 100.001
+
+
+def test_la_cascata_del_browser_e_quella_del_report():
+    """Le percentuali si calcolano una volta sola, sul server. Due
+    implementazioni della stessa geometria divergerebbero al primo ritocco."""
+    fatti = _fatti_del_caricamento()
+    dal_server = web.caricamento(fatti, "http://bbc.com/", PROPRI)["cascata"]
+    disegno = cascata.cascata(fatti.richieste, fatti.tempi_osservati,
+                              "http://bbc.com/", PROPRI)
+    assert dal_server["scala_ms"] == disegno.scala_ms
+    assert [b["inizio_pc"] for b in dal_server["barre"]] == [b.inizio_pc for b in disegno.barre]
+
+
+def test_il_caricamento_resta_fuori_dai_fatti_essenziali():
+    """E' l'unico blocco che il browser non rimanda indietro: i soli fotogrammi
+    sono 250 KB a pagina, e a quaranta pagine il corpo della richiesta
+    sfonderebbe i 4,5 MB."""
+    fatti = _fatti_del_caricamento()
+    ridotti = web.fatti_essenziali(fatti)
+    assert "filmstrip" not in ridotti and "screenshot" not in ridotti
+    assert "redirect" not in ridotti and "categorie" not in ridotti
+
+
+def test_il_browser_toglie_il_caricamento_dal_payload_del_word():
+    """Il controllo e' sul sorgente perche' e' JavaScript: se qualcuno rimanda
+    indietro le pagine intere, il Word smette di generarsi oltre le ~15 pagine
+    e l'errore non dice perche'."""
+    sorgente = _sorgente()
+    assert "const senzaCaricamento = ({ caricamento, ...resto }) => resto;" in sorgente
+    assert "[...risultati, ...falliti].map(senzaCaricamento)" in sorgente
+
+
+def test_i_fotogrammi_pesano_quanto_dichiarato():
+    """La soglia difende l'affermazione scritta nei commenti e nel README: se
+    Lighthouse cambiasse formato, il numero da correggere e' qui."""
+    blocco = web.caricamento(_fatti_del_caricamento(), "http://bbc.com/", PROPRI)
+    peso = len(json.dumps(blocco["filmstrip"], ensure_ascii=False).encode("utf-8"))
+    assert 150_000 < peso < 400_000, f"{peso} byte: il commento dice ~250 KB"
