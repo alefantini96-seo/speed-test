@@ -46,12 +46,36 @@ def test_l_attesa_fra_i_giri_non_si_somma_al_caso_peggiore():
     non aspetta affatto. Contarla in piu' porterebbe a stringere i timeout senza
     motivo."""
     budget = web.BUDGET
-    assert budget.psi_attesa_fra_giri < budget.giro_psi
-    assert budget.peggior_caso(2) == budget.campo + budget.giro_psi * 2
+    assert budget.psi_attesa_fra_giri < budget.giro_psi(2)
+    assert budget.peggior_caso(2) == budget.campo + budget.giro_psi(2) * 2
 
 
-def test_un_solo_giro_costa_meno_di_due():
-    assert web.BUDGET.peggior_caso(1) < web.BUDGET.peggior_caso(2)
+def test_le_chiamate_a_pagespeed_sono_due_comunque_si_giri():
+    """E' il tetto vero: due giri da un tentativo o un giro da due tentativi
+    costano lo stesso. Contare giri PER tentativi obbligava a stringere il
+    timeout a 55 s, e 55 s non bastano a una home vera."""
+    budget = web.BUDGET
+    assert budget.tentativi(2) == 1
+    assert budget.tentativi(1) == 2
+    assert budget.peggior_caso(1) < web.MAX_DURATA_VERCEL
+    assert budget.peggior_caso(2) < web.MAX_DURATA_VERCEL
+
+
+def test_il_timeout_copre_una_misurazione_lenta_davvero():
+    """Misurate il 15/09/2026 nove chiamate su tre URL di www.pluxee.it: mediana
+    33,9 s, massima 50,9 s. Contro un tetto di 55 s la piu' lenta passava al 93%,
+    e un percorso completo sotto carico ha toccato 101,6 s. Il timeout deve stare
+    largo sopra la misurazione lenta, non appena sopra."""
+    assert web.BUDGET.psi_timeout >= 2 * 50.9
+
+
+def test_i_due_rami_costano_quasi_uguale():
+    """Da quando il tetto e' sulle chiamate, i due rami sono lo stesso conto: due
+    giri da un tentativo, oppure un giro da due. Resta fuori il solo backoff fra
+    i due tentativi, che fra i giri non serve perche' c'e' gia' l'attesa."""
+    budget = web.BUDGET
+    differenza = budget.peggior_caso(1) - budget.peggior_caso(2)
+    assert abs(differenza) <= budget.psi_backoff, differenza
 
 
 # --- i parametri che arrivano davvero ai client ------------------------------ #
@@ -82,7 +106,7 @@ def test_il_percorso_web_passa_il_suo_budget_ai_client(monkeypatch):
     visto = _analisi_finta(monkeypatch)
     budget = web.BUDGET
     assert visto["psi"]["timeout"] == budget.psi_timeout
-    assert visto["psi"]["tentativi"] == budget.psi_tentativi
+    assert visto["psi"]["tentativi"] == budget.tentativi(visto["psi"]["ripetizioni"])
     assert visto["psi"]["attesa_iniziale"] == budget.psi_backoff
     assert visto["psi"]["attesa_fra_giri"] == budget.psi_attesa_fra_giri
     assert visto["crux"]["timeout_record"] == budget.crux_timeout_record
@@ -95,7 +119,7 @@ def test_dai_parametri_passati_il_conto_torna_sotto_il_tetto(monkeypatch):
     li' che il tempo si consuma davvero."""
     visto = _analisi_finta(monkeypatch)
     effettivo = web.Budget(
-        psi_tentativi=visto["psi"]["tentativi"],
+        psi_chiamate=visto["psi"]["tentativi"] * visto["psi"]["ripetizioni"],
         psi_timeout=visto["psi"]["timeout"],
         psi_backoff=visto["psi"]["attesa_iniziale"],
         psi_attesa_fra_giri=visto["psi"]["attesa_fra_giri"],

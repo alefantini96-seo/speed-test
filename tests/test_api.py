@@ -963,6 +963,31 @@ def test_errore_e_consiglio_stanno_fuori_dal_modulo():
     assert 'id="errore"' in sorgente and 'id="consiglio"' in sorgente
 
 
+# --- un errore muto e' un errore inutile ------------------------------------ #
+
+def test_il_502_non_esce_mai_senza_una_causa():
+    """Visto in produzione: "Misurazione fallita: Errore 502". Il browser scrive
+    `dati.errore || 'Errore ' + status`, e `str(httpx.ReadTimeout(''))` e' la
+    stringa vuota: lo status era tutto quello che restava."""
+    import httpx
+
+    from app import _messaggio
+    assert _messaggio(httpx.ReadTimeout("")) == "ReadTimeout senza messaggio."
+    assert _messaggio(RuntimeError("")) == "RuntimeError senza messaggio."
+    assert _messaggio(RuntimeError("  ")) == "RuntimeError senza messaggio."
+    assert _messaggio(RuntimeError("quota esaurita")) == "quota esaurita"
+    for eccezione in (httpx.ReadTimeout(""), ValueError(), KeyError("x")):
+        assert _messaggio(eccezione).strip(), type(eccezione).__name__
+
+
+def test_l_errore_con_rimedio_arriva_al_browser_intero():
+    """Un ErroreSpeed appiattito in RuntimeError perdeva il rimedio per strada:
+    `str()` concatena messaggio e rimedio, e il campo `rimedio` restava vuoto."""
+    sorgente = (RADICE / "speed" / "web.py").read_text(encoding="utf-8")
+    assert "if isinstance(fallita, ErroreSpeed):" in sorgente
+    assert "raise fallita" in sorgente
+
+
 # --- il caricamento: arriva al browser, non torna indietro ------------------ #
 
 def _fatti_del_caricamento():

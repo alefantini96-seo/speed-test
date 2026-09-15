@@ -8,6 +8,7 @@ su venti template si traduce in buchi silenziosi nel report.
 """
 import asyncio
 
+import httpx
 import pytest
 
 from speed.errori import ErroreSpeed
@@ -125,3 +126,49 @@ def test_json_sicuro():
     assert google.json_sicuro(RispostaFinta(200, {"a": 1})) == {"a": 1}
     assert google.json_sicuro(RispostaFinta(200, None, "<html>")) is None
     assert google.json_sicuro(RispostaFinta(200, [1, 2])) is None, "una lista non e' utile"
+
+
+# --- quando la rete cade, l'errore deve dire cosa e' successo --------------- #
+#
+# Il sintomo, visto in produzione: "Misurazione fallita: Errore 502". Uno status,
+# nessuna causa, nessun rimedio. httpx solleva `ReadTimeout` con il messaggio
+# VUOTO; quella stringa vuota arrivava fino al browser, che ripiegava sullo
+# status. Le eccezioni di rete vanno tradotte dove si sa quanto si e' aspettato.
+
+class ClienteCheCade:
+    def __init__(self, eccezione):
+        self.eccezione = eccezione
+
+    async def get(self, *_a, **_k):
+        raise self.eccezione
+
+
+def test_l_attesa_scaduta_diventa_un_errore_con_rimedio():
+    with pytest.raises(ErroreSpeed) as caduta:
+        asyncio.run(psi.analizza(ClienteCheCade(httpx.ReadTimeout("")), "chiave",
+                                 "https://x.it/", timeout=55.0))
+    errore = caduta.value
+    assert "55 secondi" in errore.messaggio
+    assert "https://x.it/" in errore.messaggio
+    assert errore.rimedio, "senza rimedio resta un errore muto"
+    assert "riga di comando" in errore.rimedio
+
+
+def test_la_rete_caduta_non_si_confonde_con_la_pagina_lenta():
+    with pytest.raises(ErroreSpeed) as caduta:
+        asyncio.run(psi.analizza(ClienteCheCade(httpx.ConnectError("")), "chiave",
+                                 "https://x.it/"))
+    assert "non e' raggiungibile" in caduta.value.messaggio
+    assert "ConnectError" in caduta.value.messaggio, \
+        "il nome della classe e' l'unica cosa che porta un'eccezione senza messaggio"
+
+
+def test_nessun_errore_di_rete_resta_senza_messaggio():
+    """Il difetto era proprio questo: `str(ReadTimeout(''))` e' la stringa vuota."""
+    for eccezione in (httpx.ReadTimeout(""), httpx.ConnectTimeout(""),
+                      httpx.PoolTimeout(""), httpx.ConnectError(""),
+                      httpx.RemoteProtocolError("")):
+        with pytest.raises(ErroreSpeed) as caduta:
+            asyncio.run(psi.analizza(ClienteCheCade(eccezione), "chiave", "https://x.it/"))
+        assert caduta.value.messaggio.strip()
+        assert caduta.value.rimedio.strip()

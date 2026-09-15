@@ -21,7 +21,7 @@ import asyncio
 import httpx
 
 from ..core.extract import CATEGORIE
-from ..errori import da_risposta_google
+from ..errori import da_attesa_scaduta, da_rete, da_risposta_google
 from .google import richiedi
 
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
@@ -48,13 +48,22 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
     costo delle categorie. Cresce invece il corpo della risposta, da 874 KB a
     1,1 MB, che e' traffico del server e non del browser.
     """
-    risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
-        "url": url,
-        "strategy": strategy,
-        "category": list(categorie),
-        "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
-        "key": api_key,
-    }, timeout=timeout), tentativi, attesa_iniziale)
+    # Le eccezioni di rete di httpx vanno tradotte QUI, dove si sa quanto si e'
+    # aspettato e su quale URL. Piu' in la' restano quello che sono: `ReadTimeout`
+    # ha il messaggio vuoto, e un errore vuoto arrivava al browser come
+    # "Errore 502" - uno status, nessuna causa, nessun rimedio.
+    try:
+        risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
+            "url": url,
+            "strategy": strategy,
+            "category": list(categorie),
+            "locale": locale,      # titoli, descrizioni e checklist gia' in italiano
+            "key": api_key,
+        }, timeout=timeout), tentativi, attesa_iniziale)
+    except httpx.TimeoutException:
+        raise da_attesa_scaduta("PageSpeed Insights", timeout, url) from None
+    except httpx.HTTPError as guasto:
+        raise da_rete("PageSpeed Insights", guasto, url) from None
     if dati is not None and "error" in dati:
         err = dati["error"]
         raise da_risposta_google("PageSpeed Insights", err.get("code"),

@@ -40,6 +40,18 @@ def _json(avvia, codice: str, corpo: dict):
     return [testo]
 
 
+def _messaggio(eccezione) -> str:
+    """Mai una stringa vuota.
+
+    Alcune eccezioni di rete non hanno messaggio - `httpx.ReadTimeout` e'
+    letteralmente `''` - e il browser ripiegava su `Errore ${status}`: 502 senza
+    causa e senza rimedio. Le cause vere si traducono a monte (errori.py); questa
+    e' la rete di sicurezza per tutto il resto.
+    """
+    testo = str(eccezione).strip()
+    return testo[:400] if testo else f"{type(eccezione).__name__} senza messaggio."
+
+
 def _leggi(environ) -> dict:
     try:
         lunghezza = int(environ.get("CONTENT_LENGTH") or 0)
@@ -167,7 +179,7 @@ def _analizza(avvia, richiesta: dict, environ):
         return _json(avvia, "502 Bad Gateway", {"errore": errore.messaggio,
                                                 "rimedio": errore.rimedio, "url": url})
     except Exception as exc:
-        return _json(avvia, "502 Bad Gateway", {"errore": str(exc)[:400], "url": url})
+        return _json(avvia, "502 Bad Gateway", {"errore": _messaggio(exc), "url": url})
     return _json(avvia, "200 OK", risultato)
 
 

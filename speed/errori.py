@@ -61,5 +61,52 @@ def da_risposta_google(servizio: str, codice, messaggio: str, url: str = "") -> 
     return ErroreSpeed(f"{servizio} ha risposto {codice}: {messaggio[:200]}")
 
 
+# Il rimedio dipende da cosa stava facendo il servizio. PageSpeed **misura** la
+# pagina, e una pagina pesante puo' semplicemente metterci troppo; CrUX **legge**
+# dati gia' raccolti, e se non risponde e' la rete. Dire a chi aspetta CrUX di
+# passare alla riga di comando "perche' la pagina e' lenta" sarebbe un consiglio
+# sbagliato con l'aria di essere giusto.
+RIMEDIO_ATTESA = {
+    "PageSpeed Insights":
+        "La misurazione di una pagina pesante puo' superare il tempo che la\n"
+        "versione online puo' aspettare. Riprova questa pagina: la seconda volta\n"
+        "e' spesso piu' rapida, perche' Google serve dalla cache le richieste\n"
+        "ravvicinate. Se fallisce ancora, la riga di comando non ha limiti di durata.",
+    "Chrome UX Report":
+        "Non e' una misurazione ma una lettura: di norma risponde in un paio di\n"
+        "secondi, quindi e' quasi sempre un intoppo di rete. Riprova la pagina.",
+}
+
+RIMEDIO_ATTESA_GENERICO = "Riprova fra un minuto."
+
+
+def da_attesa_scaduta(servizio: str, secondi: float, url: str = "") -> ErroreSpeed:
+    """Il servizio non ha risposto in tempo.
+
+    Non e' un dettaglio di implementazione: e' il modo in cui la versione online
+    fallisce piu' spesso, perche' una misurazione di laboratorio dura 30-60
+    secondi e ogni tanto di piu'. Va detto con parole sue, altrimenti diventa
+    quello che era: "Errore 502", che e' uno status e non una causa.
+    """
+    dove = f" su {url}" if url else ""
+    return ErroreSpeed(
+        f"{servizio} non ha risposto entro {secondi:.0f} secondi{dove}.",
+        RIMEDIO_ATTESA.get(servizio, RIMEDIO_ATTESA_GENERICO))
+
+
+def da_rete(servizio: str, eccezione, url: str = "") -> ErroreSpeed:
+    """Rete caduta fra noi e Google: non e' un problema della pagina analizzata.
+
+    Il nome della classe e' l'unica cosa che alcune eccezioni di httpx portano:
+    `ReadTimeout` e compagne hanno il messaggio vuoto.
+    """
+    dettaglio = str(eccezione).strip() or type(eccezione).__name__
+    dove = f" su {url}" if url else ""
+    return ErroreSpeed(
+        f"{servizio} non e' raggiungibile{dove}: {dettaglio[:120]}.",
+        "E' la rete fra il server e Google, non la pagina analizzata.\n"
+        "Riprova fra un minuto.")
+
+
 def configurazione(messaggio: str, rimedio: str = "") -> ErroreSpeed:
     return ErroreSpeed(f"Configurazione: {messaggio}", rimedio)

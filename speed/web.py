@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, is_dataclass
 import httpx
 
 from .core import cascata, consenso, diagnose, extract, thirdparty
+from .errori import ErroreSpeed
 from .core.soglie import fasi_dal_campo
 from .io import crux, psi
 
@@ -34,6 +35,16 @@ LIMITE_PAGINE = 40
 #  Con i valori predefiniti dei client — 3 tentativi PSI da 120 s, 2 giri, 45 s
 #  di attesa, piu' 75 s di CrUX — il caso peggiore era 852 s: quasi il triplo.
 #
+#  Il tetto sta sulle CHIAMATE a PageSpeed, non sui giri: due giri da un
+#  tentativo e un giro da due tentativi costano lo stesso e stanno nello stesso
+#  budget. Contarli separatamente — due giri PER due tentativi — obbligava a
+#  stringere il timeout a 55 s per far tornare il conto, e 55 s sono pochi:
+#  misurate il 15/09/2026 nove chiamate su tre URL di www.pluxee.it, mediana
+#  33,9 s e massima 50,9 s, cioe' il 93% del tetto; e un percorso completo con
+#  tre misurazioni in parallelo sulla stessa chiave ha impiegato 101,6 s. Quando
+#  la misurazione sforava, sforava anche il giro successivo, e all'utente
+#  arrivava "Errore 502" senza causa.
+#
 #  La CLI non ha limiti di durata e non passa nessun budget: tiene i valori
 #  predefiniti, piu' generosi.
 # --------------------------------------------------------------------------- #
@@ -43,15 +54,21 @@ MAX_DURATA_VERCEL = 300      # deve restare uguale a maxDuration in vercel.json
 
 @dataclass(frozen=True)
 class Budget:
-    """Timeout e tentativi del percorso web, con il conto del caso peggiore.
+    """Timeout e chiamate del percorso web, con il conto del caso peggiore.
 
-    I numeri sono stretti apposta. Una chiamata PSI impiega di norma 30-60 s:
-    55 s la copre, e il secondo tentativo c'e' per i codici transitori, che
-    arrivano subito e non consumano il timeout. CrUX risponde in un paio di
-    secondi: 8 s sono gia' abbondanti.
+    Una chiamata PSI impiega di norma 30-60 s e sotto carico anche il doppio:
+    120 s la coprono, e sono il massimo che lascia in piedi i 30 s di margine
+    sul tetto della piattaforma. CrUX risponde in un paio di secondi - misurati
+    0,2 - e 8 s sono gia' abbondanti.
+
+    `psi_chiamate` e' il tetto vero — quante volte si chiama PageSpeed per una
+    pagina, comunque le si distribuisca. Con due giri ciascuno ha un tentativo
+    solo, perche' il secondo giro **fa gia' da riprova**: se il primo torna un
+    500 transitorio, il secondo ci riprova comunque. Con un giro solo i due
+    tentativi restano dentro quel giro.
     """
-    psi_tentativi: int = 2
-    psi_timeout: float = 55.0
+    psi_chiamate: int = 2
+    psi_timeout: float = 120.0
     psi_backoff: float = 2.0
     psi_attesa_fra_giri: float = 45.0
     psi_giri_massimi: int = 2
@@ -66,10 +83,15 @@ class Budget:
         """Le attese fra un tentativo e l'altro: iniziale, poi il doppio, ecc."""
         return iniziale * (2 ** (tentativi - 1) - 1) if tentativi > 1 else 0.0
 
-    @property
-    def giro_psi(self) -> float:
-        return (self.psi_tentativi * self.psi_timeout
-                + self._backoff_totale(self.psi_tentativi, self.psi_backoff))
+    def tentativi(self, giri: int = 1) -> int:
+        """Quanti tentativi dentro un giro, sapendo quanti giri si faranno."""
+        return max(1, self.psi_chiamate // max(1, giri))
+
+    def giro_psi(self, giri: int = 1) -> float:
+        """Il caso peggiore di UN giro, quando i giri in tutto saranno `giri`."""
+        tentativi = self.tentativi(giri)
+        return (tentativi * self.psi_timeout
+                + self._backoff_totale(tentativi, self.psi_backoff))
 
     @property
     def campo(self) -> float:
@@ -86,7 +108,8 @@ class Budget:
         il giro e' durato piu' dell'attesa, non aspetta affatto.
         """
         giri = self.psi_giri_massimi if giri is None else giri
-        lab = self.giro_psi if giri <= 1 else             max(self.giro_psi, self.psi_attesa_fra_giri) + self.giro_psi * (giri - 1)
+        uno = self.giro_psi(giri)
+        lab = uno if giri <= 1 else max(uno, self.psi_attesa_fra_giri) + uno * (giri - 1)
         return self.campo + lab
 
 
@@ -193,12 +216,17 @@ async def analizza_una(api_key: str, url: str, form_factor: str,
     risposte = await psi.analizza_molte(
         api_key, [url], strategy, ripetizioni=ripetizioni,
         attesa_fra_giri=budget.psi_attesa_fra_giri,
-        tentativi=budget.psi_tentativi, attesa_iniziale=budget.psi_backoff,
+        tentativi=budget.tentativi(ripetizioni), attesa_iniziale=budget.psi_backoff,
         timeout=budget.psi_timeout)
     riuscite = [r for r in risposte[url] if not isinstance(r, Exception)]
     if not riuscite:
         fallita = next((r for r in risposte[url] if isinstance(r, Exception)), None)
-        raise RuntimeError(str(fallita) if fallita else "PageSpeed Insights non ha risposto")
+        # Un ErroreSpeed porta gia' il suo rimedio: appiattirlo in un RuntimeError
+        # lo perdeva per strada, e chi legge restava senza l'azione che risolve.
+        if isinstance(fallita, ErroreSpeed):
+            raise fallita
+        raise RuntimeError(str(fallita).strip() if fallita and str(fallita).strip()
+                           else "PageSpeed Insights non ha risposto")
 
     accordo = consenso.combina([extract.estrai(r, url, form_factor, domini_propri)
                                 for r in riuscite])

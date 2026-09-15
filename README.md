@@ -116,8 +116,29 @@ Il tetto è `maxDuration`, 300 secondi: oltre quello Vercel uccide la funzione e
 restituisce un 504 anonimo, cioè l'utente perde l'errore con rimedio che il tool
 avrebbe consegnato. Perciò il percorso web dichiara un **budget di tempo esplicito**
 (`web.Budget`) e lo passa ai client: timeout più corti e meno tentativi della CLI, con
-il caso peggiore a 249 secondi. La CLI non ha limiti di durata e tiene i valori
+il caso peggiore a 267 secondi. La CLI non ha limiti di durata e tiene i valori
 generosi. `Budget.peggior_caso()` fa il conto, e un test lo confronta con `vercel.json`.
+
+**Il tetto sta sulle chiamate a PageSpeed, non sui giri.** Due giri da un tentativo e
+un giro da due tentativi costano lo stesso, e stanno nello stesso budget: quando i giri
+sono due, il secondo fa già da riprova. Contarli separatamente — giri *per* tentativi —
+obbligava a stringere il timeout a 55 secondi per far tornare il conto, e 55 secondi
+sono pochi.
+
+Misurate il 15/09/2026 nove chiamate su tre URL di `www.pluxee.it`: minima 24,3 s,
+mediana 33,9 s, massima 50,9 s — con 21 secondi di scarto sulla stessa pagina fra una
+misurazione e l'altra. Nessuna ha superato i 55 s in quel campione, ma la home ci
+passava al 93%, e un percorso completo con tre misurazioni in parallelo sulla stessa
+chiave ha impiegato 101,6 s. Quando la misurazione sforava, sforava anche il giro
+successivo: all'utente arrivava «Errore 502», senza causa e senza rimedio, perché
+`httpx.ReadTimeout` ha il messaggio **vuoto** e quella stringa vuota arrivava fino al
+browser, che ripiegava sullo status.
+
+Ora il timeout è 120 secondi — il massimo che lascia in piedi i 30 s di margine sul
+tetto della piattaforma — e le eccezioni di rete vengono tradotte in `errori.py`, dove
+si sa quanto si è aspettato e su quale URL. Il rimedio cambia col servizio: PageSpeed
+**misura** la pagina e una pagina pesante può metterci troppo, CrUX **legge** dati già
+raccolti e se non risponde è la rete.
 
 ```
 app.py               applicazione WSGI: instrada tutto, nessuna dipendenza

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import httpx
 
-from ..errori import da_risposta_google
+from ..errori import da_attesa_scaduta, da_rete, da_risposta_google
 from .google import richiedi
 
 BASE = "https://chromeuxreport.googleapis.com/v1/records"
@@ -162,6 +162,13 @@ async def raccogli(client: httpx.AsyncClient, api_key: str, url: str,
                            attesa_iniziale=attesa_iniziale)
     except CruxNonDisponibile:
         return voce      # resta la sola diagnosi di laboratorio, dichiarata nel report
+    except httpx.TimeoutException:
+        # "Non ha risposto" non e' "non ha dati": far passare un guasto di rete
+        # per assenza di campo farebbe scrivere al report che la pagina non ha
+        # traffico sufficiente, che e' un'altra cosa (ADR-001).
+        raise da_attesa_scaduta("Chrome UX Report", timeout_record, url) from None
+    except httpx.HTTPError as guasto:
+        raise da_rete("Chrome UX Report", guasto, url) from None
 
     voce = {"livello": "url", "metriche": rec["metriche"],
             "periodo_a": rec["periodo_a"], "storico": None}
