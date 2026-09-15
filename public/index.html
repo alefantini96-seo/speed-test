@@ -49,6 +49,11 @@
          'Helvetica Neue',Arial,sans-serif;
   --mono:ui-monospace,'Cascadia Mono',Consolas,monospace;
 
+  /* Larghezza della colonna degli strumenti. Sta fra i token perche' cambia
+     in tre punti - stretta sotto i 1200px, a riga sotto gli 860, chiusa a mano
+     - e tenerla in uno solo evita che i tre valori divergano. */
+  --rail:214px;
+
   /* Un raggio solo, dichiarato qui e ripreso ovunque con var(--raggio): nel
      foglio non deve comparire nessun altro valore, altrimenti gli angoli
      cominciano a divergere fra un componente e l'altro. A 0 l'interfaccia torna
@@ -66,7 +71,75 @@ body { font-family:var(--font); color:var(--testo); background:var(--tela);
        margin:0; padding:0 0 96px; line-height:1.55;
        border-top:4px solid var(--blu);
        -webkit-font-smoothing:antialiased; }
-main { max-width:1080px; margin-inline:auto; padding:40px 24px 0; }
+/* --- il telaio: strumenti a sinistra, lavoro a destra ---------------------
+   Lo strumento fa una cosa sola - la velocita' - e la fa in due modi: misura le
+   tue pagine, oppure mette il tuo campo accanto a quello dei concorrenti. La
+   colonna elenca i modi, e ciascuno resta la pagina che era.
+
+   Si stringe a icona sotto i 1200px e diventa una riga sotto gli 860: la
+   cascata ha gia' bisogno di tutta la larghezza che trova. Si chiude anche a
+   mano, e la scelta si ricorda. Chiusa vuol dire a icona e non sparita: una
+   navigazione che si nasconde del tutto e' una navigazione che non si ritrova. */
+.telaio { display:grid; grid-template-columns:var(--rail) minmax(0,1fr);
+          gap:28px; align-items:start;
+          max-width:1340px; margin-inline:auto; padding:34px 24px 0; }
+main { max-width:1080px; min-width:0; }
+.nascosto { display:none; }
+
+.strumenti { position:sticky; top:18px; display:flex; flex-direction:column;
+             gap:4px; min-width:0; }
+.capo-strumenti { display:flex; align-items:center; padding:0 6px 14px; }
+.piega { margin-left:auto; flex:none; width:26px; height:26px; padding:0;
+         display:flex; align-items:center; justify-content:center;
+         background:none; border:1px solid transparent; color:var(--tenue);
+         font-size:13px; }
+.piega:hover:not(:disabled) { background:var(--sfondo); border-color:var(--bordo);
+                              color:var(--testo); }
+.voce-strumento { display:flex; align-items:center; gap:10px; padding:7px 9px;
+                  border-radius:var(--raggio); border:1px solid transparent;
+                  color:var(--tenue); font-size:13.5px; text-decoration:none;
+                  min-width:0; }
+.voce-strumento .nome { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Le icone sono disegnate col colore del testo: la voce aperta le ribalta in
+   bianco senza una seconda regola per ciascuna. */
+.voce-strumento .segno { flex:none; width:26px; height:26px; display:flex;
+                         align-items:center; justify-content:center;
+                         border:1px solid var(--bordo); border-radius:var(--raggio);
+                         background:var(--sfondo); color:var(--tenue); }
+.voce-strumento .segno svg { width:15px; height:15px; display:block; }
+.voce-strumento:hover { background:var(--sfondo); color:var(--testo); }
+.voce-strumento[aria-current="page"] { background:var(--sfondo); color:var(--testo);
+                                       border-color:var(--bordo); font-weight:500; }
+.voce-strumento[aria-current="page"] .segno { background:var(--blu); color:var(--bianco);
+                                              border-color:var(--blu); }
+body.strumenti-chiusi { --rail:58px; }
+body.strumenti-chiusi .voce-strumento .nome { display:none; }
+body.strumenti-chiusi .voce-strumento { justify-content:center; padding:7px; }
+body.strumenti-chiusi .capo-strumenti { justify-content:center; padding:0 0 14px; }
+body.strumenti-chiusi .piega { margin-left:0; }
+
+/* --- il confronto coi concorrenti ---------------------------------------- */
+.tabella-gap td.metrica { font-weight:500; }
+.tabella-gap .dato { display:block; font-variant-numeric:tabular-nums;
+                     font-size:15px; font-weight:500; }
+.tabella-gap .vuoto { color:var(--tenue); }
+.tabella-gap th.tua, .tabella-gap td.tua { background:var(--tela); }
+.tabella-gap th .chi { display:block; font-size:12px; text-transform:none;
+                       letter-spacing:0; color:var(--testo); font-weight:500;
+                       font-family:var(--mono); word-break:break-all; margin-top:3px; }
+.tabella-gap th .dove { display:block; font-size:10.5px; color:var(--tenue);
+                        text-transform:none; letter-spacing:0; font-weight:400; }
+.verdetti { display:flex; flex-wrap:wrap; gap:18px; margin-bottom:18px; }
+.verdetti .riquadro { flex:1 1 280px; margin-bottom:0; }
+.verdetti h2 { font-size:16px; }
+.verdetti ul { list-style:none; margin:10px 0 0; padding:0; display:flex;
+               flex-wrap:wrap; gap:6px; }
+.verdetti li { margin:0; }
+.metrica-tag { display:inline-block; font-family:var(--mono); font-size:12px;
+               padding:2px 8px; border:1px solid var(--bordo);
+               border-radius:var(--raggio); color:var(--testo); }
+.verdetti .dietro { border-color:var(--scarso); color:var(--scarso); }
+.verdetti .avanti { border-color:var(--buono); color:var(--buono); }
 
 /* --- tipografia ----------------------------------------------------------- */
 .occhiello { font-size:11.5px; text-transform:uppercase; letter-spacing:.05125rem;
@@ -89,6 +162,12 @@ h3:first-child { margin-top:4px; }
 /* --- moduli --------------------------------------------------------------- */
 label { display:block; font-size:11.5px; font-weight:500; color:var(--testo);
         margin:0 0 7px; text-transform:uppercase; letter-spacing:.03125rem; }
+/* L'etichetta di una casella e' una frase, non un'intestazione: in maiuscoletto
+   si leggeva "CONFRONTA SU DESKTOP INVECE CHE MOBILE". Era gia' cosi' nel modulo
+   dell'analisi, con lo stile scritto a mano sull'elemento e il maiuscolo
+   rimasto. */
+label.scelta { font-weight:400; font-size:14px; color:var(--testo);
+               text-transform:none; letter-spacing:0; }
 textarea, input[type=text] {
   width:100%; font-family:var(--mono); font-size:13px;
   padding:11px 13px; border:1px solid var(--bordo); border-radius:var(--raggio);
@@ -357,8 +436,26 @@ a { color:var(--blu); }
    Il link a questo strumento gira su Teams e si apre dal telefono: la barra a
    quattro pulsanti andava a capo lasciando un pulsante orfano per riga, e le
    tabelle si comprimevano fino a spezzare le parole. */
+@media (max-width:1200px) {
+  :root { --rail:58px; }
+  .voce-strumento .nome { display:none; }
+  .voce-strumento { justify-content:center; padding:7px; }
+  .capo-strumenti { justify-content:center; padding:0 0 14px; }
+  .piega { margin-left:0; }
+}
+@media (max-width:860px) {
+  :root { --rail:auto; }
+  .telaio { grid-template-columns:1fr; gap:14px; padding-top:22px; }
+  .strumenti { position:static; flex-direction:row; flex-wrap:wrap;
+               align-items:center; gap:8px; }
+  .voce-strumento .nome { display:block; }
+  .voce-strumento { justify-content:flex-start; padding:7px 9px; }
+  /* In riga la colonna e' gia' stretta quanto basta: il comando sarebbe un
+     pulsante che non fa niente. */
+  .capo-strumenti { display:none; }
+}
 @media (max-width:560px) {
-  main { padding:0 14px; }
+  .telaio { padding-inline:14px; }
   .barra { align-items:stretch; }
   .barra .cosa { margin-right:0; flex-basis:100%; margin-bottom:6px; }
   .barra button { flex:1 1 auto; }
@@ -373,7 +470,16 @@ a { color:var(--blu); }
 </style>
 </head>
 <body>
+<div class="telaio">
+
+<!-- La colonna degli strumenti. Si disegna dal JavaScript perché l'elenco è un
+     dato — nome, icona, pannello — e scriverlo due volte, in markup e in codice,
+     è il modo piu' sicuro per farli divergere. -->
+<nav class="strumenti" id="strumenti" aria-label="Strumenti"></nav>
+
 <main>
+
+<section id="sezione-analisi">
   <p class="occhiello">Core Web Vitals · PageSpeed Insights</p>
   <h1>Analisi velocità</h1>
   <p class="sottotitolo">Incolla gli URL da analizzare, uno per riga. Ogni pagina viene
@@ -414,7 +520,7 @@ a { color:var(--blu); }
       </div>
       <div>
         <label for="desktop">Dispositivo</label>
-        <label for="desktop" style="font-weight:400;font-size:14px;color:var(--testo)">
+        <label class="scelta" for="desktop">
           <input type="checkbox" id="desktop"> misura desktop invece di mobile
         </label>
         <p class="aiuto">Di default mobile: è quello che Google usa per il ranking,
@@ -446,7 +552,62 @@ a { color:var(--blu); }
 
   <div id="verdetto"></div>
   <div id="risultati"></div>
+</section><!-- /#sezione-analisi -->
+
+<!-- ------------------------------------------------------------------------
+     Gap competitor.
+
+     Il confronto fra siti diversi si fa sul campo e basta: il laboratorio
+     misura da un data center Google con throttling simulato, e fra due siti
+     diversi non dice piu' di quanto oscilla fra due misurazioni dello stesso.
+     Il campo e' cio' che gli utenti di ciascun sito subiscono davvero.
+     ------------------------------------------------------------------------ -->
+<section id="sezione-gap" class="nascosto">
+  <p class="occhiello">Core Web Vitals · CrUX</p>
+  <h1>Gap competitor</h1>
+  <p class="sottotitolo">La tua pagina e fino a quattro concorrenti, a confronto sui
+    dati di campo: chi sta dentro le soglie e chi no, metrica per metrica.</p>
+
+  <div class="riquadro">
+    <div class="riga">
+      <div>
+        <label for="gap-mia">La tua pagina</label>
+        <input type="text" id="gap-mia" spellcheck="false" autocomplete="off"
+               placeholder="https://www.esempio.it/prodotto/">
+        <p class="aiuto">L&rsquo;indirizzo preciso, non il dominio: il campo di una
+          scheda prodotto non e&rsquo; quello della home.</p>
+      </div>
+      <div>
+        <label for="gap-desktop">Dispositivo</label>
+        <label class="scelta" for="gap-desktop">
+          <input type="checkbox" id="gap-desktop"> confronta su desktop invece che mobile
+        </label>
+        <p class="aiuto">Di default mobile, come nell&rsquo;analisi.</p>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <label for="gap-concorrenti">I concorrenti, uno per riga &mdash; fino a quattro</label>
+      <textarea id="gap-concorrenti" rows="4" spellcheck="false"
+        placeholder="https://www.concorrente-uno.it/prodotto/&#10;https://www.concorrente-due.it/prodotto/"></textarea>
+      <p class="aiuto">Metti pagine <strong>dello stesso tipo</strong>: una scheda
+        prodotto con altre schede prodotto. Confrontare una home con una scheda
+        produce differenze che non vogliono dire niente.</p>
+    </div>
+
+    <div class="comandi">
+      <button id="confronta">Confronta</button>
+      <span class="attesa" id="gap-attesa">Sono letture, non misurazioni: qualche
+        secondo, e non consumano la quota di PageSpeed.</span>
+    </div>
+  </div>
+
+  <div id="gap-errore" role="alert"></div>
+  <div id="gap-esito"></div>
+</section><!-- /#sezione-gap -->
+
 </main>
+</div><!-- /.telaio -->
 
 <script>
 const $ = (id) => document.getElementById(id);
@@ -474,6 +635,9 @@ const FONTE = {
   campo:'classificazione su dati di campo',
 };
 const COLORE = { buono:'var(--buono)', da_migliorare:'var(--medio)', scarso:'var(--scarso)' };
+// Il giudizio scritto: "da_migliorare" e' una chiave, "da migliorare" e' una
+// parola. Serve uguale nella tabella di campo e nel confronto coi concorrenti.
+const parola = (g) => String(g || '').replace('_', ' ');
 // Tipi di risorsa come li nomina Lighthouse. Sono categorie misurate, non giudizi.
 const TIPI = { Script:'JavaScript', Stylesheet:'CSS', Image:'Immagini', Font:'Font',
                Document:'HTML', Media:'Media', Fetch:'Chiamate XHR', XHR:'Chiamate XHR',
@@ -510,7 +674,7 @@ function tabellaCampo(campo) {
     const segno = s.length > 1 && s.at(-1) >= s[0] ? '+' : '';
     return `<tr><td><strong>${SOGLIE[k].et}</strong></td>
       <td class="num">${formatta(k, metriche[k])}</td>
-      <td><span class="pill" style="color:${COLORE[g] || 'var(--tenue)'}">${g.replace('_',' ')}</span></td>
+      <td><span class="pill" style="color:${COLORE[g] || 'var(--tenue)'}">${parola(g)}</span></td>
       <td class="num">${delta ? segno + delta : ''}</td></tr>`;
   }).join('');
   const periodi = campo?.storico?.periodi || [];
@@ -1360,6 +1524,267 @@ function ripristina() {
   stimaDurata();
 }
 
+/* ==========================================================================
+   Gli strumenti: la colonna a sinistra.
+
+   Lo strumento fa una cosa sola - la velocita' - e la fa in due modi. L'elenco
+   e' un dato e la colonna si disegna da qui: scriverlo due volte, in markup e
+   in codice, e' il modo piu' sicuro per farli divergere.
+   ========================================================================== */
+
+const ICONE = {
+  // Un cronometro: si misura un tempo.
+  cronometro: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="9" r="5.2"/>' +
+    '<path d="M8 6.4V9l1.8 1.1"/><path d="M6.3 1.8h3.4"/></svg>',
+  // Barre di altezza diversa: un confronto.
+  barre: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.5" stroke-linecap="round"><path d="M3.5 13V9"/>' +
+    '<path d="M8 13V3.5"/><path d="M12.5 13V7"/></svg>',
+};
+
+const STRUMENTI = [
+  { chiave: 'analisi', nome: 'Analisi velocità', pannello: 'sezione-analisi',
+    icona: ICONE.cronometro,
+    spiega: 'Le tue pagine, misurate sul campo e diagnosticate in laboratorio' },
+  { chiave: 'gap', nome: 'Gap competitor', pannello: 'sezione-gap',
+    icona: ICONE.barre,
+    spiega: 'Il tuo campo accanto a quello di fino a quattro concorrenti' },
+];
+
+/* Quale strumento è aperto sta nel frammento dell'indirizzo e non in memoria:
+   così si manda a un collega il link del confronto, e ricaricando si resta dove
+   si era. Un valore sconosciuto non è un errore, è il primo strumento. */
+function strumentoDaIndirizzo() {
+  const chiave = (location.hash || '').replace(/^#/, '');
+  return STRUMENTI.some(s => s.chiave === chiave) ? chiave : STRUMENTI[0].chiave;
+}
+
+function apriStrumento(chiave) {
+  const scelto = STRUMENTI.find(s => s.chiave === chiave) || STRUMENTI[0];
+  for (const strumento of STRUMENTI) {
+    const pannello = document.getElementById(strumento.pannello);
+    if (pannello) pannello.classList.toggle('nascosto', strumento !== scelto);
+  }
+  for (const voce of document.querySelectorAll('[data-strumento]')) {
+    if (voce.dataset.strumento === scelto.chiave) voce.setAttribute('aria-current', 'page');
+    else voce.removeAttribute('aria-current');
+  }
+}
+
+function disegnaStrumenti() {
+  const attuale = strumentoDaIndirizzo();
+  // La voce aperta si marca già nel markup: aspettare che apriStrumento passi
+  // sui nodi vivi vuol dire un istante in cui nessuna voce è segnata, e chi
+  // arriva da un link con il frammento lo vede.
+  const voci = STRUMENTI.map(strumento => `
+    <a class="voce-strumento" href="#${esc(strumento.chiave)}"
+       data-strumento="${esc(strumento.chiave)}" title="${esc(strumento.spiega)}"
+       ${strumento.chiave === attuale ? 'aria-current="page"' : ''}>
+      <span class="segno" aria-hidden="true">${strumento.icona}</span>
+      <span class="nome">${esc(strumento.nome)}</span>
+    </a>`).join('');
+
+  $('strumenti').innerHTML = `
+    <div class="capo-strumenti">
+      <button type="button" class="piega minuto" id="piega"
+              aria-expanded="true" aria-controls="strumenti"
+              title="Stringi la colonna">&laquo;</button>
+    </div>${voci}`;
+
+  collegaPiega();
+  apriStrumento(attuale);
+  window.addEventListener('hashchange', () => apriStrumento(strumentoDaIndirizzo()));
+}
+
+/* Chiudere la colonna, e ricordarselo. La preferenza sta a parte dagli URL
+   ricordati: quella è il lavoro su un cliente, questa è come si tiene lo
+   schermo. Ogni accesso è protetto perché in navigazione privata localStorage
+   esiste ma può sollevare al primo tocco, e perdere una preferenza non deve
+   impedire di lavorare. */
+const CHIUSE = 'speed:strumenti-chiusi';
+
+function collegaPiega() {
+  const bottone = $('piega');
+  const applica = (chiuse) => {
+    document.body.classList.toggle('strumenti-chiusi', chiuse);
+    bottone.setAttribute('aria-expanded', String(!chiuse));
+    bottone.innerHTML = chiuse ? '&raquo;' : '&laquo;';
+    bottone.title = chiuse ? 'Allarga la colonna' : 'Stringi la colonna';
+  };
+  let chiuse = false;
+  try { chiuse = localStorage.getItem(CHIUSE) === '1'; } catch (e) { /* niente */ }
+  applica(chiuse);
+  bottone.addEventListener('click', () => {
+    chiuse = !document.body.classList.contains('strumenti-chiusi');
+    applica(chiuse);
+    try { localStorage.setItem(CHIUSE, chiuse ? '1' : '0'); } catch (e) { /* niente */ }
+  });
+}
+
+/* ==========================================================================
+   Gap competitor: il tuo campo accanto a quello dei concorrenti.
+
+   Solo campo. Il laboratorio misura da un data center Google con throttling
+   simulato: fra due misurazioni della stessa pagina oscilla, e fra due siti
+   diversi non dice più di quanto oscilla. Il campo è quello che gli utenti di
+   ciascun sito subiscono davvero.
+   ========================================================================== */
+
+const METRICHE_GAP = ['largest_contentful_paint', 'interaction_to_next_paint',
+                      'cumulative_layout_shift', 'first_contentful_paint',
+                      'experimental_time_to_first_byte'];
+
+const LIVELLO = {
+  url: '',
+  origin: 'dati del dominio, non della pagina',
+  assente: 'nessun dato di campo',
+  errore: 'lettura fallita',
+};
+
+function dominio(url) {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return url; }
+}
+
+function cellaGap(pagina, metrica, tua) {
+  const valore = (pagina.metriche || {})[metrica];
+  if (valore == null) {
+    return `<td class="num${tua ? ' tua' : ''}"><span class="vuoto">&mdash;</span></td>`;
+  }
+  const g = giudizio(metrica, valore);
+  return `<td class="num${tua ? ' tua' : ''}">
+    <span class="dato">${esc(formatta(metrica, valore))}</span>
+    <span class="pill" style="color:${COLORE[g] || 'var(--tenue)'}">${esc(parola(g))}</span></td>`;
+}
+
+/* Dietro a tutti: ogni concorrente misurato ha un p75 migliore del tuo. Su
+   tutte e cinque le metriche "meglio" vuol dire "meno". Un concorrente senza
+   quella metrica non vota: non si può dire che sia avanti o indietro. */
+function confrontoMetrica(metrica, tua, altri) {
+  const mio = (tua.metriche || {})[metrica];
+  if (mio == null) return null;
+  const loro = altri.map(p => (p.metriche || {})[metrica]).filter(v => v != null);
+  if (!loro.length) return null;
+  if (loro.every(v => v < mio)) return 'dietro';
+  if (loro.every(v => v > mio)) return 'avanti';
+  return null;
+}
+
+function riquadroVerdetto(titolo, metriche, classe, quandoVuoto) {
+  const voci = metriche.map(m =>
+    `<li><span class="metrica-tag ${classe}">${esc(SOGLIE[m].et)}</span></li>`).join('');
+  return `<div class="riquadro">
+    <h2>${metriche.length} ${esc(titolo)}</h2>
+    ${metriche.length ? `<ul>${voci}</ul>` : `<p class="attesa">${esc(quandoVuoto)}</p>`}
+  </div>`;
+}
+
+function disegnaGap(dati) {
+  const pagine = dati.pagine || [];
+  const tua = pagine[0];
+  const altri = pagine.slice(1);
+  const misurati = altri.filter(p => Object.keys(p.metriche || {}).length);
+
+  const dietro = METRICHE_GAP.filter(m => confrontoMetrica(m, tua, misurati) === 'dietro');
+  const avanti = METRICHE_GAP.filter(m => confrontoMetrica(m, tua, misurati) === 'avanti');
+
+  const intestazioni = pagine.map((p, i) => {
+    const etichetta = i === 0 ? 'La tua' : `Concorrente ${i}`;
+    const nota = LIVELLO[p.livello] || '';
+    return `<th class="num${i === 0 ? ' tua' : ''}">${esc(etichetta)}
+      <span class="chi">${esc(dominio(p.url))}</span>
+      ${nota ? `<span class="dove">${esc(nota)}</span>` : ''}</th>`;
+  }).join('');
+
+  const righe = METRICHE_GAP.map(metrica => `
+    <tr><td class="metrica">${esc(SOGLIE[metrica].et)}</td>
+      ${pagine.map((p, i) => cellaGap(p, metrica, i === 0)).join('')}</tr>`).join('');
+
+  const periodi = [...new Set(pagine.map(p => p.periodo_a).filter(Boolean))];
+  const senzaDati = pagine.filter(p => p.livello === 'assente');
+  const caduti = pagine.filter(p => p.livello === 'errore');
+  const perDominio = pagine.filter(p => p.livello === 'origin');
+
+  const avvisi = [
+    perDominio.length ? `<p class="nota"><strong>${perDominio.length} ${
+      perDominio.length === 1 ? 'riga viene' : 'righe vengono'} dal dominio e non
+      dalla pagina</strong> (${perDominio.map(p => esc(dominio(p.url))).join(', ')}):
+      su quell'indirizzo CrUX non aveva traffico sufficiente, e il numero è la media
+      di tutto il sito. Confrontarlo con una pagina sola è confrontare due cose
+      diverse, quindi vale come indizio, non come misura.</p>` : '',
+    senzaDati.length ? `<p class="nota"><strong>Senza dati di campo:</strong>
+      ${senzaDati.map(p => esc(dominio(p.url))).join(', ')}. CrUX non espone né la
+      pagina né il dominio quando il traffico non basta: non entrano nel
+      confronto.</p>` : '',
+    caduti.length ? `<p class="nota"><strong>Lettura fallita:</strong>
+      ${caduti.map(p => `${esc(dominio(p.url))} (${esc(p.errore || '')})`).join(', ')}.</p>` : '',
+    (dati.scartati || []).length ? `<p class="nota"><strong>Indirizzi scartati:</strong>
+      ${dati.scartati.map(x => `${esc(x.url)} — ${esc(x.motivo)}`).join('; ')}.</p>` : '',
+  ].join('');
+
+  $('gap-esito').innerHTML = `
+    <div class="verdetti">
+      ${riquadroVerdetto('metriche in cui sei dietro a tutti', dietro, 'dietro',
+        misurati.length ? 'Nessuna: su ogni metrica almeno un concorrente sta peggio di te.'
+                        : 'Nessun concorrente con dati di campo da confrontare.')}
+      ${riquadroVerdetto('metriche in cui sei davanti a tutti', avanti, 'avanti',
+        misurati.length ? 'Nessuna: su ogni metrica almeno un concorrente sta meglio di te.'
+                        : 'Nessun concorrente con dati di campo da confrontare.')}
+    </div>
+    <div class="riquadro">
+      <div class="scorre"><table class="tabella-gap">
+        <tr><th>Metrica</th>${intestazioni}</tr>${righe}
+      </table></div>
+      ${avvisi}
+      <p class="nota">p75 degli utenti reali su ${
+        $('gap-desktop').checked ? 'desktop' : 'mobile'}, da CrUX${
+        periodi.length ? `, al ${esc(periodi.sort().at(-1))}` : ''}. È una media
+        mobile a 28 giorni: un intervento messo online oggi si legge pulito solo dopo
+        quattro settimane, e vale per te come per loro. Il laboratorio non entra in
+        questo confronto: fra due siti diversi direbbe meno di quanto oscilla fra due
+        misurazioni dello stesso.</p>
+    </div>`;
+}
+
+async function confronta() {
+  const mia = $('gap-mia').value.trim();
+  const concorrenti = $('gap-concorrenti').value.split('\n')
+    .map(s => s.trim()).filter(Boolean);
+  $('gap-errore').innerHTML = '';
+  if (!mia) return mostraErroreGap('Manca la tua pagina.');
+  if (!concorrenti.length) return mostraErroreGap('Metti almeno un concorrente.');
+
+  const tasto = $('confronta');
+  tasto.disabled = true;
+  const etichetta = tasto.textContent;
+  tasto.textContent = 'confronto…';
+  $('gap-esito').innerHTML = '';
+  try {
+    const risposta = await fetch('/api/gap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: mia, concorrenti, desktop: $('gap-desktop').checked }),
+    });
+    const dati = await risposta.json();
+    if (!risposta.ok) {
+      const errore = new Error(dati.errore || `Errore ${risposta.status}`);
+      errore.rimedio = dati.rimedio || '';
+      throw errore;
+    }
+    disegnaGap(dati);
+  } catch (e) {
+    mostraErroreGap(e.message, e.rimedio);
+  } finally {
+    tasto.disabled = false;
+    tasto.textContent = etichetta;
+  }
+}
+
+function mostraErroreGap(messaggio, rimedio) {
+  $('gap-errore').innerHTML = `<div class="errore">${esc(messaggio)}
+    ${rimedio ? `<div class="rimedio">${esc(rimedio)}</div>` : ''}</div>`;
+}
+
 $('risultati').addEventListener('click', (evento) => {
   const bottone = evento.target.closest('.ancora');
   if (bottone) {
@@ -1410,6 +1835,8 @@ $('scarica-nota').addEventListener('click', () => scarica('nota'));
 $('rianalizza').addEventListener('click', avvia);
 $('modifica').addEventListener('click', espandiModulo);
 $('urls').addEventListener('input', stimaDurata);
+$('confronta').addEventListener('click', confronta);
+disegnaStrumenti();
 ripristina();
 </script>
 </body>

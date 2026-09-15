@@ -10,6 +10,7 @@ Nessuna dipendenza: WSGI e' nella libreria standard. La logica vera sta in
 
     /                  la pagina
     POST /api/analizza {url}              -> analisi di una singola pagina
+    POST /api/gap      {url, concorrenti} -> il campo tuo e dei concorrenti
     POST /api/report   {pagine, formato}  -> Word da scaricare: il report al
                                              cliente, o la nota per lo sviluppo
 """
@@ -25,7 +26,8 @@ from pathlib import Path
 
 from speed.errori import ErroreSpeed
 from speed.io import render_docx, render_nota
-from speed.web import LIMITE_PAGINE, analizza_una, serializza, valida_url
+from speed.web import (LIMITE_CONCORRENTI, LIMITE_PAGINE, LIMITE_URL,
+                       analizza_una, gap, serializza, valida_url)
 
 RADICE = Path(__file__).resolve().parent
 PAGINA = RADICE / "public" / "index.html"
@@ -183,6 +185,58 @@ def _analizza(avvia, richiesta: dict, environ):
     return _json(avvia, "200 OK", risultato)
 
 
+def _gap(avvia, richiesta: dict, environ):
+    """Il confronto sul campo fra la tua pagina e i concorrenti.
+
+    Non consuma quota PageSpeed - sono letture CrUX - ma passa lo stesso dal
+    limite di richieste: e' pur sempre la chiave Google di chi ospita l'app.
+    """
+    if _oltre_il_limite(environ):
+        return _troppe(avvia)
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return _json(avvia, "500 Internal Server Error", {
+            "errore": "GOOGLE_API_KEY non configurata sul server.",
+            "rimedio": "Impostala nelle variabili d'ambiente del progetto Vercel."})
+
+    url = (richiesta.get("url") or "").strip()
+    problema = valida_url(url)
+    if problema:
+        return _json(avvia, "400 Bad Request", {"errore": "URL non valido.",
+                                                "rimedio": problema})
+
+    concorrenti, scartati = [], []
+    for grezzo in (richiesta.get("concorrenti") or []):
+        candidato = (grezzo or "").strip()
+        if not candidato:
+            continue
+        guaio = valida_url(candidato)
+        if guaio:
+            scartati.append({"url": candidato[:LIMITE_URL], "motivo": guaio})
+        elif candidato not in concorrenti and candidato != url:
+            concorrenti.append(candidato)
+    if not concorrenti:
+        return _json(avvia, "400 Bad Request", {
+            "errore": "Nessun concorrente valido da confrontare.",
+            "rimedio": (scartati[0]["motivo"] if scartati else
+                        "Metti almeno un indirizzo, uno per riga."),
+            "scartati": scartati})
+    if len(concorrenti) > LIMITE_CONCORRENTI:
+        return _json(avvia, "400 Bad Request", {
+            "errore": f"Troppi concorrenti: il massimo e' {LIMITE_CONCORRENTI}."})
+
+    form_factor = "DESKTOP" if richiesta.get("desktop") else "PHONE"
+    try:
+        risultato = asyncio.run(gap(api_key, url, concorrenti, form_factor))
+    except ErroreSpeed as errore:
+        return _json(avvia, "502 Bad Gateway", {"errore": errore.messaggio,
+                                                "rimedio": errore.rimedio})
+    except Exception as exc:
+        return _json(avvia, "502 Bad Gateway", {"errore": _messaggio(exc)})
+    return _json(avvia, "200 OK", risultato | {"scartati": scartati})
+
+
 # I due documenti Word che la pagina sa produrre. Il report e' per chi decide, la
 # nota per chi implementa: contenuti diversi, non due vesti dello stesso testo.
 DOCUMENTI = {
@@ -247,9 +301,11 @@ def app(environ, avvia):
         return _stato(avvia)
     if percorso == "/api/analizza" and metodo == "POST":
         return _analizza(avvia, _leggi(environ), environ)
+    if percorso == "/api/gap" and metodo == "POST":
+        return _gap(avvia, _leggi(environ), environ)
     if percorso == "/api/report" and metodo == "POST":
         return _report(avvia, _leggi(environ), environ)
-    if percorso in ("/api/analizza", "/api/report"):
+    if percorso in ("/api/analizza", "/api/gap", "/api/report"):
         return _json(avvia, "405 Method Not Allowed", {"errore": "Usa POST."})
     return _json(avvia, "404 Not Found", {"errore": "Percorso sconosciuto."})
 

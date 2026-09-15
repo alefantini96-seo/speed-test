@@ -103,7 +103,12 @@ una richiesta.
 
 ## Versione online
 
-Oltre alla CLI c'è un'interfaccia web pensata per Vercel: incolli gli URL, il browser
+Oltre alla CLI c'è un'interfaccia web pensata per Vercel, con due strumenti in una
+colonna a sinistra: **Analisi velocità** e **Gap competitor**. Quale sia aperto sta nel
+frammento dell'indirizzo (`#gap`), non in memoria: così si manda a un collega il link
+del confronto, e ricaricando si resta dov'eri.
+
+Nell'analisi incolli gli URL, il browser
 li manda **uno alla volta** e i risultati compaiono mano a mano. Ogni pagina misurata
 è una scheda con quattro linguette — sintesi, fotogrammi, cascata, laboratorio —
 perché i sei blocchi impilati facevano 3.400 pixel a template, e con tre template la
@@ -267,6 +272,33 @@ Tutto il resto — evidenza, provenienza del testo, note metodologiche — sta d
 un «perche'» richiudibile. Serve a difendere il dato davanti a un cliente, non a
 decidere cosa fare. I primi cinque interventi sono visibili, gli altri dietro un
 bottone: sotto il quinto nessuno agisce subito.
+
+## Gap competitor
+
+Il tuo campo accanto a quello di **fino a quattro concorrenti**, metrica per metrica:
+LCP, INP, CLS, FCP e TTFB, ciascuno col suo giudizio sulle soglie. Sopra la tabella due
+conti che il confronto serve a fare: in quante metriche sei **dietro a tutti** e in
+quante sei **davanti a tutti** — «dietro a tutti» vuol dire che ogni concorrente
+misurato ha un p75 migliore del tuo, e un concorrente senza quella metrica non vota.
+
+**Solo campo, nessun laboratorio.** Lighthouse misura da un data center Google con
+throttling simulato: fra due misurazioni della stessa pagina oscilla — misurato, 21
+secondi di scarto sulla stessa home — e fra due siti diversi non direbbe più di quanto
+oscilla. Il campo invece è quello che gli utenti di ciascun sito subiscono davvero
+(ADR-001). È anche l'unica fonte che sta in una richiesta sola: CrUX risponde in 0,2
+secondi e cinque URL si leggono in parallelo in meno di uno, mentre PageSpeed ne vuole
+40 a pagina e non ci starebbe nel tetto della piattaforma.
+
+**Il ripiego sull'origine è dichiarato.** Su un concorrente l'URL preciso spesso non ha
+traffico sufficiente mentre il dominio sì: misurato il 15/09/2026, `coverflex.com` non
+aveva dati sulla home e li aveva sull'origine. Senza ripiego quel concorrente sparirebbe
+pur essendo misurabile; col ripiego il numero è la media di tutto il sito, che è
+un'altra cosa. La riga lo scrive — *dati del dominio, non della pagina* — e la nota sotto
+la tabella dice che vale come indizio e non come misura. Darlo per un dato della pagina
+sarebbe la stessa trappola dell'`origin_fallback` di PageSpeed.
+
+Chi non ha dati né sulla pagina né sul dominio compare lo stesso, con la riga vuota e il
+motivo: sparire in silenzio farebbe credere che fosse stato misurato e fosse a posto.
 
 ## Nota tecnica per lo sviluppo
 

@@ -11,6 +11,7 @@ coda, nessun database, nessun polling.
 """
 from __future__ import annotations
 
+import asyncio
 from dataclasses import asdict, dataclass, is_dataclass
 
 import httpx
@@ -22,6 +23,11 @@ from .io import crux, psi
 
 LIMITE_URL = 2048
 LIMITE_PAGINE = 40
+# Quanti concorrenti stanno in un confronto. Il tetto non e' tecnico - le
+# chiamate costano 0,2 s l'una - ma di lettura: cinque colonne di numeri sono
+# gia' il massimo che si legge senza scorrere, e un confronto che non si legge
+# non fa decidere niente.
+LIMITE_CONCORRENTI = 4
 
 
 # --------------------------------------------------------------------------- #
@@ -188,6 +194,68 @@ def terze_essenziali(riepilogo) -> dict:
         "entita": [{"nome": e.nome, "byte": e.byte, "richieste": e.richieste,
                     "terza_parte": e.terza_parte} for e in riepilogo.entita[:10]],
     }
+
+
+# --------------------------------------------------------------------------- #
+#  Gap competitor
+#
+#  Il confronto fra siti diversi si fa **sul campo e basta**. Il laboratorio
+#  misura da un data center Google con throttling simulato: fra due misurazioni
+#  della stessa pagina oscilla, e fra due siti diversi non dice niente di piu'
+#  di quanto oscilla. Il campo invece e' cio' che gli utenti di ciascun sito
+#  subiscono davvero (ADR-001), ed e' anche l'unica fonte che si puo' chiedere
+#  per cinque URL in una richiesta sola: CrUX risponde in 0,2 s, PageSpeed in
+#  40 e non ci starebbe nel tetto della piattaforma.
+# --------------------------------------------------------------------------- #
+
+async def campo_con_ripiego(client: httpx.AsyncClient, api_key: str, url: str,
+                            form_factor: str, budget: Budget = BUDGET) -> dict:
+    """Il campo di una pagina, e se non ce l'ha quello del suo dominio.
+
+    Su un concorrente l'URL preciso spesso non ha traffico sufficiente mentre il
+    dominio si': misurato il 15/09/2026, `coverflex.com` non aveva dati sulla
+    home e li aveva sull'origine. Senza ripiego quel concorrente sparirebbe dal
+    confronto pur essendo misurabile.
+
+    Il ripiego pero' cambia **cosa** si sta guardando - il sito invece della
+    pagina - quindi la voce lo dichiara in `livello` e chi disegna lo scrive.
+    Prenderlo per un dato della pagina e' la stessa trappola dell'`origin_fallback`
+    di PageSpeed.
+    """
+    for origine in (False, True):
+        try:
+            return await crux.record(
+                client, api_key, url, form_factor, origin=origine,
+                timeout=budget.crux_timeout_record,
+                tentativi=budget.crux_tentativi,
+                attesa_iniziale=budget.crux_backoff)
+        except crux.CruxNonDisponibile:
+            continue
+    return {"url": url, "livello": "assente", "metriche": {}}
+
+
+async def _voce_gap(client, api_key: str, url: str, form_factor: str,
+                    budget: Budget) -> dict:
+    """Una riga del confronto. Un URL che cade non fa cadere gli altri."""
+    try:
+        return await campo_con_ripiego(client, api_key, url, form_factor, budget)
+    except Exception as guasto:
+        return {"url": url, "livello": "errore", "metriche": {},
+                "errore": str(guasto).strip() or type(guasto).__name__}
+
+
+async def gap(api_key: str, url: str, concorrenti: list, form_factor: str = "PHONE",
+              budget: Budget = BUDGET) -> dict:
+    """La tua pagina e i concorrenti, sul campo, in una richiesta sola.
+
+    In parallelo: sono letture, non misurazioni, e CrUX regge 150 richieste al
+    minuto. Cinque URL misurati il 15/09/2026 in 0,9 secondi.
+    """
+    tutte = [url] + [c for c in concorrenti if c != url][:LIMITE_CONCORRENTI]
+    async with httpx.AsyncClient() as client:
+        pagine = await asyncio.gather(*(
+            _voce_gap(client, api_key, u, form_factor, budget) for u in tutte))
+    return {"form_factor": form_factor, "tua": url, "pagine": list(pagine)}
 
 
 async def analizza_una(api_key: str, url: str, form_factor: str,
