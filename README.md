@@ -10,7 +10,7 @@ Due fonti, con due ruoli distinti che non vanno mescolati:
 | Fonte | Cosa dà | Come si usa |
 |---|---|---|
 | **CrUX API + History** | p75 degli utenti reali, 40 settimane di storico | è **la metrica**: dice se il sito è lento e se sta peggiorando |
-| **PageSpeed Insights** | elemento LCP, fasi, peso, risorse bloccanti, **e il testo delle raccomandazioni** | è **la diagnosi**: dice perché. Il punteggio non viene usato |
+| **PageSpeed Insights** | elemento LCP, fasi, peso, risorse bloccanti, tempi di ogni richiesta, fotogrammi del caricamento, **e il testo delle raccomandazioni** | è **la diagnosi**: dice perché. Il punteggio non viene usato |
 
 Il punteggio PSI non entra in nessuna valutazione: varia fra due misurazioni identiche.
 Compare solo in fondo al report come riferimento, perché è il numero che il cliente
@@ -57,6 +57,49 @@ ravvicinate — tre risposte identiche non sono tre misurazioni, e il tool le de
 
 L'elemento LCP e la checklist di scopribilità sono invece stabili in ogni caso: sono
 proprietà dell'HTML, non della rete.
+
+## Cosa si vede del caricamento
+
+Una risposta di PageSpeed contiene molto piu' delle raccomandazioni, e sono byte
+gia' pagati: il report li mostra invece di buttarli via. Nessuna di queste sezioni
+costa una chiamata in piu'.
+
+| Sezione | Da dove viene | Cosa fa vedere |
+|---|---|---|
+| **Fotogrammi del caricamento** | `screenshot-thumbnails` | otto immagini a passo costante: quando compare il contenuto, e cosa si muove dopo |
+| **Prima del documento** | `redirects` incrociato con gli stati HTTP | la catena di redirect e il tempo speso prima che la pagina cominci ad arrivare |
+| **Cascata delle richieste** | `network-requests` | in quale ordine la pagina si carica, cosa aspetta cosa, e quali richieste tengono la rete piu' a lungo |
+| **Altre misure di laboratorio** | `first-contentful-paint`, `speed-index`, `interactive`, `server-response-time` | FCP, Speed Index, TTI e TTFB, che nel report non c'erano da nessuna parte |
+| **Punteggi Lighthouse** | `categories` | prestazioni, accessibilita', best practice, SEO |
+
+Tre cose vanno dette, e il report le dice ogni volta che le mostra.
+
+**La cascata e' fatta di tempi osservati.** Il trace registra quando ogni
+richiesta parte e finisce; le metriche che Lighthouse riporta sono invece
+simulate con throttling e vivono su un'altra scala — lo stesso scarto gia'
+dichiarato per le fasi dell'LCP. Per questo i riferimenti sul righello (FCP, LCP,
+DOM pronto, caricata, ultimo cambio visivo) sono anch'essi osservati: metterci
+l'LCP simulato lo disegnerebbe dopo l'ultima richiesta.
+
+**Il TTFB di laboratorio non e' il vostro.** Lighthouse gira da un data center
+Google: su una pagina italiana riportava 10 ms contro i 403 ms misurati sugli
+utenti reali. FCP e TTFB compaiono in entrambe le tabelle, ed e' la tabella di
+campo quella che dice cosa succede agli utenti.
+
+**I punteggi delle altre tre categorie sono un riferimento, non una
+valutazione** (ADR-001). Arrivano nella stessa risposta e non costano un'altra
+misurazione — misurato su www.pluxee.it: 46 s con la sola performance, 32 s con
+tutte e quattro, cioe' la variabilita' fra due run supera il costo delle
+categorie in piu'. Ma accessibilita', best practice e SEO non sono state
+analizzate da questo tool, e il report lo scrive accanto ai numeri. Il riquadro
+non compare affatto se la risposta ha la sola performance.
+
+Il costo di tutto questo e' il peso: **i fotogrammi sono circa 250 KB per
+template**, nel report HTML e nel JSON di scansione. Il report resta comunque
+autonomo, perche' le immagini sono data URI e non file da allegare. Nel percorso
+web restano invece al browser: il blocco `caricamento` non torna indietro nel
+payload del Word, o a quaranta pagine sarebbero 10 MB contro i 4,5 del corpo di
+una richiesta.
 
 ## Versione online
 
@@ -163,9 +206,12 @@ ancora, saranno i test su `fixtures/` a segnalarlo.
 
 ## Cosa mostra la pagina
 
-**Per ogni URL: i Core Web Vitals reali con l'andamento e il peso della pagina.**
-Restano per template perche' sono numeri diversi per pagina, ed e' tutto il motivo
-per cui si misurano i template invece del solo dominio.
+**Per ogni URL: i Core Web Vitals reali con l'andamento, come si vede la pagina
+mentre carica, e come si carica.** Restano per template perche' sono numeri
+diversi per pagina, ed e' tutto il motivo per cui si misurano i template invece
+del solo dominio. Il dettaglio di cosa mostrano le sezioni del caricamento —
+fotogrammi, redirect, cascata, misure di laboratorio, punteggi — sta in [Cosa si
+vede del caricamento](#cosa-si-vede-del-caricamento).
 
 **Gli interventi stanno invece in una lista sola per il sito.** Misurato su una
 scansione reale a tre template: 10 interventi su 13 comparivano su tutti e tre,
@@ -408,3 +454,7 @@ Sei decisioni non si cambiano senza aggiornare l'ADR corrispondente in
 - **Il campo è una media mobile a 28 giorni**: un intervento messo online oggi si legge
   pulito solo dopo quattro settimane.
 - **Solo URL pubblici**: PSI non raggiunge staging o pagine dietro autenticazione.
+- **La cascata e' un caricamento solo**, misurato da un data center Google con
+  throttling simulato: dice in che ordine la pagina si carica e cosa aspetta cosa,
+  non quanto ci mette un utente vero. E non e' un HAR: PSI non espone gli header
+  di richiesta e risposta, quindi quelli non ci sono.
