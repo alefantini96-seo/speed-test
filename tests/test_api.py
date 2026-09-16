@@ -373,7 +373,7 @@ def test_l_interfaccia_manda_al_report_anche_le_pagine_fallite():
 def test_il_download_resta_possibile_con_pagine_fallite():
     """Il pulsante si disabilita solo se NON e' riuscita nessuna pagina."""
     sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
-    assert "$('scarica').disabled = risultati.length === 0;" in sorgente
+    assert "$('scarica-nota').disabled = risultati.length === 0;" in sorgente
 
 
 # --- la lista degli interventi e' una sola per il sito ----------------------- #
@@ -586,9 +586,13 @@ def _barra():
 
 def test_nella_barra_c_e_un_primario_solo():
     """Il sintomo: quattro pulsanti in fila, due minuti e due secondari, nessuno
-    primario. L'azione che si viene a fare pesava quanto "Rianalizza"."""
+    primario. L'azione che si viene a fare pesava quanto "Rianalizza".
+
+    Dal 16/09/2026 sono tre: il report al cliente e' stato tolto dalla barra e
+    resta la nota tecnica. Il conto non e' il punto del test - lo e' che di
+    primari ce ne sia **uno**, e che sia il documento che si consegna."""
     bottoni = re.findall(r"<button([^>]*)>", _barra())
-    assert len(bottoni) == 4, bottoni
+    assert len(bottoni) == 3, bottoni
     primari = [b for b in bottoni if "class=" not in b]
     assert len(primari) == 1, "uno e uno solo senza classe, cioe' primario"
     assert 'id="scarica-nota"' in primari[0], "il primario e' il documento che si consegna"
@@ -820,7 +824,7 @@ def test_l_orologio_si_ferma_anche_quando_una_pagina_fallisce():
     sull'ultima pagina non deve lasciare un intervallo che gira per sempre."""
     sorgente = _sorgente()
     ciclo = sorgente[sorgente.index("for (let i = 0; i < urls.length; i++)"):]
-    assert ciclo.index("fermaOrologio();") < ciclo.index("$('scarica').disabled")
+    assert ciclo.index("fermaOrologio();") < ciclo.index("$('scarica-nota').disabled")
 
 
 # --- la sintesi in cima ------------------------------------------------------ #

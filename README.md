@@ -330,7 +330,9 @@ motivo: sparire in silenzio farebbe credere che fosse stato misurato e fosse a p
     python -m speed report --formato nota "out/dati velocita 21082026.json"
 
 Scrive `Interventi Performance <ddmmyyyy>.docx`. Si scarica **anche dalla versione
-web**, dal pulsante «Scarica la nota tecnica» accanto a quello del report. È **il documento che si consegna**:
+web**, ed è l'unico documento che da lì si scarica: il pulsante del report al cliente
+è stato tolto dalla barra il 16/09/2026, mentre `/api/report` accetta ancora
+`formato: cliente` e la CLI lo produce come prima. È **il documento che si consegna**:
 poche pagine, i problemi accorpati per tema e ordinati, la citazione di PageSpeed e
 il rimando alla documentazione Google per ognuno. Esempio committato:
 [`docs/esempio-interventi-performance.docx`](docs/esempio-interventi-performance.docx).

@@ -492,12 +492,15 @@ a { color:var(--blu); }
     <!-- Tre livelli, e l'ordine di lettura arriva al primario.
          "Rianalizza" rifa' l'intera scansione: minuti di attesa e quota API
          consumata. Restava indistinguibile da "Modifica gli URL", che non costa
-         niente, e stava alla pari con i due download - cioe' con l'azione che
-         si viene a fare. -->
+         niente, e stava alla pari con il download - cioe' con l'azione che
+         si viene a fare.
+         Il report al cliente e' stato tolto dalla barra: resta la nota tecnica,
+         che e' il documento che si consegna. Il server lo sa ancora produrre
+         (`/api/report` con `formato: cliente`) e la CLI pure, quindi rimetterlo
+         vuol dire rimettere il pulsante e la sua voce in DOCUMENTI. -->
     <button class="minuto" id="modifica">Modifica gli URL</button>
     <button class="minuto costosa" id="rianalizza"
             title="Rifà la scansione di tutte le pagine da capo: alcuni minuti">Rianalizza tutto</button>
-    <button class="secondario" id="scarica" disabled>Report per il cliente</button>
     <button id="scarica-nota" disabled>Scarica la nota tecnica</button>
   </div>
 
@@ -1377,7 +1380,6 @@ async function avvia() {
   risultati.length = 0;
   falliti.length = 0;
   stati.length = 0;
-  $('scarica').disabled = true;
   $('scarica-nota').disabled = true;
 
   if (!urls.length) return mostraErrore('Inserisci almeno un URL.');
@@ -1429,9 +1431,8 @@ async function avvia() {
   disegnaAvanzamento();
   annuncia(`Analisi completata: ${riepilogo()} I documenti sono scaricabili.`);
   $('avvia').disabled = false;
-  // Il download resta possibile sulle pagine riuscite: il report dichiara quali
-  // sono mancate invece di far finta che la lista fosse piu' corta.
-  $('scarica').disabled = risultati.length === 0;
+  // Il download resta possibile sulle pagine riuscite: il documento dichiara
+  // quali sono mancate invece di far finta che la lista fosse piu' corta.
   $('scarica-nota').disabled = risultati.length === 0;
   comprimiModulo();
   comandiAttivi(true);
@@ -1452,7 +1453,6 @@ async function riprova(url) {
     disegnaInterventi();
     disegnaVerdetto();
     comprimiModulo();
-    $('scarica').disabled = risultati.length === 0;
     $('scarica-nota').disabled = risultati.length === 0;
   } catch (e) {
     if (scheda) scheda.remove();
@@ -1463,11 +1463,13 @@ async function riprova(url) {
   }
 }
 
-// Due documenti, non due vesti dello stesso: il report risponde a "il sito e'
-// lento e quanto costa", la nota a "cosa mettiamo a piano e in che ordine".
+// I documenti che il browser sa chiedere. Sono due, non due vesti dello stesso:
+// il report risponde a "il sito e' lento e quanto costa", la nota a "cosa
+// mettiamo a piano e in che ordine". Dal browser per ora si scarica solo la
+// nota; `/api/report` accetta ancora `formato: cliente`, e la CLI lo produce
+// comunque, quindi rimetterlo qui e' una voce e un pulsante.
 const DOCUMENTI = {
-  cliente: { bottone: 'scarica',      nome: 'Report velocità' },
-  nota:    { bottone: 'scarica-nota', nome: 'Interventi Performance' },
+  nota: { bottone: 'scarica-nota', nome: 'Interventi Performance' },
 };
 
 // Il blocco `caricamento` serve solo a disegnare qui: i fotogrammi da soli sono
@@ -1475,7 +1477,7 @@ const DOCUMENTI = {
 // 4,5 MB di Vercel. Il Word non lo usa, quindi non torna indietro.
 const senzaCaricamento = ({ caricamento, ...resto }) => resto;
 
-async function scarica(formato = 'cliente') {
+async function scarica(formato = 'nota') {
   const { bottone, nome } = DOCUMENTI[formato];
   const tasto = $(bottone);
   tasto.disabled = true;
@@ -1830,7 +1832,6 @@ $('consiglio').addEventListener('click', (evento) => {
 });
 
 $('avvia').addEventListener('click', avvia);
-$('scarica').addEventListener('click', () => scarica('cliente'));
 $('scarica-nota').addEventListener('click', () => scarica('nota'));
 $('rianalizza').addEventListener('click', avvia);
 $('modifica').addEventListener('click', espandiModulo);
