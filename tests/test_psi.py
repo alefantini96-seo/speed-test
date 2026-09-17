@@ -305,3 +305,53 @@ def test_un_giro_non_si_mangia_il_budget_di_quello_dopo():
     assert len(visti) == 2
     assert visti[0] is not None and visti[1] is not None
     assert visti[1] > visti[0], "il secondo giro ha una scadenza piu' in la'"
+
+
+# --- gli errori di esecuzione di Lighthouse --------------------------------- #
+#
+# Arrivano con HTTP 400, che di regola vuol dire "richiesta sbagliata" e qui
+# invece vuol dire "il run e' andato male". Col solo status passavano per errori
+# definitivi e la pagina falliva al primo colpo, con un rimedio che accusava
+# l'URL di non essere raggiungibile.
+#
+# Sono transitori davvero: misurato il 17/09/2026 sulla stessa URL che aveva
+# appena fallito in produzione, sei chiamate su sei riuscite.
+
+SBAGLIO_LIGHTHOUSE = {"error": {"code": 400, "message": 'Lighthouse returned error: ERRORED_DOCUMENT_REQUEST. Lighthouse was unable to reliably load the page you requested.'}}
+
+
+def test_un_errore_di_lighthouse_si_riprova():
+    cliente = ClienteFinto(RispostaFinta(400, SBAGLIO_LIGHTHOUSE), RispostaFinta(200, OK))
+    assert _analizza(cliente, chiamate=2) == OK
+    assert cliente.chiamate == 2
+
+
+def test_una_richiesta_davvero_sbagliata_non_si_riprova():
+    """Un 400 che e' un 400 - la chiave non valida - non migliora insistendo."""
+    chiave_storta = {"error": {"code": 400, "message": "API key not valid. Please pass a valid API key."}}
+    cliente = ClienteFinto(RispostaFinta(400, chiave_storta), RispostaFinta(200, OK))
+    with pytest.raises(ErroreSpeed):
+        _analizza(cliente, chiamate=3)
+    assert cliente.chiamate == 1
+
+
+def test_l_errore_finale_porta_la_sigla_di_lighthouse():
+    """`ERRORED_DOCUMENT_REQUEST` dice molto piu' di "non e' riuscito", e si
+    cerca nei changelog quando un fallimento si ripete."""
+    cliente = ClienteFinto(RispostaFinta(400, SBAGLIO_LIGHTHOUSE))
+    with pytest.raises(ErroreSpeed) as caduta:
+        _analizza(cliente, chiamate=2)
+    assert "ERRORED_DOCUMENT_REQUEST" in caduta.value.messaggio
+
+
+def test_il_rimedio_non_accusa_piu_la_pagina():
+    """Il rimedio diceva "verifica che l'URL sia raggiungibile": su una pagina
+    pubblica che risponde 200 e' un consiglio falso, e manda a cercare un
+    problema che non c'e'."""
+    cliente = ClienteFinto(RispostaFinta(400, SBAGLIO_LIGHTHOUSE))
+    with pytest.raises(ErroreSpeed) as caduta:
+        _analizza(cliente, chiamate=1)
+    rimedio = caduta.value.rimedio
+    assert "Riprova questa pagina" in rimedio
+    assert rimedio.index("Riprova") < rimedio.index("login"), \
+        "prima la riprova, poi il controllo sull'URL"

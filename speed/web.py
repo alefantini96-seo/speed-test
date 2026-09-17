@@ -67,13 +67,18 @@ class Budget:
     sul tetto della piattaforma. CrUX risponde in un paio di secondi - misurati
     0,2 - e 8 s sono gia' abbondanti.
 
-    `psi_chiamate` e' il tetto vero — quante volte si chiama PageSpeed per una
-    pagina, comunque le si distribuisca. Con due giri ciascuno ha un tentativo
-    solo, perche' il secondo giro **fa gia' da riprova**: se il primo torna un
-    500 transitorio, il secondo ci riprova comunque. Con un giro solo i due
-    tentativi restano dentro quel giro.
+    **Il tetto vero e' il tempo, non il numero di chiamate.** La scadenza passata
+    ai client la fa rispettare a ogni tentativo, quindi `psi_chiamate` non e' un
+    budget ma un freno: quante volte al massimo ha senso insistere. Quattro,
+    perche' i fallimenti rapidi costano poco - un errore di esecuzione di
+    Lighthouse torna in una decina di secondi, e su una pagina vera che aveva
+    appena fallito in produzione sei chiamate su sei sono poi riuscite - mentre
+    le scadenze si mangiano il tempo da sole e la scadenza le ferma.
+
+    Erano due, e due erano poche: sizeate sul costo di una scadenza, spendevano
+    un tentativo intero anche per un errore che tornava in dieci secondi.
     """
-    psi_chiamate: int = 2
+    psi_chiamate: int = 4
     psi_timeout: float = 120.0
     # Quanto si lascia libero sotto il tetto della piattaforma: avvio a freddo,
     # rete, lettura del JSON (1,1 MB), estrazione e serializzazione della
@@ -94,19 +99,13 @@ class Budget:
         return iniziale * (2 ** (tentativi - 1) - 1) if tentativi > 1 else 0.0
 
     def chiamate_per_giro(self, giri: int = 1) -> int:
-        """Quante chiamate a PSI dentro un giro, sapendo quanti giri si faranno.
+        """Quanti tentativi al massimo dentro un giro, dati i giri che si faranno.
 
-        Il gruzzolo e' unico e non distingue il motivo: una risposta transitoria
-        e una scadenza costano uguale. E' il cambio che ha reso possibile
-        riprovare dopo uno scadere senza chiedere tempo in piu'.
+        Non e' una spartizione del tempo - quella la fa la scadenza - ma di
+        quante volte insistere: su due giri non ha senso che il primo esaurisca
+        da solo tutte le insistenze.
         """
         return max(1, self.psi_chiamate // max(1, giri))
-
-    def giro_psi(self, giri: int = 1) -> float:
-        """Il caso peggiore di UN giro, quando i giri in tutto saranno `giri`."""
-        chiamate = self.chiamate_per_giro(giri)
-        return (chiamate * self.psi_timeout
-                + self._backoff_totale(chiamate, self.psi_backoff))
 
     @property
     def campo(self) -> float:
@@ -115,17 +114,18 @@ class Budget:
                 + self.crux_tentativi_storico * self.crux_timeout_storico
                 + self._backoff_totale(self.crux_tentativi_storico, self.crux_backoff))
 
-    def peggior_caso(self, giri: int | None = None) -> float:
+    def peggior_caso(self) -> float:
         """Il tempo massimo di una analisi, in secondi.
 
-        L'attesa fra i giri non si somma: `analizza_molte` aspetta il residuo,
-        cioe' solo cio' che manca ad `attesa_fra_giri` dall'inizio del giro. Se
-        il giro e' durato piu' dell'attesa, non aspetta affatto.
+        Non e' piu' una somma di previsioni ma il tetto stesso meno il margine:
+        la scadenza che il percorso web passa ai client viene controllata **prima
+        di ogni chiamata**, e una che sforerebbe non comincia. Con la somma il
+        conto tornava solo finche' i tentativi erano pochi e tutti costosi;
+        bastava ammetterne uno in piu' - per i fallimenti rapidi, che costano
+        dieci secondi - e il numero diventava spaventoso senza che il
+        comportamento cambiasse di un secondo.
         """
-        giri = self.psi_giri_massimi if giri is None else giri
-        uno = self.giro_psi(giri)
-        lab = uno if giri <= 1 else max(uno, self.psi_attesa_fra_giri) + uno * (giri - 1)
-        return self.campo + lab
+        return MAX_DURATA_VERCEL - self.margine
 
 
 BUDGET = Budget()

@@ -22,7 +22,7 @@ import httpx
 
 from ..core.extract import CATEGORIE
 from ..errori import da_attesa_scaduta, da_rete, da_risposta_google
-from .google import CODICI_RIPROVABILI, richiedi
+from .google import e_transitorio, richiedi
 
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
@@ -95,12 +95,18 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
         quanto = timeout
         if scadenza is not None:
             residuo = scadenza - orologio()
-            # L'ultima chiamata si prende tutto il tempo che resta, invece di
-            # fermarsi al timeout: se la prima e' scaduta, la pagina e' piu' lenta
-            # di quel numero, e riprovare con lo stesso numero e' un fallimento
-            # gia' pagato. Le altre restano una sonda: su una pagina normale la
-            # misurazione arriva in mezzo minuto, e tenere il resto in tasca vale
-            # piu' di un'attesa lunga che non serve.
+            # Chi non ha piu' spazio dietro di se' si prende tutto il tempo che
+            # resta, invece di fermarsi al timeout: se una chiamata e' scaduta, la
+            # pagina e' piu' lenta di quel numero, e riprovare con lo stesso
+            # numero e' un fallimento gia' pagato. Finche' c'e' spazio per
+            # un'altra, invece, resta una sonda: su una pagina normale la
+            # misurazione arriva in mezzo minuto.
+            #
+            # Il conto e' sul TEMPO e non sui tentativi, ed e' quello che permette
+            # di riprovare parecchie volte quando i fallimenti sono rapidi - un
+            # errore di Lighthouse torna in dieci secondi - e poche quando sono
+            # scadenze, che il tempo se lo mangiano tutto.
+            ultima = ultima or residuo < 2 * timeout
             quanto = residuo if ultima else min(timeout, residuo)
             if quanto < MINIMO_UTILE:
                 # La prima si tenta comunque, col tempo che c'e': l'errore dira'
@@ -141,7 +147,7 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
         elif codice < 400:
             messaggio = "la risposta non e' in formato JSON"
 
-        if codice in CODICI_RIPROVABILI and numero < chiamate:
+        if e_transitorio(codice, messaggio) and numero < totale:
             await asyncio.sleep(attesa_iniziale * 2 ** (numero - 1))
             continue
         raise da_risposta_google("PageSpeed Insights", codice,

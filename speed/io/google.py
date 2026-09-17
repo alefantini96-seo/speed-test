@@ -28,6 +28,25 @@ import asyncio
 CODICI_RIPROVABILI = (429, 500, 502, 503, 504)
 
 
+def e_transitorio(codice, messaggio: str = "") -> bool:
+    """Se vale la pena riprovare questo fallimento.
+
+    Oltre ai codici transitori ci sono gli errori di **esecuzione** di
+    Lighthouse. Arrivano con HTTP 400 - che di regola vuol dire "richiesta
+    sbagliata", e qui invece vuol dire "il run e' andato male" - quindi il solo
+    status li faceva passare per errori definitivi e la pagina falliva al primo
+    colpo.
+
+    Sono transitori davvero: misurato il 17/09/2026 sulla stessa URL che aveva
+    appena fallito in produzione, sei chiamate su sei riuscite (27,6 - 32,0 -
+    5,3 - 0,6 - 33,6 - 23,8 s). Non era la pagina.
+    """
+    if codice in CODICI_RIPROVABILI:
+        return True
+    testo = (messaggio or "").lower()
+    return "lighthouse returned error" in testo or "unable to process" in testo
+
+
 def json_sicuro(risposta) -> dict | None:
     """Il corpo come dizionario, o None se non e' JSON.
 

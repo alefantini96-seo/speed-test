@@ -79,7 +79,8 @@ Template misurati: 2 (piu' 1 non riuscita)
 
 #### `bootup-time` — Riduci il tempo di esecuzione di JavaScript
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 850 ms su TBT.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 850 ms su TBT.
+> Non e' una classificazione di Lighthouse.
 
 1,7 s · risparmio dichiarato: TBT 850 ms · score 0.00
 
@@ -108,7 +109,8 @@ Potresti ridurre i tempi di analisi, compilazione ed esecuzione di JavaScript. A
 
 #### `mainthread-work-breakdown` — Riduci al minimo il lavoro del thread principale
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 600 ms su TBT.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 600 ms su TBT.
+> Non e' una classificazione di Lighthouse.
 
 2,8 s · risparmio dichiarato: TBT 600 ms · score 0.00
 
@@ -128,7 +130,8 @@ Potresti ridurre i tempi di analisi, compilazione ed esecuzione di JavaScript. A
 
 #### `unused-javascript` — Riduci il codice JavaScript inutilizzato
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: 1.350 ms su LCP.
+> **Priorita' bassa** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: 1.350 ms su LCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 498 KiB · risparmio dichiarato: LCP 1350 ms · score 0.00
 
@@ -157,7 +160,8 @@ Riduci il codice JavaScript inutilizzato e rimanda il caricamento degli script f
 
 #### `cache-insight` — Utilizza durate della memorizzazione nella cache efficienti
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: infrastruttura · guadagno stimato in lab: 300 ms su LCP.
+> **Priorita' bassa** · interviene: infrastruttura · guadagno stimato in lab: 300 ms su LCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 567 KiB · risparmio dichiarato: LCP 300 ms, FCP 150 ms · score 0.00
 
@@ -199,7 +203,8 @@ La memorizzazione nella cache per un lungo periodo di tempo può velocizzare le 
 
 #### `font-display-insight` — Carattere visualizzato
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 200 ms su FCP.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 200 ms su FCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 200 ms · risparmio dichiarato: FCP 200 ms · score 0.00
 
@@ -218,7 +223,8 @@ Valuta la possibilità di impostare font-display su swap o optional per assicura
 
 #### `legacy-javascript-insight` — JavaScript precedente
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: 150 ms su LCP.
+> **Priorita' bassa** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: 150 ms su LCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 97 KiB · risparmio dichiarato: LCP 150 ms · score 0.00
 
@@ -238,7 +244,8 @@ Polyfill e trasformazioni consentono ai browser precedenti di usare nuove funzio
 
 #### `lcp-resourceLoadDelay` — Il browser scopre la risorsa LCP tardi: il tempo si perde prima ancora che il download inizi
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 - Fase dominante (utenti reali): Attesa prima del download — 39% (498 ms) del tempo LCP
 - Ripartizione: Risposta del server (TTFB) 27%, Attesa prima del download 39%, Download della risorsa 14%, Rendering dell'elemento 20%
@@ -252,7 +259,8 @@ Voci di checklist non superate, testuali da Lighthouse:
 
 #### `unminified-css` — Minimizza CSS
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: Risparmio stimato di 2 KiB.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: Risparmio stimato di 2 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 2 KiB · score 0.50
 
@@ -266,7 +274,8 @@ Minimizza i file CSS per ridurre le dimensioni dei payload di rete. Scopri come 
 
 #### `script-treemap-data` — Script Treemap Data
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · **fuori dal master plan** — artefatto di dati: Lighthouse non allega una raccomandazione.
+> **Priorita' bassa** · interviene: sviluppo · **fuori dal master plan** — artefatto di dati: Lighthouse non allega una raccomandazione.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 
@@ -363,7 +372,8 @@ score 1.00
 
 #### `third-parties-insight` — Terze parti
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: marketing/tag.
+> **Priorita' bassa** · interviene: marketing/tag.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 
@@ -383,7 +393,8 @@ Il codice di terze parti può incidere notevolmente sulle prestazioni del carica
 
 #### `image-delivery-insight` — Migliora il caricamento delle immagini
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: cms/redazione · guadagno stimato in lab: Risparmio stimato di 225 KiB.
+> **Priorita' bassa** · interviene: cms/redazione · guadagno stimato in lab: Risparmio stimato di 225 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 225 KiB · score 0.50
 
@@ -415,7 +426,8 @@ La riduzione del tempo di download delle immagini può migliorare il tempo di ca
 
 #### `network-dependency-tree-insight` — Albero delle dipendenze di rete
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 0.00
 
@@ -442,7 +454,8 @@ Evita di concatenare le richieste fondamentali riducendo la lunghezza delle cate
 
 #### `forced-reflow-insight` — Adattamento dinamico forzato del contenuto
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 0.00
 
@@ -456,7 +469,8 @@ Si verifica un adattamento dinamico forzato del contenuto quando JavaScript eseg
 
 #### `unsized-images` — Gli elementi immagine non hanno `width` e `height` esplicite
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: cms/redazione.
+> **Priorita' bassa** · interviene: cms/redazione.
+> Non e' una classificazione di Lighthouse.
 
 score 0.50
 
@@ -474,7 +488,8 @@ Imposta larghezza e altezza esplicite negli elementi immagine per ridurre le var
 
 #### `cls-culprits-insight` — Responsabili delle variazioni del layout
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 
@@ -533,7 +548,8 @@ Le variazioni del layout si verificano quando gli elementi si spostano senza alc
 
 #### `legacy-javascript-insight` — JavaScript precedente
 
-> **Classificazione nostra** — priorita' **media** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: Risparmio stimato di 96 KiB.
+> **Priorita' media** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: Risparmio stimato di 96 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 96 KiB · score 0.50
 
@@ -553,7 +569,8 @@ Polyfill e trasformazioni consentono ai browser precedenti di usare nuove funzio
 
 #### `unused-javascript` — Riduci il codice JavaScript inutilizzato
 
-> **Classificazione nostra** — priorita' **media** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: Risparmio stimato di 519 KiB.
+> **Priorita' media** · interviene: sviluppo + marketing/tag · guadagno stimato in lab: Risparmio stimato di 519 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 519 KiB · score 0.50
 
@@ -583,7 +600,8 @@ Riduci il codice JavaScript inutilizzato e rimanda il caricamento degli script f
 
 #### `bootup-time` — Riduci il tempo di esecuzione di JavaScript
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 1.650 ms su TBT.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 1.650 ms su TBT.
+> Non e' una classificazione di Lighthouse.
 
 2,6 s · risparmio dichiarato: TBT 1650 ms · score 0.00
 
@@ -613,7 +631,8 @@ Potresti ridurre i tempi di analisi, compilazione ed esecuzione di JavaScript. A
 
 #### `mainthread-work-breakdown` — Riduci al minimo il lavoro del thread principale
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 1.400 ms su TBT.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 1.400 ms su TBT.
+> Non e' una classificazione di Lighthouse.
 
 4,0 s · risparmio dichiarato: TBT 1400 ms · score 0.00
 
@@ -633,7 +652,8 @@ Potresti ridurre i tempi di analisi, compilazione ed esecuzione di JavaScript. A
 
 #### `cache-insight` — Utilizza durate della memorizzazione nella cache efficienti
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: infrastruttura · guadagno stimato in lab: 300 ms su FCP.
+> **Priorita' bassa** · interviene: infrastruttura · guadagno stimato in lab: 300 ms su FCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 594 KiB · risparmio dichiarato: LCP 100 ms, FCP 300 ms · score 0.00
 
@@ -675,7 +695,8 @@ La memorizzazione nella cache per un lungo periodo di tempo può velocizzare le 
 
 #### `font-display-insight` — Carattere visualizzato
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: 200 ms su FCP.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 200 ms su FCP.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 220 ms · risparmio dichiarato: FCP 200 ms · score 0.00
 
@@ -694,7 +715,8 @@ Valuta la possibilità di impostare font-display su swap o optional per assicura
 
 #### `lcp-resourceLoadDelay` — Il browser scopre la risorsa LCP tardi: il tempo si perde prima ancora che il download inizi
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 - Fase dominante (utenti reali): Attesa prima del download — 39% (498 ms) del tempo LCP
 - Ripartizione: Risposta del server (TTFB) 27%, Attesa prima del download 39%, Download della risorsa 14%, Rendering dell'elemento 20%
@@ -708,7 +730,8 @@ Voci di checklist non superate, testuali da Lighthouse:
 
 #### `script-treemap-data` — Script Treemap Data
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · **fuori dal master plan** — artefatto di dati: Lighthouse non allega una raccomandazione.
+> **Priorita' bassa** · interviene: sviluppo · **fuori dal master plan** — artefatto di dati: Lighthouse non allega una raccomandazione.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 
@@ -806,7 +829,8 @@ score 1.00
 
 #### `third-parties-insight` — Terze parti
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: marketing/tag.
+> **Priorita' bassa** · interviene: marketing/tag.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 
@@ -826,7 +850,8 @@ Il codice di terze parti può incidere notevolmente sulle prestazioni del carica
 
 #### `forced-reflow-insight` — Adattamento dinamico forzato del contenuto
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 0.00
 
@@ -840,7 +865,8 @@ Si verifica un adattamento dinamico forzato del contenuto quando JavaScript eseg
 
 #### `unsized-images` — Gli elementi immagine non hanno `width` e `height` esplicite
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: cms/redazione.
+> **Priorita' bassa** · interviene: cms/redazione.
+> Non e' una classificazione di Lighthouse.
 
 score 0.50
 
@@ -858,7 +884,8 @@ Imposta larghezza e altezza esplicite negli elementi immagine per ridurre le var
 
 #### `network-dependency-tree-insight` — Albero delle dipendenze di rete
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 0.00
 
@@ -885,7 +912,8 @@ Evita di concatenare le richieste fondamentali riducendo la lunghezza delle cate
 
 #### `unminified-css` — Minimizza CSS
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo · guadagno stimato in lab: Risparmio stimato di 2 KiB.
+> **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: Risparmio stimato di 2 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 2 KiB · score 0.50
 
@@ -899,7 +927,8 @@ Minimizza i file CSS per ridurre le dimensioni dei payload di rete. Scopri come 
 
 #### `image-delivery-insight` — Migliora il caricamento delle immagini
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: cms/redazione · guadagno stimato in lab: Risparmio stimato di 225 KiB.
+> **Priorita' bassa** · interviene: cms/redazione · guadagno stimato in lab: Risparmio stimato di 225 KiB.
+> Non e' una classificazione di Lighthouse.
 
 Risparmio stimato di 225 KiB · score 0.50
 
@@ -931,7 +960,8 @@ La riduzione del tempo di download delle immagini può migliorare il tempo di ca
 
 #### `cls-culprits-insight` — Responsabili delle variazioni del layout
 
-> **Classificazione nostra** — priorita' **bassa** · interviene: sviluppo.
+> **Priorita' bassa** · interviene: sviluppo.
+> Non e' una classificazione di Lighthouse.
 
 score 1.00
 

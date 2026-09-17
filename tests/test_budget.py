@@ -41,24 +41,33 @@ def test_il_tetto_dichiarato_e_quello_di_vercel():
     assert configurazione["functions"]["app.py"]["maxDuration"] == web.MAX_DURATA_VERCEL
 
 
-def test_l_attesa_fra_i_giri_non_si_somma_al_caso_peggiore():
-    """analizza_molte aspetta il residuo: se il giro e' durato piu' dell'attesa,
-    non aspetta affatto. Contarla in piu' porterebbe a stringere i timeout senza
-    motivo."""
+def test_il_caso_peggiore_e_la_scadenza_non_una_somma():
+    """Il conto per somma tornava solo finche' i tentativi erano pochi e tutti
+    costosi. Ammetterne uno in piu' per i fallimenti rapidi - dieci secondi
+    l'uno - faceva esplodere il numero senza cambiare il comportamento di un
+    secondo, perche' a fermare le chiamate e' la scadenza, controllata prima di
+    ognuna."""
     budget = web.BUDGET
-    assert budget.psi_attesa_fra_giri < budget.giro_psi(2)
-    assert budget.peggior_caso(2) == budget.campo + budget.giro_psi(2) * 2
+    assert budget.peggior_caso() == web.MAX_DURATA_VERCEL - budget.margine
+    assert budget.peggior_caso() < web.MAX_DURATA_VERCEL
 
 
-def test_le_chiamate_a_pagespeed_sono_due_comunque_si_giri():
-    """E' il tetto vero: due giri da un tentativo o un giro da due tentativi
-    costano lo stesso. Contare giri PER tentativi obbligava a stringere il
-    timeout a 55 s, e 55 s non bastano a una home vera."""
+def test_le_insistenze_si_dividono_fra_i_giri():
+    """Non e' una spartizione del tempo - quella la fa la scadenza - ma di
+    quante volte insistere: su due giri non ha senso che il primo le esaurisca
+    da solo."""
     budget = web.BUDGET
-    assert budget.chiamate_per_giro(2) == 1
-    assert budget.chiamate_per_giro(1) == 2
-    assert budget.peggior_caso(1) < web.MAX_DURATA_VERCEL
-    assert budget.peggior_caso(2) < web.MAX_DURATA_VERCEL
+    assert budget.chiamate_per_giro(1) == budget.psi_chiamate
+    assert budget.chiamate_per_giro(2) == budget.psi_chiamate // 2
+    assert budget.chiamate_per_giro(9) >= 1, "sempre almeno un tentativo"
+
+
+def test_si_insiste_piu_di_due_volte():
+    """Due erano poche: sizeate sul costo di una scadenza, spendevano un
+    tentativo intero anche per un errore che torna in dieci secondi. Misurato il
+    17/09/2026 sull'URL che aveva appena fallito in produzione: sei chiamate su
+    sei riuscite."""
+    assert web.BUDGET.psi_chiamate >= 4
 
 
 def test_il_timeout_copre_una_misurazione_lenta_davvero():
@@ -69,13 +78,10 @@ def test_il_timeout_copre_una_misurazione_lenta_davvero():
     assert web.BUDGET.psi_timeout >= 2 * 50.9
 
 
-def test_i_due_rami_costano_quasi_uguale():
-    """Da quando il tetto e' sulle chiamate, i due rami sono lo stesso conto: due
-    giri da un tentativo, oppure un giro da due. Resta fuori il solo backoff fra
-    i due tentativi, che fra i giri non serve perche' c'e' gia' l'attesa."""
-    budget = web.BUDGET
-    differenza = budget.peggior_caso(1) - budget.peggior_caso(2)
-    assert abs(differenza) <= budget.psi_backoff, differenza
+def test_i_due_rami_costano_uguale():
+    """Un giro o due, il tetto e' lo stesso: e' il tempo, e il tempo non cambia
+    a seconda di come lo si spende."""
+    assert web.BUDGET.peggior_caso() == web.MAX_DURATA_VERCEL - web.BUDGET.margine
 
 
 def test_la_scadenza_lascia_il_margine_sotto_il_tetto():

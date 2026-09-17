@@ -6,6 +6,8 @@ Ogni errore previsto qui porta con se' l'azione che lo risolve.
 """
 from __future__ import annotations
 
+import re
+
 
 class ErroreSpeed(Exception):
     """Errore atteso, con rimedio. La CLI lo stampa senza traceback."""
@@ -53,10 +55,21 @@ def da_risposta_google(servizio: str, codice, messaggio: str, url: str = "") -> 
             "--ripetizioni o il numero di template.")
 
     if codice in (400, 500) and ("unable to process" in testo or "lighthouse" in testo):
+        # Il codice di Lighthouse, quando c'e': ERRORED_DOCUMENT_REQUEST, NO_FCP,
+        # FAILED_DOCUMENT_REQUEST... dice molto piu' di "non e' riuscito", e
+        # cercarlo nei changelog e' il primo passo per capire un fallimento che
+        # si ripete.
+        sigla = re.search(r"\b([A-Z][A-Z_]{6,})\b", messaggio or "")
+        dettaglio = sigla.group(1) if sigla else (messaggio or "").strip()[:120]
         return ErroreSpeed(
-            f"{servizio}: non e' riuscito ad analizzare la pagina{dove}.",
-            "Verifica che l'URL sia raggiungibile pubblicamente e risponda 200.\n"
-            "PSI non vede staging, ambienti protetti da password o pagine dietro login.")
+            f"{servizio} non e' riuscito a misurare la pagina{dove}"
+            + (f": {dettaglio}." if dettaglio else "."),
+            "Capita anche su pagine perfettamente raggiungibili: e' il run di\n"
+            "Lighthouse ad essere andato male, non la pagina. Misurato su una URL\n"
+            "che aveva appena fallito: sei chiamate su sei riuscite pochi minuti\n"
+            "dopo. Riprova questa pagina.\n"
+            "Se invece fallisce sempre, allora controlla che l'URL risponda 200\n"
+            "senza login: PSI non vede staging ne' ambienti protetti da password.")
 
     return ErroreSpeed(f"{servizio} ha risposto {codice}: {messaggio[:200]}")
 

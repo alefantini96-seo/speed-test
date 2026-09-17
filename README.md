@@ -202,6 +202,25 @@ dopo 90: le risposte sono arrivate in 41,0 e 32,5 secondi, con marca temporale n
 PSI non tiene il lavoro che nessuno ha ritirato. Il sorteggio però conviene, perché la
 coda lenta è l'eccezione: su nove misurazioni la mediana era 33,9 s e nessuna oltre i 51.
 
+**Il conto è sul tempo, non sui tentativi.** La scadenza viene controllata prima di
+ogni chiamata e una che sforerebbe non comincia, quindi il numero di tentativi non è un
+budget ma un freno: quante volte al massimo ha senso insistere. Sono quattro, ed erano
+due — due sizeate sul costo di una scadenza, che spendevano un tentativo intero anche
+per un errore che torna in dieci secondi.
+
+**Un errore di *esecuzione* di Lighthouse si riprova.** Arriva con HTTP 400, che di
+regola vuol dire «richiesta sbagliata» e qui vuol dire «il run è andato male»: col solo
+status passava per definitivo e la pagina falliva al primo colpo. È transitorio davvero
+— misurato il 17/09/2026 sulla stessa URL che aveva appena fallito in produzione, **sei
+chiamate su sei riuscite** (27,6 · 32,0 · 5,3 · 0,6 · 33,6 · 23,8 s). E il messaggio ora
+porta la sigla che Lighthouse dà (`ERRORED_DOCUMENT_REQUEST`) invece di un generico «non
+è riuscito»: è quella che si cerca nei changelog quando un fallimento si ripete.
+
+Il rimedio è cambiato di conseguenza. Diceva «verifica che l'URL sia raggiungibile
+pubblicamente»: su una pagina pubblica che risponde 200 è un consiglio falso, e manda a
+cercare un problema che non c'è. Ora dice di riprovare, e solo se fallisce sempre di
+controllare l'URL.
+
 **Il tempo che resta va all'ultima chiamata, e l'ultima chiede meno.** Un tetto fisso
 per ogni tentativo spendeva male un budget che è già stretto: se la prima chiamata è
 scaduta a 120 secondi, la pagina è più lenta di quel numero, e riprovare con lo stesso

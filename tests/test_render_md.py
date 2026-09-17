@@ -342,6 +342,40 @@ def test_il_nome_del_file_distingue_il_documento_tecnico():
         "Interventi tecnici Ferroli 20082026"
 
 
+# --- la riga di triage --------------------------------------------------------- #
+
+def test_il_triage_si_distingue_dal_testo_di_lighthouse(documento):
+    """L'invariante dell'ADR-004: chi legge deve poter dire, riga per riga, che
+    cosa viene dalla misurazione e che cosa e' stato deciso.
+
+    La priorita' e il responsabile Lighthouse non li fornisce. Se la riga smette
+    di dirlo, il documento presenta una decisione con la faccia di un dato.
+    """
+    assert "Non e' una classificazione di Lighthouse." in documento
+    for intestazione in re.findall(r"^#### `[^`]+`.*$", documento, re.M):
+        blocco = documento.split(intestazione, 1)[1][:400]
+        assert "Non e' una classificazione di Lighthouse." in blocco, intestazione
+
+
+def test_il_triage_non_usa_il_possessivo(documento):
+    """«Classificazione nostra» chiedeva al lettore di sapere chi siamo.
+
+    Il documento passa di mano — dall'agenzia al cliente, dal cliente al suo
+    fornitore di sviluppo — e li' «nostra» non ha un referente. Si nomina la
+    fonte che manca, che chiunque puo' verificare aprendo Lighthouse sullo
+    stesso audit.
+    """
+    for possessivo in ("nostra", "nostro", "nostre", "nostri"):
+        assert possessivo not in documento.lower(), possessivo
+
+
+def test_il_triage_porta_priorita_e_responsabile(documento):
+    """Sono le due cose che il triage aggiunge al dato misurato."""
+    blocco = _blocco(documento, "bootup-time")
+    assert "**Priorita'" in blocco
+    assert "interviene:" in blocco
+
+
 # --- l'esempio committato resta allineato ------------------------------------ #
 
 def test_l_esempio_committato_e_aggiornato():

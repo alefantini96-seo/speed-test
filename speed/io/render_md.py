@@ -315,16 +315,31 @@ def _contesto(pagina: dict) -> list:
 #  Un intervento
 # --------------------------------------------------------------------------- #
 
+# Che cosa Lighthouse non ha detto, invece di chi l'ha detto.
+#
+# La riga diceva «**Classificazione nostra**», e su ogni intervento di ogni
+# documento. Due difetti. Il primo e' che «nostra» chiede al lettore di sapere
+# chi siamo: in un documento che passa di mano — dall'agenzia al cliente, dal
+# cliente al suo fornitore di sviluppo — quel possessivo non ha un referente.
+# Il secondo e' il tono: ripetuta trenta volte, l'etichetta smette di attribuire
+# e comincia a scusarsi, come se la priorita' fosse un'opinione di troppo
+# accanto al dato di Lighthouse. La priorita' e' il lavoro, non una postilla.
+#
+# L'invariante dell'ADR-004 resta intero: chi legge deve poter dire, riga per
+# riga, che cosa viene dalla misurazione e che cosa e' stato deciso. Si dice
+# nominando la fonte che *non* c'e' — verificabile da chiunque apra Lighthouse
+# sullo stesso audit — invece della fonte che c'e'.
 def _classificazione(problema: dict) -> list:
-    """La riga marcata come nostra: ADR-004 vuole che si distingua dal resto."""
-    parti = [f"priorita' **{problema.get('gravita', 'n/d')}**",
+    """La riga di triage, distinta dal testo di Lighthouse (ADR-004)."""
+    parti = [f"**Priorita' {problema.get('gravita', 'n/d')}**",
              f"interviene: {problema.get('responsabile', 'n/d')}"]
     if problema.get("guadagno"):
         parti.append(f"guadagno stimato in lab: {problema['guadagno']}")
     motivo = motivo_esclusione(problema)
     if motivo:
         parti.append(f"**fuori dal master plan** — {motivo}")
-    return [f"> **Classificazione nostra** — {' · '.join(parti)}.", ""]
+    return [f"> {' · '.join(parti)}.",
+            "> Non e' una classificazione di Lighthouse.", ""]
 
 
 def _colonne_risorse(risorse: list) -> list:
