@@ -420,6 +420,58 @@ def test_l_interfaccia_tronca_i_bersagli_in_resa():
     assert sorgente.count(".slice(0, 3)") >= 2, "comuni e propri restano corti a schermo"
 
 
+def test_gli_interventi_si_leggono_prima_in_tabella():
+    """La domanda che la lista non sapeva rispondere: questo intervento riguarda
+    una pagina sola o tutte? Ci si rispondeva aprendo diciassette schede per
+    leggere diciassette volte "su N template su M"."""
+    sorgente = _sorgente()
+    assert "function tabellaInterventi(" in sorgente
+    inizio = sorgente.index("function tabellaInterventi(")
+    corpo = sorgente[inizio:sorgente.index("function problemi(")]
+    assert "p.template.map(t => t.nome)" in corpo, "le colonne sono i template misurati"
+    assert "risultati.map(p => etichettaTemplate(p.url))" in sorgente, \
+        "e li prende dalle pagine analizzate, in quell'ordine"
+
+
+def test_la_presenza_nella_tabella_non_e_solo_un_colore():
+    """Stessa regola del verdetto: una spunta e un trattino si distinguono anche
+    a chi non separa rosso e verde."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function tabellaInterventi("):
+                     sorgente.index("function problemi(")]
+    assert "presenza si" in corpo and "presenza no" in corpo
+    assert 'aria-label="presente"' in corpo and 'aria-label="assente"' in corpo
+
+
+def test_le_schede_degli_interventi_nascono_chiuse():
+    """Diciassette schede aperte sono una pagina che non si legge. Il tetto dei
+    cinque non serve piu': non e' il numero a stancare, e' l'altezza."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function scheda(p, indice)"):
+                     sorgente.index("function tabellaInterventi(")]
+    assert '<details class="intervento"' in corpo
+    assert " open" not in corpo.split("<summary>")[0], "nessuna nasce aperta"
+    assert "const VISIBILI" not in sorgente, "il tetto dei cinque non c'e' piu'"
+    assert "Mostra gli altri" not in sorgente
+
+
+def test_tutti_gli_interventi_restano_nella_pagina():
+    """Chiusi, non tagliati: sparire e' un'altra cosa da stare stretti."""
+    corpo = _sorgente()
+    corpo = corpo[corpo.index("function problemi("):corpo.index("function disegnaInterventi(")]
+    assert "lista.map(scheda)" in corpo
+    assert ".slice(" not in corpo
+
+
+def test_dalla_riga_si_apre_la_sua_scheda():
+    """Il salto da solo non basta: una scheda chiusa resterebbe chiusa sotto il
+    cursore."""
+    sorgente = _sorgente()
+    assert "data-apre=" in sorgente
+    assert "closest('[data-apre]')" in sorgente
+    assert "scheda.open = true;" in sorgente
+
+
 def test_la_scheda_di_pagina_non_ripete_piu_gli_interventi():
     sorgente = (RADICE / "public" / "index.html").read_text(encoding="utf-8")
     inizio = sorgente.index("function disegna(pagina)")

@@ -294,8 +294,19 @@ laboratorio, in millisecondi simulati: non il tempo che gli utenti recuperano.
 
 Tutto il resto — evidenza, provenienza del testo, note metodologiche — sta dietro
 un «perche'» richiudibile. Serve a difendere il dato davanti a un cliente, non a
-decidere cosa fare. I primi cinque interventi sono visibili, gli altri dietro un
-bottone: sotto il quinto nessuno agisce subito.
+decidere cosa fare.
+
+**Nell'interfaccia web gli interventi si leggono prima in tabella**: una riga per
+intervento, una colonna per template, una spunta dove il problema c'è. È la domanda
+a cui la lista non sapeva rispondere — *questo riguarda una pagina sola o tutte?* — e
+a cui si rispondeva aprendo diciassette schede per leggere diciassette volte «su N
+template su M». Sotto, il dettaglio di **tutti** gli interventi, ciascuno in una
+scheda chiusa che si apre anche dal titolo nella tabella.
+
+Fino al 17/09/2026 le schede erano cinque aperte e le altre dietro un bottone
+(«sotto il quinto nessuno agisce subito»). Il tetto non serve più: non è il numero
+di schede a stancare, è la loro altezza, e chiuse non ne hanno. Il report HTML, che
+si legge di fila e si stampa, tiene invece le schede aperte come prima.
 
 ## Gap competitor
 

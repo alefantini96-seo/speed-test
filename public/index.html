@@ -383,7 +383,50 @@ table.cascata td.nome .tag { color:var(--tenue); }
 .righello span.destra { border-left:none; border-right:1px solid var(--bordo);
                         padding-left:0; padding-right:3px; }
 
-/* --- interventi ----------------------------------------------------------- */
+/* --- interventi -----------------------------------------------------------
+   Prima erano diciassette schede in fila, cinque aperte e dodici dietro un
+   bottone: per sapere se un intervento riguardava una pagina sola o tutte
+   bisognava aprirle una per una e leggere la riga "su N template su M".
+
+   Ora la domanda ha una tabella - una riga per intervento, una colonna per
+   template - e il dettaglio sta sotto, tutto, in un accordion. Il tetto dei
+   cinque non serve piu': non e' il numero di schede a stancare, e' la loro
+   altezza, e chiuse non ne hanno. */
+table.tabella-interventi { font-size:13px; }
+table.tabella-interventi th, table.tabella-interventi td { padding:7px 9px; }
+table.tabella-interventi td.titolo { font-weight:500; }
+table.tabella-interventi td.titolo a { color:var(--testo); text-decoration:none;
+                                       border-bottom:1px solid var(--bordo); }
+table.tabella-interventi td.titolo a:hover { color:var(--blu); border-color:var(--blu); }
+table.tabella-interventi th.template { max-width:140px; overflow:hidden;
+                                       text-overflow:ellipsis; white-space:nowrap;
+                                       font-family:var(--mono); font-size:10.5px;
+                                       text-transform:none; letter-spacing:0;
+                                       text-align:center; }
+table.tabella-interventi td.presenza { text-align:center; }
+table.tabella-interventi .gravita { font-size:10.5px; font-weight:500;
+                                    letter-spacing:.03125rem; }
+table.tabella-interventi .g-alta { color:var(--scarso); }
+table.tabella-interventi .g-media { color:var(--medio); }
+table.tabella-interventi .g-bassa { color:var(--tenue); }
+/* Il segno di presenza non e' un colore: una spunta e un trattino si
+   distinguono anche a chi non separa rosso e verde. */
+table.tabella-interventi td.si { color:var(--testo); }
+table.tabella-interventi td.no { color:var(--bordo); }
+/* La stima e' testo di Lighthouse e resta verbatim: "Risparmio stimato di
+   96 KiB". Per questo la colonna non si intitola "Risparmio" - lo ripeterebbe
+   in ogni cella - e dice invece di chi e' la stima. */
+table.tabella-interventi td.stima { white-space:nowrap; }
+.scorre table.tabella-interventi { min-width:560px; }
+
+details.intervento { border:1px solid var(--bordo-tenue); border-left:3px solid var(--tenue);
+                     border-radius:var(--raggio); padding:14px 16px; margin:12px 0; }
+details.intervento > summary { list-style:none; cursor:pointer; }
+details.intervento > summary::-webkit-details-marker { display:none; }
+details.intervento > summary h4::before { content:"+ "; color:var(--tenue);
+                                          font-weight:400; }
+details.intervento[open] > summary h4::before { content:"\2212 "; }
+details.intervento .chi { display:block; }
 .intervento { border:1px solid var(--bordo-tenue); border-left:3px solid var(--tenue);
               border-radius:var(--raggio); padding:14px 16px; margin:12px 0; }
 .intervento .testa { display:flex; align-items:baseline; gap:12px;
@@ -1010,12 +1053,17 @@ function scheda(p, indice) {
   const marchio = p.azionabile === false
     ? '<span class="marchio">non azionabile</span>' : '';
 
-  return `<div class="intervento" style="border-left-color:${colore}" data-indice="${indice}">
-    <div class="testa">
-      <h4>${esc(p.titolo)}${marchio}</h4>${guadagno}
-    </div>
-    <p class="chi"><span class="gravita">${esc((p.gravita || '').toUpperCase())}</span>${
-      quanti ? ' · ' + quanti : ''} · ${esc(p.responsabile)}</p>
+  // La scheda e' chiusa: il titolo, la gravita' e il guadagno bastano a decidere
+  // se aprirla, e diciassette schede aperte sono una pagina che non si legge.
+  return `<details class="intervento" id="intervento-${indice}"
+                   style="border-left-color:${colore}" data-indice="${indice}">
+    <summary>
+      <span class="testa">
+        <h4>${esc(p.titolo)}${marchio}</h4>${guadagno}
+      </span>
+      <span class="chi"><span class="gravita">${esc((p.gravita || '').toUpperCase())}</span>${
+        quanti ? ' · ' + quanti : ''} · ${esc(p.responsabile)}</span>
+    </summary>
     ${bersagli}
     <details class="perche">
       <summary>perché</summary>
@@ -1025,23 +1073,46 @@ function scheda(p, indice) {
       <p class="nota">Fonte: ${esc(FONTE[p.fonte] || p.fonte)}.</p>
       ${doc}
     </details>
-  </div>`;
+  </details>`;
 }
 
-const VISIBILI = 5;
+/* La tabella: una riga per intervento, una colonna per template.
 
-function problemi(lista, idPagina) {
+   E' la domanda che la lista non sapeva rispondere — "questo riguarda una
+   pagina sola o tutte?" — e a cui si rispondeva aprendo diciassette schede per
+   leggere diciassette volte "su N template su M". Il titolo porta alla scheda
+   corrispondente, che si apre da sola. */
+function tabellaInterventi(lista, template) {
+  const intestazioni = template.map(nome =>
+    `<th class="num template" title="${esc(nome)}">${esc(nome)}</th>`).join('');
+
+  const righe = lista.map((p, indice) => {
+    const presenti = new Set(p.template.map(t => t.nome));
+    const celle = template.map(nome => presenti.has(nome)
+      ? '<td class="presenza si" aria-label="presente">✓</td>'
+      : '<td class="presenza no" aria-label="assente">—</td>').join('');
+    const guadagno = p.guadagno
+      ? `${p.guadagno_tipo === 'tempo' ? '−' : ''}${esc(p.guadagno)}` : '';
+    const marchio = p.azionabile === false
+      ? '<span class="marchio">non azionabile</span>' : '';
+    return `<tr>
+      <td class="titolo"><a href="#intervento-${indice}"
+        data-apre="intervento-${indice}">${esc(p.titolo)}</a>${marchio}</td>
+      <td><span class="gravita g-${esc(p.gravita || 'bassa')}">${
+        esc((p.gravita || '').toUpperCase())}</span></td>
+      ${celle}
+      <td class="num stima">${guadagno}</td></tr>`;
+  }).join('');
+
+  return `<div class="scorre"><table class="tabella-interventi">
+    <tr><th>Intervento</th><th>Gravità</th>${intestazioni}
+      <th class="num">Stima Lighthouse</th></tr>
+    ${righe}</table></div>`;
+}
+
+function problemi(lista) {
   if (!lista?.length) return '<p class="attesa">Nessun problema rilevato oltre soglia.</p>';
-  const primi = lista.slice(0, VISIBILI).map(scheda).join('');
-  if (lista.length <= VISIBILI) return primi;
-  // Sotto il quinto nessuno agisce subito: il resto sta dietro un bottone, non
-  // sparisce.
-  const resto = lista.slice(VISIBILI).map(scheda).join('');
-  return `${primi}
-    <div class="altri" id="altri-${idPagina}" hidden>${resto}</div>
-    <button class="ancora" data-pagina="${idPagina}"
-            data-quanti="${lista.length - VISIBILI}">
-      Mostra gli altri ${lista.length - VISIBILI} interventi</button>`;
+  return lista.map(scheda).join('');
 }
 
 function disegnaInterventi() {
@@ -1050,13 +1121,18 @@ function disegnaInterventi() {
   if (!risultati.length) return;
 
   const lista = raggruppa(risultati);
+  const template = risultati.map(p => etichettaTemplate(p.url));
   const div = document.createElement('div');
   div.className = 'riquadro';
   div.id = 'interventi';
   div.innerHTML = `<h2>Interventi</h2>
     <p class="meta">${plurale(lista.length, 'intervento', 'interventi')} per il sito ·
-      i file su cui agire sono raggruppati per template</p>
-    ${problemi(lista, 'sito')}`;
+      una riga per intervento, una colonna per template</p>
+    ${lista.length ? tabellaInterventi(lista, template) : ''}
+    <h3>Il dettaglio di ogni intervento</h3>
+    <p class="meta">I file su cui agire, raggruppati per template. Aperti tutti
+      insieme sarebbero una pagina che non si legge: si apre quello che serve.</p>
+    ${problemi(lista)}`;
   $('risultati').appendChild(div);
 }
 
@@ -1788,11 +1864,15 @@ function mostraErroreGap(messaggio, rimedio) {
 }
 
 $('risultati').addEventListener('click', (evento) => {
-  const bottone = evento.target.closest('.ancora');
-  if (bottone) {
-    document.getElementById(`altri-${bottone.dataset.pagina}`).hidden = false;
-    bottone.remove();
-    return;
+  // Dalla riga della tabella alla scheda: il salto da solo non basta, una
+  // scheda chiusa resterebbe chiusa sotto il cursore.
+  const rimando = evento.target.closest('[data-apre]');
+  if (rimando) {
+    const scheda = document.getElementById(rimando.dataset.apre);
+    if (scheda) {
+      scheda.open = true;
+      scheda.scrollIntoView({ block: 'nearest' });
+    }
   }
   const linguetta = evento.target.closest('[role=tab]');
   if (linguetta) {
