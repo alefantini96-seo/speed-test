@@ -98,12 +98,15 @@ table.cascata td.nome .terza { color:var(--tenue); }
 .linea .tratto { display:inline-block; height:7px; background:#1f2328; vertical-align:middle;
                  min-width:1px; border-radius:1px; }
 .linea .tratto.terza { background:#a16207; }
-.righello { position:relative; height:34px; font-size:9px; color:var(--tenue);
+.righello { position:relative; font-size:9px; color:var(--tenue);
             font-weight:400; text-transform:none; letter-spacing:0; }
-.righello span { position:absolute; top:0; white-space:nowrap;
+/* Una riga per riferimento, e il filetto scende fino in fondo al righello.
+   Cosi' due etichette non possono sovrapporsi nemmeno quando i riferimenti si
+   ammassano - e si ammassano: la scala della cascata arriva all'ultima
+   richiesta, che su una pagina con beacon di analytics finisce molto dopo
+   l'ultimo evento di paint. */
+.righello span { position:absolute; white-space:nowrap;
                  border-left:1px solid var(--bordo); padding-left:2px; }
-.righello span.r1 { top:11px; }
-.righello span.r2 { top:22px; }
 .righello span.destra { border-left:none; border-right:1px solid var(--bordo);
                         padding-left:0; padding-right:2px; }
 footer { margin-top:44px; padding-top:14px; border-top:1px solid var(--bordo);
@@ -386,6 +389,10 @@ CASCATA_VISIBILI = 30
 
 LAB_IN_VETRINA = ("FCP", "SI", "TTI", "TTFB")
 
+# Altezza di una riga del righello della cascata, in pixel. Ogni riferimento ha
+# la sua: e' cio' che rende impossibile la sovrapposizione.
+RIGHELLO_PASSO = 11
+
 
 def _durata(ms) -> str:
     if ms is None:
@@ -519,33 +526,42 @@ def _riga_cascata(barra) -> str:
             f'<td class="num">{_e(_durata(barra.durata_ms))}</td></tr>')
 
 
-def _cascata(fatti: dict, url: str) -> str:
-    """La cascata delle richieste, nell'ordine in cui la pagina le ha chieste."""
-    disegno = cascata(_richieste(fatti), fatti.get("tempi_osservati") or {}, url)
+def _cascata(fatti: dict, url: str, domini_propri=()) -> str:
+    """La cascata delle richieste, nell'ordine in cui la pagina le ha chieste.
+
+    `domini_propri` sono i CDN e i domini fratelli dichiarati nella
+    configurazione. Senza, la cascata marcava terze parti gli stessi host che il
+    peso della pagina - due righe sopra - contava prima parte: su un run reale
+    118 richieste su 126 con la targhetta 3P sotto un paragrafo che dichiarava
+    il 23% di terze parti. Una contraddizione dentro lo stesso documento.
+    """
+    disegno = cascata(_richieste(fatti), fatti.get("tempi_osservati") or {}, url,
+                      domini_propri)
     if not disegno.barre:
         return ""
 
-    # Le etichette girano su tre righe e quelle oltre meta' scala si appendono a
-    # destra. Cinque riferimenti su una riga sola si sovrappongono - misurato:
-    # "FCP osservato 279 ms" e "DOM pronto 850 ms" distano 17 punti di scala,
-    # cioe' meno della meta' della loro larghezza - e l'ultimo, che cade al 100%,
-    # uscirebbe dal grafico. Su tre righe due etichette vicine non si toccano mai:
-    # servirebbero tre riferimenti dentro la larghezza di una parola.
+    # Una riga per riferimento: sovrapporsi diventa impossibile invece che
+    # improbabile. Girandone tre a rotazione si toccavano lo stesso, perche' la
+    # scala arriva all'ultima richiesta - su una pagina con beacon di analytics
+    # sono 30 secondi - mentre i paint stanno tutti nei primi cinque: cinque
+    # etichette in un quinto della larghezza non stanno in tre righe.
+    # Quelle oltre meta' scala si appendono a destra, o l'ultima uscirebbe dal
+    # grafico.
     marchi = []
     for i, r in enumerate(disegno.riferimenti):
-        classi = [f"r{i % 3}"] if i % 3 else []
-        if r.pc > 60:
-            classi.append("destra")
-            posa = f"right:{100 - r.pc:.2f}%"
-        else:
-            posa = f"left:{r.pc:.2f}%"
-        classe = f' class="{" ".join(classi)}"' if classi else ""
-        marchi.append(f'<span{classe} style="{posa}">{_e(r.etichetta)} '
-                      f'{_e(_durata(r.ms))}</span>')
-    righello = "".join(marchi)
+        alto = i * RIGHELLO_PASSO
+        destra = r.pc > 60
+        posa = f"right:{100 - r.pc:.2f}%" if destra else f"left:{r.pc:.2f}%"
+        marchi.append(
+            f'<span{" class=destra" if destra else ""} style="{posa};'
+            f'top:{alto}px;height:calc(100% - {alto}px)">'
+            f'{_e(r.etichetta)} {_e(_durata(r.ms))}</span>')
+    righello = (f'<div class="righello" style="height:'
+                f'{len(disegno.riferimenti) * RIGHELLO_PASSO + 4}px">'
+                f'{"".join(marchi)}</div>')
     testa = ('<colgroup><col style="width:30%"><col><col style="width:11%">'
              '<col style="width:11%"></colgroup>'
-             f'<tr><th>richiesta</th><th><div class="righello">{righello}</div></th>'
+             f'<tr><th>richiesta</th><th>{righello}</th>'
              f'<th class="num">peso</th><th class="num">in rete</th></tr>')
     visibili = "".join(_riga_cascata(b) for b in disegno.barre[:CASCATA_VISIBILI])
     resto = ""
@@ -571,6 +587,9 @@ def _cascata(fatti: dict, url: str) -> str:
 
 def html_report(esecuzione: dict) -> str:
     pagine = esecuzione.get("pagine", [])
+    # Un run salvato prima che la chiave esistesse non ce l'ha: si ricade sul
+    # solo dominio della pagina, cioe' su com'era prima.
+    domini_propri = esecuzione.get("domini_propri") or ()
     sezioni = []
     for p in pagine:
         if p.get("errore"):
@@ -594,7 +613,7 @@ def html_report(esecuzione: dict) -> str:
             f"sono di terze parti ({quota * 100:.0f}%)</strong>.</p>"
             f"{_peso_per_tipo(p.get('peso_per_tipo') or {})}"
             f"{_catena_redirect(fatti)}"
-            f"{_cascata(fatti, p['url'])}"
+            f"{_cascata(fatti, p['url'], domini_propri)}"
             f"{_metriche_lab(fatti)}"
             f"{_categorie(fatti)}"
             )

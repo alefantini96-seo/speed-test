@@ -374,12 +374,14 @@ table.cascata td.nome .tag { color:var(--tenue); }
 .linea .tratto { display:inline-block; height:7px; background:var(--blu);
                  vertical-align:middle; min-width:1px; }
 .linea .tratto.terza { background:var(--corallo); }
-.righello { position:relative; height:38px; font-size:9.5px; color:var(--tenue);
+.righello { position:relative; font-size:9.5px; color:var(--tenue);
             font-weight:400; text-transform:none; letter-spacing:0; }
-.righello span { position:absolute; top:0; white-space:nowrap;
+/* Una riga per riferimento, e il filetto scende fino in fondo al righello:
+   due etichette non possono sovrapporsi nemmeno quando i riferimenti si
+   ammassano - e si ammassano, perche' la scala arriva all'ultima richiesta,
+   che con i beacon di analytics finisce molto dopo l'ultimo paint. */
+.righello span { position:absolute; white-space:nowrap;
                  border-left:1px solid var(--bordo); padding-left:3px; }
-.righello span.r1 { top:12px; }
-.righello span.r2 { top:24px; }
 .righello span.destra { border-left:none; border-right:1px solid var(--bordo);
                         padding-left:0; padding-right:3px; }
 
@@ -862,6 +864,9 @@ function voceBersaglio(nome, misura, dettaglio) {
 
 const LAB_VETRINA = ['FCP', 'SI', 'TTI', 'TTFB'];
 const CASCATA_VISIBILI = 30;
+// Altezza di una riga del righello, in pixel: ogni riferimento ha la sua, ed e'
+// cio' che rende impossibile la sovrapposizione.
+const RIGHELLO_PASSO = 12;
 
 function durata(ms) {
   if (ms == null) return 'n/d';
@@ -935,22 +940,26 @@ function cascata(caricamento) {
   const barre = disegno?.barre || [];
   if (!barre.length) return '';
 
-  // Le etichette girano su tre righe e quelle oltre metà scala si appendono a
-  // destra: su una riga sola si sovrappongono - "FCP osservato" e "DOM pronto"
-  // distano meno della loro larghezza - e l'ultima, che cade al 100%, uscirebbe
-  // dal grafico.
-  const righello = (disegno.riferimenti || []).map((r, i) => {
-    const classi = i % 3 ? [`r${i % 3}`] : [];
-    if (r.pc > 60) classi.push('destra');
-    const posa = r.pc > 60 ? `right:${(100 - r.pc).toFixed(2)}%`
-                           : `left:${r.pc.toFixed(2)}%`;
-    return `<span class="${classi.join(' ')}" style="${posa}">${esc(r.etichetta)}
+  // Una riga per riferimento: sovrapporsi diventa impossibile invece che
+  // improbabile. A rotazione su tre righe si toccavano lo stesso, perché la
+  // scala arriva all'ultima richiesta - con i beacon di analytics sono decine di
+  // secondi - mentre i paint stanno tutti nei primi cinque.
+  const riferimenti = disegno.riferimenti || [];
+  const righello = riferimenti.map((r, i) => {
+    const alto = i * RIGHELLO_PASSO;
+    const destra = r.pc > 60;
+    const posa = destra ? `right:${(100 - r.pc).toFixed(2)}%`
+                        : `left:${r.pc.toFixed(2)}%`;
+    return `<span class="${destra ? 'destra' : ''}"
+      style="${posa};top:${alto}px;height:calc(100% - ${alto}px)">${esc(r.etichetta)}
       ${esc(durata(r.ms))}</span>`;
   }).join('');
 
   const testa = `<colgroup><col style="width:30%"><col>
     <col style="width:12%"><col style="width:12%"></colgroup>
-    <tr><th>richiesta</th><th><div class="righello">${righello}</div></th>
+    <tr><th>richiesta</th>
+      <th><div class="righello" style="height:${riferimenti.length * RIGHELLO_PASSO + 4}px">${
+        righello}</div></th>
       <th class="num">peso</th><th class="num">in rete</th></tr>`;
   const visibili = barre.slice(0, CASCATA_VISIBILI).map(rigaCascata).join('');
   const nascoste = barre.slice(CASCATA_VISIBILI);

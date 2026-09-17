@@ -130,6 +130,65 @@ def test_nessuna_barra_della_cascata_esce_dal_grafico(esecuzione):
         assert sum(larghezze) <= 100.2, cella[:120]
 
 
+def test_ogni_riferimento_del_righello_ha_la_sua_riga():
+    """Le etichette si sovrapponevano: la scala della cascata arriva all'ultima
+    richiesta - su una pagina con beacon di analytics sono decine di secondi -
+    mentre i paint stanno tutti nei primi cinque, quindi i riferimenti si
+    ammassano. Girarne tre a rotazione non bastava; una riga ciascuno rende la
+    sovrapposizione impossibile invece che improbabile.
+
+    Misurato su www.pluxee.it il 17/09/2026: scala 8.430 ms e quattro
+    riferimenti su cinque fra il 30% e il 54%."""
+    import re
+
+    from speed.io import render
+
+    disegno = render.cascata(
+        [extract.Richiesta(url="https://x.it/a.js", host="x.it", byte=10, tipo="Script",
+                           partita=10.0, finita=20.0)],
+        {"DOM pronto": 2535.0, "FCP osservato": 3317.0, "Caricata": 3826.0,
+         "LCP osservato": 4538.0, "Ultimo cambio visivo": 6944.0},
+        "https://x.it/")
+    assert len(disegno.riferimenti) == 5
+
+    html = render._cascata({"richieste": [{"url": "https://x.it/a.js", "host": "x.it",
+                                           "byte": 10, "tipo": "Script",
+                                           "partita": 10.0, "finita": 20.0}],
+                            "tempi_osservati": {
+                                "DOM pronto": 2535.0, "FCP osservato": 3317.0,
+                                "Caricata": 3826.0, "LCP osservato": 4538.0,
+                                "Ultimo cambio visivo": 6944.0}},
+                           "https://x.it/")
+    righello = html[html.index('class="righello"'):html.index("</div>", html.index('class="righello"'))]
+    alti = re.findall(r"top:(\d+)px", righello)
+    assert len(alti) == 5, righello[:200]
+    assert len(set(alti)) == 5, f"due riferimenti sulla stessa riga: {alti}"
+
+
+def test_la_cascata_e_il_peso_dicono_la_stessa_cosa_sulle_terze_parti(esecuzione):
+    """Il difetto: la cascata non riceveva i domini dichiarati e marcava terze
+    parti gli stessi host che il paragrafo sopra contava prima parte. Su questo
+    run erano 118 richieste su 126 con la targhetta 3P sotto "23% di terze
+    parti" - due risposte diverse alla stessa domanda, nello stesso documento."""
+    con_domini = dict(esecuzione, domini_propri=PROPRI)
+    h = render.html_report(con_domini)
+    prime = h.count(">1P</span>")
+    terze = h.count(">3P</span>")
+    assert prime > terze, f"1P={prime} 3P={terze}: i domini dichiarati non arrivano"
+
+    # Senza dichiararli si torna al comportamento di prima, senza rompersi.
+    senza = render.html_report({k: v for k, v in con_domini.items()
+                                if k != "domini_propri"})
+    assert senza.count(">3P</span>") > h.count(">3P</span>")
+
+
+def test_il_run_salvato_porta_i_domini_dichiarati():
+    """Il report si rigenera da un JSON salvato mesi prima: se la chiave non
+    finisce li', `speed report` non puo' sapere quali domini erano del cliente."""
+    sorgente = (FIXTURES.parent / "speed" / "cli.py").read_text(encoding="utf-8")
+    assert '"domini_propri": list(conf.domini_propri or ())' in sorgente
+
+
 def test_la_cascata_dichiara_che_i_tempi_sono_osservati(esecuzione):
     """Sono un'altra scala rispetto alle metriche riportate da Lighthouse.
     Senza la riga, il lettore confronta numeri che non si confrontano."""

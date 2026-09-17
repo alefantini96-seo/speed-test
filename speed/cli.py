@@ -252,6 +252,11 @@ async def _run(percorso: str, desktop: bool, formato: str, ripetizioni: int) -> 
         # Il master plan e i renderer devono sapere se l'ordine e' pesato: senza
         # traffico dichiarato tutti i template contano uguale, e va detto.
         "ordinamento_pesato": conf.traffico_dichiarato,
+        # I CDN e i domini fratelli del cliente. Senza, la cascata del report li
+        # marcava terze parti mentre il peso della pagina, due righe sopra, li
+        # contava prima parte: su un run reale erano 118 richieste su 126
+        # marcate 3P sotto un paragrafo che diceva "23% di terze parti".
+        "domini_propri": list(conf.domini_propri or ()),
         "pagine": pagine,
     }
     # Il report si genera dalla forma JSON, non dagli oggetti in memoria: cosi'

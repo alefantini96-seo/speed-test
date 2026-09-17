@@ -420,6 +420,18 @@ def test_l_interfaccia_tronca_i_bersagli_in_resa():
     assert sorgente.count(".slice(0, 3)") >= 2, "comuni e propri restano corti a schermo"
 
 
+def test_il_righello_della_cascata_da_una_riga_a_ciascuno():
+    """Stessa correzione del report: le etichette si sovrapponevano quando i
+    riferimenti si ammassano, e si ammassano perche' la scala arriva all'ultima
+    richiesta mentre i paint stanno all'inizio."""
+    sorgente = _sorgente()
+    assert "const RIGHELLO_PASSO" in sorgente
+    corpo = sorgente[sorgente.index("const riferimenti = disegno.riferimenti"):
+                     sorgente.index("const testa = ")]
+    assert "i * RIGHELLO_PASSO" in corpo, "l'altezza dipende dall'indice, non da un resto"
+    assert "% 3" not in corpo, "la rotazione su tre righe non basta"
+
+
 def test_gli_interventi_si_leggono_prima_in_tabella():
     """La domanda che la lista non sapeva rispondere: questo intervento riguarda
     una pagina sola o tutte? Ci si rispondeva aprendo diciassette schede per
