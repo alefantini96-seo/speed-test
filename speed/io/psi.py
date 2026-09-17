@@ -26,14 +26,28 @@ from .google import CODICI_RIPROVABILI, richiedi
 
 ENDPOINT = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
-# Timeout di una singola chiamata. Una misurazione impiega 30-60 secondi: la CLI
-# puo' permettersi di aspettare, il percorso web no e passa il suo (vedi web.py).
-TIMEOUT = 120.0
+# Timeout di una singola chiamata dalla CLI. Non ha un tetto di piattaforma da
+# rispettare - gira sul portatile di chi la lancia - quindi aspetta come farebbe
+# Screaming Frog, che sulla stessa API non va mai in timeout per questo motivo.
+#
+# Misurato il 17/09/2026 su casino.supersport.hr: 39, 58, 79 e 105 secondi in
+# quattro chiamate a pochi minuti l'una dall'altra. Con 120 s la CLI perdeva la
+# pagina per un pelo, e non per un suo limite.
+TIMEOUT = 300.0
 
 # Sotto questa soglia non si tenta nemmeno: la misurazione piu' rapida mai vista
 # su una pagina vera e' stata 24,3 s, quindi con meno tempo di cosi' si
 # spenderebbe l'attesa per un fallimento sicuro.
 MINIMO_UTILE = 30.0
+
+# Dopo uno scadere la riprova chiede la sola performance.
+#
+# Le altre tre categorie sono un riferimento e non entrano in nessuna valutazione
+# (ADR-001), ma su una pagina pesante costano tempo vero: misurato il 17/09/2026
+# su casino.supersport.hr, 78,9 s contro 104,9 e 39,3 contro 58,4 - fra il 25% e
+# il 49% in piu'. Quando il tempo e' il vincolo, si rinuncia ai numeri di
+# riferimento e non all'analisi.
+CATEGORIE_MINIME = ("performance",)
 
 
 async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
@@ -74,11 +88,20 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
     """
     orologio = asyncio.get_event_loop().time
     scaduta = None
+    totale = max(1, chiamate)
 
-    for numero in range(1, max(1, chiamate) + 1):
+    for numero in range(1, totale + 1):
+        ultima = numero == totale
         quanto = timeout
         if scadenza is not None:
-            quanto = min(timeout, scadenza - orologio())
+            residuo = scadenza - orologio()
+            # L'ultima chiamata si prende tutto il tempo che resta, invece di
+            # fermarsi al timeout: se la prima e' scaduta, la pagina e' piu' lenta
+            # di quel numero, e riprovare con lo stesso numero e' un fallimento
+            # gia' pagato. Le altre restano una sonda: su una pagina normale la
+            # misurazione arriva in mezzo minuto, e tenere il resto in tasca vale
+            # piu' di un'attesa lunga che non serve.
+            quanto = residuo if ultima else min(timeout, residuo)
             if quanto < MINIMO_UTILE:
                 # La prima si tenta comunque, col tempo che c'e': l'errore dira'
                 # quanto si e' aspettato davvero. E' la riprova che non comincia,
@@ -88,11 +111,15 @@ async def analizza(client: httpx.AsyncClient, api_key: str, url: str,
                     break
                 quanto = max(quanto, 1.0)
 
+        # Dopo uno scadere si chiede meno: la sola performance, che e' l'unica
+        # categoria che il tool analizza.
+        chieste = CATEGORIE_MINIME if scaduta is not None else categorie
+
         try:
             risposta, dati = await richiedi(lambda: client.get(ENDPOINT, params={
                 "url": url,
                 "strategy": strategy,
-                "category": list(categorie),
+                "category": list(chieste),
                 "locale": locale,   # titoli, descrizioni e checklist gia' in italiano
                 "key": api_key,
             }, timeout=quanto), 1, 0.0)
@@ -151,7 +178,10 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
     durata e deve stare sotto (vedi `web.Budget`), la CLI no.
 
     `secondi` e' quanto tempo c'e' in tutto: da li' esce la scadenza che le
-    chiamate rispettano, e un giro nuovo non comincia se non ci sta.
+    chiamate rispettano, e un giro nuovo non comincia se non ci sta. Ogni giro
+    ne prende la sua parte - il tempo che resta diviso i giri che restano - o il
+    primo si prenderebbe tutto, visto che l'ultima chiamata di un giro si prende
+    il residuo.
     """
     sem = asyncio.Semaphore(parallelismo)
     risultati: dict = {u: [] for u in urls}
@@ -159,20 +189,25 @@ async def analizza_molte(api_key: str, urls: list, strategy: str = "mobile",
     scadenza = orologio() + secondi if secondi is not None else None
 
     async with httpx.AsyncClient() as client:
-        async def uno(url: str):
+        async def uno(url: str, scadenza_giro):
             async with sem:
                 try:
                     risultati[url].append(await analizza(
                         client, api_key, url, strategy, locale,
-                        chiamate, attesa_iniziale, timeout, categorie, scadenza))
+                        chiamate, attesa_iniziale, timeout, categorie, scadenza_giro))
                 except Exception as exc:   # la singola pagina non deve fermare il run
                     risultati[url].append(exc)
 
         for giro in range(ripetizioni):
             inizio = orologio()
+            if scadenza is not None:
+                quota = (scadenza - orologio()) / max(1, ripetizioni - giro)
+                scadenza_giro = orologio() + quota
+            else:
+                scadenza_giro = None
             if avviso:
                 avviso(giro + 1, ripetizioni, 0.0)
-            await asyncio.gather(*(uno(u) for u in urls))
+            await asyncio.gather(*(uno(u, scadenza_giro) for u in urls))
 
             if giro == ripetizioni - 1:
                 break

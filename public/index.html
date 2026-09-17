@@ -254,6 +254,13 @@ button:disabled { opacity:.38; cursor:default; }
   button:active:not(:disabled) { transform:none }
 }
 
+/* --- quello che Lighthouse dice della propria misurazione ----------------- */
+.avviso-misura { background:var(--sfondo); border:1px solid var(--bordo);
+                 border-left:3px solid var(--medio); border-radius:var(--raggio);
+                 padding:13px 15px; font-size:13px; margin:16px 0 0; }
+.avviso-misura ul { margin:7px 0 0; padding-left:18px; font-size:13px; }
+.avviso-misura .nota { margin-top:8px; }
+
 /* --- le spiegazioni: una "i" e una bolla ----------------------------------
    Le voci che non si spiegano da sole portano la loro definizione addosso.
    «Stima Lighthouse» era la peggiore: un numero che a volte e' in millisecondi
@@ -1173,6 +1180,27 @@ const SPIEGAZIONI_LAB = {
         'campo. Quello vero è nella tabella qui sopra.',
 };
 
+/* Gli avvisi che Lighthouse mette sulla misurazione, non sulla pagina.
+
+   Dicono che quel run e' meno affidabile di quanto sembri - un bot manager, un
+   consenso che blocca, una risorsa che non arriva - e il punteggio che ne esce
+   oscilla di conseguenza: misurato il 17/09/2026 su casino.supersport.hr,
+   quattro run con lo stesso avviso hanno dato 0,16 0,20 0,23 e 0,27.
+
+   Stanno sopra le linguette perche' qualificano tutto quello che viene dal
+   laboratorio - fasi dell'LCP, cascata, fotogrammi - non una sezione sola. */
+function avvisiMisura(pagina) {
+  const avvisi = (pagina.fatti?.avvisi || []).filter(Boolean);
+  if (!avvisi.length) return '';
+  return `<div class="avviso-misura">
+    <strong>Lighthouse avverte sulla misurazione.</strong>
+    <ul>${avvisi.map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+    <p class="nota">Testo di Lighthouse. Quando compare, i numeri di laboratorio
+      di questa pagina oscillano più del solito fra un run e l'altro: il campo,
+      nella scheda Sintesi, non ne è toccato.</p>
+  </div>`;
+}
+
 function misureLab(pagina) {
   const lab = pagina.fatti?.metriche_lab || {};
   const voci = LAB_VETRINA.filter(s => lab[s])
@@ -1444,6 +1472,7 @@ function disegna(pagina) {
       <span class="quando">${plurale(pagina.misurazioni || 1,
         'misurazione', 'misurazioni')} di laboratorio</span>
     </div>
+    ${avvisiMisura(pagina)}
     ${schede(indicePagina + 1, etichettaTemplate(pagina.url), [
       { nome: 'Sintesi', html: sintesi },
       { nome: 'Fotogrammi', html: filmstrip(pagina.caricamento)

@@ -162,6 +162,10 @@ def fatti_essenziali(fatti) -> dict:
         "performance_score": fatti.performance_score,
         "lcp_elemento_snippet": fatti.lcp_elemento_snippet,
         "lcp_fasi": fatti.lcp_fasi,
+        # Poche righe di testo, e dicono quanto vale il resto del payload: senza,
+        # i numeri di una misurazione che Lighthouse stesso ha marcato come
+        # incerta arriverebbero indistinguibili dagli altri.
+        "avvisi": fatti.avvisi,
         # Nove numeri: sono il quadro di sintesi della nota tecnica, e senza di
         # loro dal browser quel documento uscirebbe senza tabella in testa.
         "metriche_lab": fatti.metriche_lab,

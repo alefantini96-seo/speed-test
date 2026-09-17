@@ -76,6 +76,7 @@ class FattiPagina:
     metriche_lab: dict = field(default_factory=dict)
     campo_psi: dict = field(default_factory=dict)
     campo_psi_origin_fallback: bool = False
+    avvisi: list = field(default_factory=list)
     tempi_osservati: dict = field(default_factory=dict)
     redirect: list = field(default_factory=list)
     filmstrip: list = field(default_factory=list)
@@ -854,6 +855,22 @@ def estrai_categorie(psi: dict) -> list:
     return sorted(out, key=lambda c: ordine.get(c.chiave, len(ordine)))
 
 
+def estrai_avvisi(psi: dict) -> list:
+    """Gli avvisi che Lighthouse mette sulla misurazione stessa.
+
+    Non sono problemi della pagina: dicono che **quella misurazione** e' meno
+    affidabile di quanto sembri. Lighthouse li scrive quando la pagina non si e'
+    caricata come si aspettava - un bot manager, un consenso che blocca, una
+    risorsa che non arriva - e il punteggio che ne esce oscilla di conseguenza:
+    misurato il 17/09/2026 su casino.supersport.hr, quattro run con lo stesso
+    avviso hanno dato 0,16 0,20 0,23 e 0,27.
+
+    Buttarli via voleva dire consegnare quei numeri come se fossero fermi.
+    """
+    avvisi = psi.get("lighthouseResult", {}).get("runWarnings") or []
+    return [str(a).strip() for a in avvisi if str(a).strip()]
+
+
 def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagina:
     lr = psi.get("lighthouseResult", {})
     selettore, snippet = estrai_elemento_lcp(psi)
@@ -877,6 +894,7 @@ def estrai(psi: dict, url: str, form_factor: str, domini_propri=()) -> FattiPagi
         metriche_lab=estrai_metriche_lab(psi),
         campo_psi=campo.get("metrics", {}) or {},
         campo_psi_origin_fallback=bool(campo.get("origin_fallback")),
+        avvisi=estrai_avvisi(psi),
         tempi_osservati=estrai_tempi_osservati(psi),
         redirect=estrai_redirect(psi),
         filmstrip=estrai_filmstrip(psi),

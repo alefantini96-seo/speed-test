@@ -446,6 +446,23 @@ def _dettagli_pagina(fatti: dict, terze: dict) -> str:
     return _tessere(voci)
 
 
+def _avvisi_misura(fatti: dict) -> str:
+    """Quello che Lighthouse dice della propria misurazione.
+
+    Va accanto ai numeri e non in fondo: qualifica tutto quello che viene dal
+    laboratorio - fasi dell'LCP, cascata, fotogrammi - non una sezione sola.
+    """
+    avvisi = [a for a in (fatti.get("avvisi") or []) if a]
+    if not avvisi:
+        return ""
+    righe = "".join(f"<li>{_e(a)}</li>" for a in avvisi)
+    return (f'<div class="avviso"><strong>Lighthouse avverte sulla misurazione.</strong>'
+            f"<ul>{righe}</ul>"
+            f"<p class=\"nota\">Testo di Lighthouse. Quando compare, i numeri di "
+            f"laboratorio di questa pagina oscillano piu' del solito fra un run e "
+            f"l'altro: il campo, che sta qui sopra, non ne e' toccato.</p></div>")
+
+
 def _metriche_lab(fatti: dict) -> str:
     """Le quattro misure che completano il quadro e non hanno un pari sul campo.
 
@@ -605,6 +622,7 @@ def html_report(esecuzione: dict) -> str:
             f'<p class="meta">{_e(p.get("misurazioni", 1))} misurazioni di laboratorio'
             f'{" &middot; " + _e(p["consenso"]) if p.get("consenso") else ""}</p>'
             f"{_tabella_campo(p.get('campo') or {})}"
+            f"{_avvisi_misura(fatti)}"
             f"{_filmstrip(fatti)}"
             f"{_fasi_lcp(fatti)}"
             f"<h3>Peso della pagina</h3>"

@@ -75,6 +75,15 @@ costa una chiamata in piu'.
 | **Cascata delle richieste** | `network-requests` | in quale ordine la pagina si carica, cosa aspetta cosa, e quali richieste tengono la rete piu' a lungo |
 | **Altre misure di laboratorio** | `first-contentful-paint`, `speed-index`, `interactive`, `server-response-time` | FCP, Speed Index, TTI e TTFB, che nel report non c'erano da nessuna parte |
 | **Punteggi Lighthouse** | `categories` | prestazioni, accessibilita', best practice, SEO |
+| **Avvisi sulla misurazione** | `runWarnings` | quando Lighthouse dichiara che *quel run* e' meno affidabile |
+
+**Gli avvisi non riguardano la pagina, riguardano la misurazione.** Lighthouse li
+scrive quando la pagina non si e' caricata come si aspettava - un indirizzo che
+reindirizza altrove, un bot manager, un consenso che blocca - e il punteggio che ne esce
+oscilla di conseguenza. Su `casino.supersport.hr` l'avviso c'era su tutti e quattro i
+run («l'URL di prova e' stato reindirizzato a mcasino.supersport.hr»), e i punteggi
+erano 0,16 0,20 0,23 e 0,27. Buttarlo via voleva dire consegnare quei numeri come se
+fossero fermi. Quando compare, vale la pena misurare l'indirizzo finale.
 
 Tre cose vanno dette, e il report le dice ogni volta che le mostra.
 
@@ -192,6 +201,23 @@ Riprovare **non recupera** la prima misurazione: è un secondo sorteggio. Misura
 dopo 90: le risposte sono arrivate in 41,0 e 32,5 secondi, con marca temporale nuova.
 PSI non tiene il lavoro che nessuno ha ritirato. Il sorteggio però conviene, perché la
 coda lenta è l'eccezione: su nove misurazioni la mediana era 33,9 s e nessuna oltre i 51.
+
+**Il tempo che resta va all'ultima chiamata, e l'ultima chiede meno.** Un tetto fisso
+per ogni tentativo spendeva male un budget che è già stretto: se la prima chiamata è
+scaduta a 120 secondi, la pagina è più lenta di quel numero, e riprovare con lo stesso
+numero è un fallimento già pagato. Ora la prima è una sonda — la misurazione tipica
+arriva in mezzo minuto — e l'ultima si prende tutto quello che resta.
+
+E chiede solo la performance. Le altre tre categorie sono un riferimento che non entra
+in nessuna valutazione (ADR-001) ma costa tempo vero: misurato il 17/09/2026 su
+`casino.supersport.hr`, **78,9 s contro 104,9 e 39,3 contro 58,4** — fra il 25% e il 49%
+in più. Quando il tempo è il vincolo si rinuncia ai numeri di riferimento, non
+all'analisi.
+
+Quella pagina è anche il caso che ha mostrato quanto vari la stessa misurazione: quattro
+chiamate a pochi minuti l'una dall'altra hanno dato 39, 58, 79 e 105 secondi, con il
+punteggio prestazioni fra 0,16 e 0,27. Non è una pagina che sta sempre oltre il tetto: è
+una pagina che ci passa sopra a caso.
 
 La riprova non può però sforare il tetto, o la funzione viene uccisa dalla piattaforma
 prima di consegnare l'errore col rimedio. Per questo il percorso web passa ai client una

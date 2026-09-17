@@ -38,10 +38,12 @@ class ClienteFinto:
         self.risposte = list(risposte)
         self.chiamate = 0
         self.attese = []
+        self.tutti_i_parametri = []
 
     async def get(self, *_a, **kwargs):
         self.chiamate += 1
         self.parametri = kwargs.get("params", {})
+        self.tutti_i_parametri.append(self.parametri)
         self.attese.append(kwargs.get("timeout"))
         esito = self.risposte[min(self.chiamate - 1, len(self.risposte) - 1)]
         if isinstance(esito, Exception):
@@ -242,3 +244,64 @@ def test_senza_scadenza_la_cli_tiene_il_suo_timeout():
     cliente = ClienteFinto(RispostaFinta(200, OK))
     asyncio.run(psi.analizza(cliente, "chiave", "https://x.it/", timeout=120.0))
     assert cliente.attese[0] == 120.0
+
+
+# --- come si spende il tempo che resta -------------------------------------- #
+#
+# Misurato il 17/09/2026 su casino.supersport.hr, quattro chiamate a pochi minuti
+# l'una dall'altra: 39,3 - 58,4 - 78,9 - 104,9 secondi. La stessa pagina varia del
+# doppio, e con un tetto fisso a 120 s ci passava a filo o non ci passava.
+
+def test_l_ultima_chiamata_si_prende_il_tempo_che_resta():
+    """Se la prima e' scaduta, la pagina e' piu' lenta di quel numero: riprovare
+    con lo stesso numero e' un fallimento gia' pagato."""
+    cliente = ClienteFinto(httpx.ReadTimeout(""), RispostaFinta(200, OK))
+    fra_molto = asyncio.new_event_loop().time() + 200
+    asyncio.run(psi.analizza(cliente, "chiave", "https://x.it/", chiamate=2,
+                             attesa_iniziale=0, timeout=60.0, scadenza=fra_molto))
+    assert cliente.attese[0] == 60.0, "la prima e' una sonda"
+    assert cliente.attese[1] > 100, f"l'ultima prende il residuo: {cliente.attese[1]}"
+
+
+def test_dopo_uno_scadere_si_chiede_solo_la_performance():
+    """Le altre tre categorie sono un riferimento e non entrano in nessuna
+    valutazione, ma costano tempo vero: sulla stessa pagina 78,9 s contro 104,9.
+    Quando il tempo e' il vincolo si rinuncia ai numeri di riferimento, non
+    all'analisi."""
+    cliente = ClienteFinto(httpx.ReadTimeout(""), RispostaFinta(200, OK))
+    _analizza(cliente, chiamate=2)
+    assert cliente.tutti_i_parametri[0]["category"] == list(psi.CATEGORIE)
+    assert cliente.tutti_i_parametri[1]["category"] == list(psi.CATEGORIE_MINIME)
+    assert cliente.tutti_i_parametri[1]["category"] == ["performance"]
+
+
+def test_senza_scadenze_le_categorie_restano_tutte():
+    """Una risposta transitoria non e' un problema di tempo: li' non si rinuncia
+    a niente."""
+    cliente = ClienteFinto(RispostaFinta(503, None, "<html>gateway</html>"),
+                           RispostaFinta(200, OK))
+    _analizza(cliente, chiamate=2)
+    assert cliente.tutti_i_parametri[1]["category"] == list(psi.CATEGORIE)
+
+
+def test_un_giro_non_si_mangia_il_budget_di_quello_dopo():
+    """L'ultima chiamata di un giro si prende il residuo: senza una quota per
+    giro, il primo giro si prenderebbe tutto e il secondo non partirebbe."""
+    visti = []
+
+    async def finta_analizza(_client, _chiave, url, *_a, **kwargs):
+        visti.append(kwargs.get("scadenza") if "scadenza" in kwargs else _a[-1])
+        return OK
+
+    import speed.io.psi as modulo
+    vera = modulo.analizza
+    modulo.analizza = finta_analizza
+    try:
+        asyncio.run(modulo.analizza_molte("chiave", ["https://x.it/"], ripetizioni=2,
+                                          attesa_fra_giri=0, secondi=200))
+    finally:
+        modulo.analizza = vera
+
+    assert len(visti) == 2
+    assert visti[0] is not None and visti[1] is not None
+    assert visti[1] > visti[0], "il secondo giro ha una scadenza piu' in la'"

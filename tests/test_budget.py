@@ -171,8 +171,14 @@ def test_il_ramo_costoso_e_quello_a_due_giri(monkeypatch):
 
 def test_la_cli_tiene_i_valori_generosi():
     """Non ha limiti di durata: stringerle i timeout perderebbe le pagine lente
-    per un vincolo che non la riguarda."""
-    assert psi.TIMEOUT == 120.0
+    per un vincolo che non la riguarda.
+
+    Da 120 a 300 secondi il 17/09/2026. Misurato su casino.supersport.hr: 39, 58,
+    79 e 105 secondi in quattro chiamate a pochi minuti l'una dall'altra. Con 120
+    la CLI perdeva la pagina per un pelo, e per un tetto che non ha - e' quello
+    che permette a Screaming Frog, sulla stessa API, di non andare mai in timeout
+    per questo motivo."""
+    assert psi.TIMEOUT == 300.0
     assert crux.TIMEOUT_RECORD == 30.0 and crux.TIMEOUT_STORICO == 45.0
     for funzione in (psi.analizza, crux.record, crux.storico):
         difetti = funzione.__defaults__ or ()

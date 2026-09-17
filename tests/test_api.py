@@ -376,6 +376,23 @@ def test_il_download_resta_possibile_con_pagine_fallite():
     assert "$('scarica-nota').disabled = risultati.length === 0;" in sorgente
 
 
+def test_gli_avvisi_sulla_misurazione_arrivano_al_browser():
+    """Poche righe di testo, e dicono quanto vale il resto del payload."""
+    fatti = _fatti_del_caricamento()
+    assert "avvisi" in web.fatti_essenziali(fatti)
+
+
+def test_gli_avvisi_stanno_sopra_le_linguette():
+    """Qualificano tutto quello che viene dal laboratorio - fasi dell'LCP,
+    cascata, fotogrammi - non una sezione sola."""
+    sorgente = _sorgente()
+    assert "function avvisiMisura(" in sorgente
+    corpo = sorgente[sorgente.index("${avvisiMisura(pagina)}"):]
+    assert corpo.index("${schede(") < corpo.index("function"), \
+        "l'avviso viene prima delle linguette"
+    assert ".avviso-misura {" in _css()
+
+
 # --- le voci che non si spiegano da sole ------------------------------------- #
 
 def test_le_voci_ambigue_portano_la_loro_spiegazione():

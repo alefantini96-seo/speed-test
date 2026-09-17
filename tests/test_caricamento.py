@@ -146,3 +146,31 @@ def test_gli_interventi_restano_quelli_di_performance(psi):
 
 def test_il_filtro_non_toglie_niente_alle_risposte_di_sola_performance(storico):
     assert len(extract.estrai_opportunita(storico, "https://www.bbc.com/")) == 14
+
+
+# --- quello che Lighthouse dice della propria misurazione -------------------- #
+
+def test_gli_avvisi_di_lighthouse_non_si_buttano():
+    """Non sono problemi della pagina: dicono che quella misurazione e' meno
+    affidabile di quanto sembri. Misurato il 17/09/2026 su
+    casino.supersport.hr: quattro run con lo stesso avviso, punteggi 0,16 0,20
+    0,23 e 0,27. Senza l'avviso quei numeri arrivano come se fossero fermi."""
+    finto = {"lighthouseResult": {"runWarnings": [
+        "La pagina potrebbe non essere caricata come previsto.", "  ", ""]}}
+    assert extract.estrai_avvisi(finto) == [
+        "La pagina potrebbe non essere caricata come previsto."]
+
+
+def test_l_avviso_del_redirect_arriva_dai_dati_veri(psi):
+    """Il fixture con la catena di redirect ne porta uno, ed e' di quelli che
+    servono: Lighthouse dice che l'indirizzo dato viene reindirizzato e che
+    conviene misurare quello finale."""
+    avvisi = extract.estrai_avvisi(psi)
+    assert len(avvisi) == 1
+    assert "reindirizzato" in avvisi[0]
+    assert extract.estrai(psi, "http://bbc.com/", "PHONE").avvisi == avvisi
+
+
+def test_senza_avvisi_la_lista_e_vuota(storico):
+    assert extract.estrai_avvisi(storico) == []
+    assert extract.estrai_avvisi({}) == []
