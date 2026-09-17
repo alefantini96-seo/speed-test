@@ -254,6 +254,42 @@ button:disabled { opacity:.38; cursor:default; }
   button:active:not(:disabled) { transform:none }
 }
 
+/* --- le spiegazioni: una "i" e una bolla ----------------------------------
+   Le voci che non si spiegano da sole portano la loro definizione addosso.
+   «Stima Lighthouse» era la peggiore: un numero che a volte e' in millisecondi
+   simulati e a volte in byte, e il README lo diceva ma non lo diceva li' dove
+   si legge il numero.
+
+   La bolla si apre sotto e non sopra: queste tabelle stanno dentro `.scorre`,
+   che e' un contenitore di scorrimento e taglia tutto quello che esce dai suoi
+   bordi - compresa una bolla appesa sopra la prima riga. Sotto invece copre le
+   righe seguenti, che e' dove c'e' posto.
+
+   `:focus-visible` oltre a `:hover`: senza, da tastiera la spiegazione non si
+   raggiunge. Il testo sta nel DOM e non in un attributo, quindi chi legge a
+   voce lo sente comunque. */
+.spiega { position:relative; display:inline-flex; align-items:center;
+          justify-content:center; width:15px; height:15px; margin-left:5px;
+          border:1px solid var(--bordo); border-radius:var(--raggio);
+          font-family:var(--font); font-size:10px; font-weight:600;
+          font-style:italic; line-height:1; color:var(--tenue); cursor:help;
+          vertical-align:middle; text-transform:none; letter-spacing:0; }
+.spiega::before { content:"i"; }
+.spiega:hover, .spiega:focus-visible { border-color:var(--testo); color:var(--testo); }
+.spiega .bolla { position:absolute; top:calc(100% + 6px); left:50%;
+                 transform:translateX(-50%); width:264px; max-width:70vw;
+                 padding:10px 12px; background:var(--testo); color:var(--bianco);
+                 border-radius:var(--raggio); font-size:12px; font-weight:400;
+                 font-style:normal; line-height:1.45; text-align:left;
+                 text-transform:none; letter-spacing:0; z-index:20;
+                 opacity:0; visibility:hidden; transition:opacity .12s ease-out; }
+/* Ai bordi la bolla si appende al bordo invece di stare centrata, o esce dal
+   contenitore di scorrimento e viene tagliata. Misurato: centrate tutte, cinque
+   bolle su trentadue finivano fuori dal riquadro. */
+.spiega.a-destra .bolla { left:auto; right:0; transform:none; }
+.spiega.a-sinistra .bolla { left:0; transform:none; }
+.spiega:hover .bolla, .spiega:focus-visible .bolla { opacity:1; visibility:visible; }
+
 /* --- le righe del modulo: un nome e un indirizzo --------------------------
    Prima era una textarea sola, con il nome davanti all'indirizzo separato da una
    barra verticale. Funzionava, ma era una convenzione da ricordare: due campi
@@ -766,6 +802,83 @@ function formatta(metrica, valore) {
   return SOGLIE[metrica]?.decimali ? valore.toFixed(2) : Math.round(valore) + ' ms';
 }
 
+/* Le spiegazioni delle voci che non si spiegano da sole.
+
+   Stanno in un posto solo perche' la stessa voce compare in piu' tabelle, e due
+   spiegazioni diverse della stessa cosa sono peggio di nessuna. */
+const SPIEGAZIONI = {
+  stima:
+    'Quanto Lighthouse calcola di risparmiare su questo problema: millisecondi ' +
+    'dove li dichiara, altrimenti byte. Sono millisecondi di laboratorio, ' +
+    'simulati con throttling da un data center Google — non il tempo che gli ' +
+    'utenti reali recuperano. Dove Lighthouse non dichiara niente la cella resta ' +
+    'vuota, invece di convertire i byte in secondi con una regola nostra.',
+  gravita:
+    'Classificazione nostra, non di Lighthouse: combina l\'urgenza che dice il ' +
+    'campo — cosa succede agli utenti reali su quella metrica — con la taglia del ' +
+    'problema in laboratorio.',
+  p75:
+    'Il valore sotto cui sta il 75% delle visite reali, da CrUX. È una media ' +
+    'mobile a 28 giorni: un intervento messo online oggi si legge pulito solo ' +
+    'dopo quattro settimane.',
+  delta:
+    'Ultimo meno primo sullo storico di 40 settimane: dice se sta migliorando o ' +
+    'peggiorando, non quanto è buono adesso.',
+  richieste:
+    'Quante risorse la pagina ha chiesto in quella misurazione, redirect e ' +
+    'chiamate in background comprese.',
+  peso:
+    'Byte che sono passati dalla rete, quindi già compressi: è quello che paga ' +
+    'chi naviga, non il peso dei file sul server.',
+  caricata:
+    'Quando quel singolo caricamento di laboratorio si è chiuso (evento load). ' +
+    'È un tempo osservato sul trace, misurato da un data center Google: non ' +
+    'quanto aspetta un utente vero.',
+  dom:
+    'Quando il documento è stato letto e il DOM è pronto — prima che immagini e ' +
+    'font finiscano di arrivare.',
+  origine:
+    'CrUX non aveva traffico sufficiente su quell\'indirizzo, quindi il numero è ' +
+    'la media di tutto il dominio. Confrontarlo con una pagina sola è confrontare ' +
+    'due cose diverse: vale come indizio, non come misura.',
+};
+
+/* Cosa misura una metrica, senza le soglie: quelle si aggiungono da `SOGLIE`,
+   cosi' la spiegazione non puo' contraddire la pastiglia che le sta accanto. */
+const COSA_MISURA = {
+  largest_contentful_paint:
+    'Quando compare l\'elemento più grande della pagina: il momento in cui si ' +
+    'vede che il contenuto c\'è.',
+  interaction_to_next_paint:
+    'Quanto la pagina ci mette a rispondere a un click o a un tocco, nel caso ' +
+    'peggiore della visita.',
+  cumulative_layout_shift:
+    'Quanto il contenuto si sposta da solo mentre la pagina carica. Non è un ' +
+    'tempo: è un numero senza unità.',
+  first_contentful_paint:
+    'Quando compare il primo testo o la prima immagine, cioè quando lo schermo ' +
+    'smette di essere bianco.',
+  experimental_time_to_first_byte:
+    'Quanto ci mette il server a mandare il primo byte della risposta.',
+};
+
+function spiegaMetrica(chiave) {
+  const cosa = COSA_MISURA[chiave];
+  const s = SOGLIE[chiave];
+  if (!cosa || !s) return '';
+  return `${cosa} Buono fino a ${formatta(chiave, s.buono)}, scarso oltre ${
+    formatta(chiave, s.scarso)}.`;
+}
+
+/* `dove` ancora la bolla a un bordo invece di centrarla: serve nelle colonne
+   laterali, dove centrata uscirebbe dal riquadro che scorre. */
+function spiega(testo, dove) {
+  if (!testo) return '';
+  const lato = dove === 'destra' ? ' a-destra' : dove === 'sinistra' ? ' a-sinistra' : '';
+  return `<span class="spiega${lato}" tabindex="0"
+    ><span class="bolla">${esc(testo)}</span></span>`;
+}
+
 function tabellaCampo(campo) {
   const metriche = campo?.metriche || {};
   const chiavi = Object.keys(SOGLIE).filter(k => k in metriche);
@@ -780,7 +893,8 @@ function tabellaCampo(campo) {
       ? (SOGLIE[k].decimali ? (s.at(-1)-s[0]).toFixed(2) : Math.round(s.at(-1)-s[0]) + ' ms')
       : '';
     const segno = s.length > 1 && s.at(-1) >= s[0] ? '+' : '';
-    return `<tr><td><strong>${SOGLIE[k].et}</strong></td>
+    return `<tr><td><strong>${SOGLIE[k].et}</strong>${
+      spiega(spiegaMetrica(k), 'sinistra')}</td>
       <td class="num">${formatta(k, metriche[k])}</td>
       <td><span class="pill" style="color:${COLORE[g] || 'var(--tenue)'}">${parola(g)}</span></td>
       <td class="num">${delta ? segno + delta : ''}</td></tr>`;
@@ -789,8 +903,12 @@ function tabellaCampo(campo) {
   const nota = periodi.length
     ? `<p class="meta">storico ${esc(periodi[0])} → ${esc(periodi.at(-1))} ·
        ${periodi.length} settimane · delta = ultimo meno primo</p>` : '';
-  return `<div class="scorre"><table><tr><th>metrica</th><th class="num">p75 reale</th>
-    <th></th><th class="num">delta</th></tr>${righe}</table></div>${nota}`;
+  return `<div class="scorre"><table>
+    <tr><th>metrica</th>
+      <th class="num">p75 reale${spiega(SPIEGAZIONI.p75, 'destra')}</th>
+      <th></th>
+      <th class="num">delta${spiega(SPIEGAZIONI.delta, 'destra')}</th></tr>
+    ${righe}</table></div>${nota}`;
 }
 
 function fasiLcp(fatti) {
@@ -943,18 +1061,20 @@ function peso(byte) {
 
 function tessere(voci) {
   if (!voci.length) return '';
-  return `<div class="tessere">${voci.map(([et, val]) =>
-    `<div class="tessera"><span class="et">${esc(et)}</span>
+  return `<div class="tessere">${voci.map(([et, val, perche]) =>
+    `<div class="tessera"><span class="et">${esc(et)}${spiega(perche)}</span>
        <span class="val">${esc(val)}</span></div>`).join('')}</div>`;
 }
 
 function dettagliPagina(pagina) {
   const terze = pagina.terze_parti || {};
   const tempi = pagina.caricamento?.tempi || {};
-  const voci = [['richieste', String(terze.richieste_totali || 0)],
-                ['peso', peso(terze.byte_totali)]];
-  if (tempi['Caricata']) voci.push(['caricata in', durata(tempi['Caricata'])]);
-  if (tempi['DOM pronto']) voci.push(['DOM pronto', durata(tempi['DOM pronto'])]);
+  const voci = [['richieste', String(terze.richieste_totali || 0), SPIEGAZIONI.richieste],
+                ['peso', peso(terze.byte_totali), SPIEGAZIONI.peso]];
+  if (tempi['Caricata'])
+    voci.push(['caricata in', durata(tempi['Caricata']), SPIEGAZIONI.caricata]);
+  if (tempi['DOM pronto'])
+    voci.push(['DOM pronto', durata(tempi['DOM pronto']), SPIEGAZIONI.dom]);
   return tessere(voci);
 }
 
@@ -1041,9 +1161,22 @@ function cascata(caricamento) {
       ${esc(peso(b.byte))}${b.terza_parte ? ' · terza parte' : ''}</li>`).join('')}</ul>`;
 }
 
+const SPIEGAZIONI_LAB = {
+  FCP: 'Stesso nome della tabella di campo, altra fonte: qui è il laboratorio, ' +
+       'una misurazione sola su una rete simulata.',
+  SI: 'Speed Index: quanto in fretta la parte visibile della pagina si riempie. ' +
+      'Più è basso, prima si vede qualcosa. Esiste solo in laboratorio.',
+  TTI: 'Time to Interactive: quando la pagina risponde in modo affidabile ai ' +
+       'click. Esiste solo in laboratorio, e non è fra le metriche che Google usa.',
+  TTFB: 'Qui è il tempo di risposta misurato dai server di Google, non dalla rete ' +
+        'dei vostri utenti: su una pagina italiana erano 10 ms contro i 403 del ' +
+        'campo. Quello vero è nella tabella qui sopra.',
+};
+
 function misureLab(pagina) {
   const lab = pagina.fatti?.metriche_lab || {};
-  const voci = LAB_VETRINA.filter(s => lab[s]).map(s => [s, durata(lab[s])]);
+  const voci = LAB_VETRINA.filter(s => lab[s])
+    .map(s => [s, durata(lab[s]), SPIEGAZIONI_LAB[s]]);
   if (!voci.length) return '';
   return `<h3>Altre misure di laboratorio</h3>${tessere(voci)}
     <p class="nota">Misurate da un data center Google su una rete simulata: servono a
@@ -1174,8 +1307,9 @@ function tabellaInterventi(lista, template) {
   }).join('');
 
   return `<div class="scorre"><table class="tabella-interventi">
-    <tr><th>Intervento</th><th>Gravità</th>${intestazioni}
-      <th class="num">Stima Lighthouse</th></tr>
+    <tr><th>Intervento</th>
+      <th>Gravità${spiega(SPIEGAZIONI.gravita, 'sinistra')}</th>${intestazioni}
+      <th class="num">Stima Lighthouse${spiega(SPIEGAZIONI.stima, 'destra')}</th></tr>
     ${righe}</table></div>`;
 }
 
@@ -1971,11 +2105,13 @@ function disegnaGap(dati) {
     const nota = LIVELLO[p.livello] || '';
     return `<th class="num${i === 0 ? ' tua' : ''}">${esc(etichetta)}
       <span class="chi">${esc(dominio(p.url))}</span>
-      ${nota ? `<span class="dove">${esc(nota)}</span>` : ''}</th>`;
+      ${nota ? `<span class="dove">${esc(nota)}${
+        p.livello === 'origin' ? spiega(SPIEGAZIONI.origine, 'destra') : ''}</span>` : ''}</th>`;
   }).join('');
 
   const righe = METRICHE_GAP.map(metrica => `
-    <tr><td class="metrica">${esc(SOGLIE[metrica].et)}</td>
+    <tr><td class="metrica">${esc(SOGLIE[metrica].et)}${
+      spiega(spiegaMetrica(metrica), 'sinistra')}</td>
       ${pagine.map((p, i) => cellaGap(p, metrica, i === 0)).join('')}</tr>`).join('');
 
   const periodi = [...new Set(pagine.map(p => p.periodo_a).filter(Boolean))];

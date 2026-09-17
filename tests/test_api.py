@@ -376,6 +376,65 @@ def test_il_download_resta_possibile_con_pagine_fallite():
     assert "$('scarica-nota').disabled = risultati.length === 0;" in sorgente
 
 
+# --- le voci che non si spiegano da sole ------------------------------------- #
+
+def test_le_voci_ambigue_portano_la_loro_spiegazione():
+    """«Stima Lighthouse» era la peggiore: un numero che a volte e' in
+    millisecondi simulati e a volte in byte. Il README lo diceva, ma non li' dove
+    si legge il numero."""
+    sorgente = _sorgente()
+    assert "const SPIEGAZIONI = {" in sorgente
+    for voce in ("stima", "gravita", "p75", "delta", "richieste", "peso",
+                 "caricata", "dom", "origine"):
+        assert f"  {voce}:" in sorgente, voce
+    assert "function spiega(" in sorgente
+
+
+def test_la_stima_dichiara_di_essere_di_laboratorio():
+    """E' il punto: non e' tempo che gli utenti reali recuperano."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("  stima:"):sorgente.index("  gravita:")]
+    assert "laboratorio" in corpo and "simulati" in corpo
+    assert "byte" in corpo, "l'altra unita' in cui Lighthouse la dichiara"
+
+
+def test_le_soglie_nelle_spiegazioni_vengono_dalle_soglie():
+    """Scritte a mano diventerebbero il posto dove il numero diverge da quello
+    della pastiglia che le sta accanto."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function spiegaMetrica("):
+                     sorgente.index("function spiega(")]
+    assert "formatta(chiave, s.buono)" in corpo
+    assert "formatta(chiave, s.scarso)" in corpo
+
+
+def test_la_spiegazione_si_raggiunge_anche_da_tastiera():
+    """Senza, la definizione esiste solo per chi ha un mouse."""
+    sorgente = _sorgente()
+    assert 'class="spiega${lato}" tabindex="0"' in sorgente
+    css = _css()
+    assert ".spiega:hover .bolla, .spiega:focus-visible .bolla" in css
+
+
+def test_la_bolla_sta_nel_dom_e_non_in_un_attributo():
+    """Il testo dentro un `title` non lo legge chi naviga a voce, e compare dopo
+    un secondo buono. Qui e' un elemento, quindi si legge sempre."""
+    sorgente = _sorgente()
+    assert '<span class="bolla">${esc(testo)}</span>' in sorgente
+    assert 'title="${esc(SPIEGAZIONI' not in sorgente
+
+
+def test_la_bolla_si_apre_in_basso_e_si_ancora_ai_bordi():
+    """Queste tabelle stanno dentro `.scorre`, che taglia tutto quello che esce
+    dai suoi bordi: una bolla appesa sopra la prima riga sparirebbe, e una
+    centrata nelle colonne laterali uscirebbe di lato. Misurato: centrate tutte,
+    cinque bolle su trentadue finivano fuori dal riquadro."""
+    css = _css()
+    assert ".spiega .bolla { position:absolute; top:calc(100% + 6px)" in css
+    assert ".spiega.a-destra .bolla { left:auto; right:0; transform:none; }" in css
+    assert ".spiega.a-sinistra .bolla { left:0; transform:none; }" in css
+
+
 # --- il nome del template lo dichiara chi lancia l'analisi ------------------- #
 
 def test_il_modulo_ha_un_campo_per_il_nome_e_uno_per_l_indirizzo():

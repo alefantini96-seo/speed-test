@@ -128,6 +128,18 @@ in una mail. Riconosce anche il formato `Nome | indirizzo`, con cui si scrivevan
 liste finché il modulo era una casella di testo sola: valgono ancora, comprese quelle
 che il browser aveva in memoria.
 
+**Le voci che non si spiegano da sole portano la loro definizione addosso**, dietro una
+«i» che si apre passandoci sopra o arrivandoci da tastiera. La peggiore era «Stima
+Lighthouse»: quanto Lighthouse calcola di risparmiare su un problema, in millisecondi
+dove li dichiara e in byte altrimenti — e sono millisecondi di laboratorio, simulati con
+throttling, non tempo che gli utenti reali recuperano. Il README lo diceva; ora lo dice
+anche lì dove si legge il numero. Le soglie dentro le spiegazioni delle metriche non
+sono scritte a mano: escono da `SOGLIE`, o sarebbero il posto dove il numero diverge da
+quello della pastiglia accanto.
+
+Il report HTML non ha tooltip e non li avrà: si stampa, e su carta non si passa sopra a
+niente. Lì le stesse avvertenze stanno nelle note sotto ogni sezione.
+
 Le pagine misurate si vedono **una per volta**, scelte da un selettore in cima. Prima
 erano riquadri in fila e la pagina cresceva con il numero di template: con tre passava
 i cinquemila pixel, e gli interventi — che sono la parte che si usa — finivano in
