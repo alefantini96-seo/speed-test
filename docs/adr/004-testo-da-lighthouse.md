@@ -47,6 +47,29 @@ e il report dichiara quale:
 
 L'invariante e' presidiato dal test `test_nessuna_azione_scritta_a_mano`.
 
+## Come si scrive la terza origine nel documento
+
+La decisione non cambia; cambia la parola. Fino al 2026-09-17 la riga di triage
+del Markdown diceva «**Classificazione nostra**», su ogni intervento di ogni
+documento. Due difetti:
+
+- **il referente.** Il documento passa di mano — dall'agenzia al cliente, dal
+  cliente al suo fornitore di sviluppo — e «nostra» li' non indica nessuno.
+- **il tono.** Ripetuta trenta volte, l'etichetta smette di attribuire e comincia
+  a scusarsi, come se la priorita' fosse una postilla accanto al dato di
+  Lighthouse. La priorita' e' il lavoro, non una riserva sul lavoro.
+
+Si dichiara nominando la fonte che **non** c'e', che e' verificabile da chiunque
+apra Lighthouse sullo stesso audit:
+
+    > **Priorita' bassa** · interviene: sviluppo · guadagno stimato in lab: 850 ms su TBT.
+    > Non e' una classificazione di Lighthouse.
+
+Presidiato da `test_il_triage_si_distingue_dal_testo_di_lighthouse` (la riga c'e'
+sotto ogni intervento) e `test_il_triage_non_usa_il_possessivo` (il possessivo non
+torna). Vale per il Markdown e per i due suggerimenti dell'interfaccia; nel codice
+e nella CLI `fonte_intervento` resta `nostra`, che li' un referente ce l'ha.
+
 ## La quarta origine: istruzioni nostre, enumerate
 
 La condizione prevista in «Come si ribalta» si e' verificata, su due audit e non
