@@ -378,14 +378,69 @@ def test_il_download_resta_possibile_con_pagine_fallite():
 
 # --- il nome del template lo dichiara chi lancia l'analisi ------------------- #
 
-def test_il_modulo_accetta_il_nome_davanti_all_indirizzo():
+def test_il_modulo_ha_un_campo_per_il_nome_e_uno_per_l_indirizzo():
     """Il cliente chiama quella pagina "Scheda prodotto", non
-    "/prodotti/utilizzatori/buoni-pasto/". Il nome si scrive nel modulo e da li'
-    arriva ovunque."""
+    "/prodotti/utilizzatori/buoni-pasto/".
+
+    Prima il nome si scriveva davanti all'indirizzo con una barra verticale in
+    mezzo. Funzionava, ma era una convenzione da ricordare: due campi per riga
+    non si ricordano, si vedono."""
+    sorgente = _sorgente()
+    assert "function rigaUrl(" in sorgente
+    assert "function leggiModulo(" in sorgente
+    assert 'class="nome-pagina"' in sorgente and 'class="url-pagina"' in sorgente
+    assert 'id="aggiungi"' in sorgente, "il piu' per aggiungere una riga"
+    assert "togli-riga" in sorgente, "e il modo di toglierla"
+
+
+def test_il_modulo_nasce_con_tre_righe():
+    """Tre e' il minimo che il tool chiede - una pagina per template - e una riga
+    sola sembrerebbe un campo, non una lista."""
+    sorgente = _sorgente()
+    assert "const RIGHE_INIZIALI = 3;" in sorgente
+    corpo = sorgente[sorgente.index("function disegnaRighe("):
+                     sorgente.index("function leggiModulo(")]
+    assert "while (lista.length < RIGHE_INIZIALI)" in corpo
+
+
+def test_l_ultima_riga_non_si_toglie():
+    """Un modulo senza righe non si riempie: l'ultima si svuota invece di
+    sparire."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("const togli = evento.target.closest('.togli-riga');"):]
+    corpo = corpo[:corpo.index("$('campo-urls').addEventListener('paste'")]
+    assert "if (righe.length > 1)" in corpo
+    assert "c.value = ''" in corpo
+
+
+def test_le_righe_si_disegnano_anche_senza_memoria():
+    """In navigazione privata `localStorage` puo' sollevare al primo tocco: se il
+    disegno stesse dentro il try, il modulo resterebbe senza righe - cioe'
+    inutilizzabile - per non aver potuto leggere una preferenza."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function ripristina()"):]
+    corpo = corpo[:corpo.index("stimaDurata();")]
+    assert corpo.index("} catch (e)") < corpo.index("disegnaRighe(righe);")
+
+
+def test_una_lista_incollata_si_divide_in_righe():
+    """E' il modo in cui si arriva qui: gli indirizzi stanno gia' in un foglio o
+    in una mail. E riconosce il vecchio formato `Nome | indirizzo`, con cui erano
+    scritte le liste finche' il modulo era una textarea sola."""
+    sorgente = _sorgente()
+    assert "$('campo-urls').addEventListener('paste'" in sorgente
+    corpo = sorgente[sorgente.index("$('campo-urls').addEventListener('paste'"):]
+    assert "leggiRighe(testo)" in corpo
+    assert "if (righe.length < 2) return;" in corpo, "una riga sola resta un incollaggio normale"
+
+
+def test_il_vecchio_formato_si_legge_ancora():
+    """Serve a due cose: le liste salvate nel browser prima di questo modulo, e
+    l'incollaggio di una lista scritta com'erano scritte prima."""
     sorgente = _sorgente()
     assert "function leggiRighe(" in sorgente
     corpo = sorgente[sorgente.index("function leggiRighe("):sorgente.index("const NOMI")]
-    assert "riga.split('|')" in corpo, "il separatore e' la barra verticale"
+    assert "riga.split('|')" in corpo, "il separatore era la barra verticale"
     assert "/^https?:" in corpo, "si riconosce l'indirizzo, non la posizione"
     assert "return { url: riga, nome: '' }" in corpo, "senza nome resta il percorso"
 
@@ -1052,6 +1107,8 @@ def test_la_pagina_ricorda_gli_url_fra_una_sessione_e_l_altra():
     sorgente = _sorgente()
     assert "function ricorda(" in sorgente and "function ripristina(" in sorgente
     assert "localStorage" in sorgente
+    assert "'speed_pagine'" in sorgente, "righe con nome e indirizzo"
+    assert "'speed_urls'" in sorgente, "e le liste salvate prima, che restano leggibili"
 
 
 def test_la_pagina_non_chiede_nessuna_password():

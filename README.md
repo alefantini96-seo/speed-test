@@ -112,16 +112,21 @@ colonna a sinistra: **Analisi velocità** e **Gap competitor**. Quale sia aperto
 frammento dell'indirizzo (`#gap`), non in memoria: così si manda a un collega il link
 del confronto, e ricaricando si resta dov'eri.
 
-Nell'analisi incolli gli URL, il browser
-li manda **uno alla volta** e i risultati compaiono mano a mano.
+Nell'analisi si compila una riga per pagina — **nome del template e indirizzo**, due
+campi, con un «+» per aggiungerne — e il browser le manda **una alla volta**, con i
+risultati che compaiono mano a mano.
 
-Davanti all'indirizzo si può mettere **il nome del template**, separato da una barra
-verticale: `Scheda prodotto | https://…`. È il nome con cui il cliente chiama quella
-pagina, e da lì arriva ovunque — il selettore delle pagine, la tabella degli
-interventi, la sintesi e i documenti Word. Senza, resta il percorso dell'URL, che è il
-comportamento di prima. Il nome va ai documenti **solo se dichiarato**: mandare il
-percorso farebbe scrivere alla nota «Senza dati di campo: /.», e dentro una frase quel
-carattere non si legge come il nome di una pagina.
+Il nome è quello con cui il cliente chiama quella pagina, e da lì arriva ovunque: il
+selettore dei risultati, la tabella degli interventi, la sintesi e i documenti Word.
+Lasciarlo vuoto è legittimo: resta il percorso dell'URL. Ai documenti il nome va **solo
+se dichiarato**: mandare il percorso farebbe scrivere alla nota «Senza dati di campo:
+/.», e dentro una frase quel carattere non si legge come il nome di una pagina.
+
+Una lista di indirizzi si incolla in un campo solo e si divide da sé, una riga per
+pagina — è il modo in cui si arriva qui, perché gli indirizzi stanno già in un foglio o
+in una mail. Riconosce anche il formato `Nome | indirizzo`, con cui si scrivevano le
+liste finché il modulo era una casella di testo sola: valgono ancora, comprese quelle
+che il browser aveva in memoria.
 
 Le pagine misurate si vedono **una per volta**, scelte da un selettore in cima. Prima
 erano riquadri in fila e la pagina cresceva con il numero di template: con tre passava

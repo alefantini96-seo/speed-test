@@ -254,6 +254,23 @@ button:disabled { opacity:.38; cursor:default; }
   button:active:not(:disabled) { transform:none }
 }
 
+/* --- le righe del modulo: un nome e un indirizzo --------------------------
+   Prima era una textarea sola, con il nome davanti all'indirizzo separato da una
+   barra verticale. Funzionava, ma era una convenzione da ricordare: due campi
+   per riga non si ricordano, si vedono. */
+.riga-url { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.riga-url input[type=text].nome-pagina { flex:0 1 230px; font-family:var(--font); }
+.riga-url input[type=text].url-pagina { flex:1 1 auto; min-width:0; }
+.riga-url .togli-riga { flex:none; width:36px; padding:0; align-self:stretch;
+                        font-size:17px; line-height:1; color:var(--tenue); }
+.riga-url .togli-riga:hover:not(:disabled) { color:var(--scarso); background:transparent; }
+.comandi-righe { margin-top:4px; }
+.comandi-righe button { padding:7px 14px; font-size:13px; }
+@media (max-width:560px) {
+  .riga-url { flex-wrap:wrap; }
+  .riga-url input[type=text].nome-pagina { flex:1 1 100%; }
+}
+
 /* --- il selettore delle pagine --------------------------------------------
    Prima ogni pagina misurata era un riquadro in fila: con tre template la
    pagina passava i cinquemila pixel e gli interventi, che sono la parte che si
@@ -558,8 +575,8 @@ a { color:var(--blu); }
 <section id="sezione-analisi">
   <p class="occhiello">Core Web Vitals · PageSpeed Insights</p>
   <h1>Analisi velocità</h1>
-  <p class="sottotitolo">Incolla gli URL da analizzare, uno per riga. Ogni pagina viene
-    misurata sui dati di campo reali e diagnosticata in laboratorio.</p>
+  <p class="sottotitolo">Una riga per pagina: il nome del template e il suo indirizzo.
+    Ogni pagina viene misurata sui dati di campo reali e diagnosticata in laboratorio.</p>
 
   <!-- Barra compatta: compare al posto del modulo quando ci sono risultati, cosi'
        la prima schermata mostra i numeri e non piu' il modulo gia' compilato. -->
@@ -582,16 +599,23 @@ a { color:var(--blu); }
 
   <div class="riquadro" id="modulo">
     <div id="campo-urls">
-      <label for="urls">URL da analizzare</label>
-      <textarea id="urls" placeholder="Home | https://www.esempio.it/&#10;Categoria | https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
-      <p class="aiuto">Uno per riga, da tre a sei: una pagina per template, la più
-        trafficata del suo gruppo. Sotto una certa soglia di traffico i dati di campo
-        non esistono, e resta la sola diagnosi di laboratorio.</p>
-      <p class="aiuto">Davanti all&rsquo;indirizzo puoi mettere <strong>il nome del
-        template</strong> separato da una barra verticale: <code>Scheda prodotto |
-        https://&hellip;</code>. È il nome con cui il cliente chiama quella pagina, e
-        da lì arriva ovunque — il selettore qui sotto, la tabella degli interventi, la
-        sintesi e i documenti Word. Senza, resta il percorso.</p>
+      <label id="etichetta-pagine">Pagine da analizzare</label>
+      <!-- Le righe le disegna il JavaScript: nascono, si aggiungono e si tolgono
+           tutte allo stesso modo, e una sola forma vuol dire un solo posto dove
+           sbagliarla. -->
+      <div id="righe" role="group" aria-labelledby="etichetta-pagine"></div>
+      <div class="comandi-righe">
+        <button type="button" class="secondario" id="aggiungi">+ Aggiungi una pagina</button>
+      </div>
+      <p class="aiuto">Da tre a sei: una pagina per template, la più trafficata del
+        suo gruppo. Sotto una certa soglia di traffico i dati di campo non esistono,
+        e resta la sola diagnosi di laboratorio.</p>
+      <p class="aiuto">Il <strong>nome</strong> è quello con cui il cliente chiama
+        quella pagina — «Scheda prodotto», non «/prodotti/utilizzatori/buoni-pasto/»
+        — e da lì arriva ovunque: il selettore dei risultati, la tabella degli
+        interventi, la sintesi e i documenti Word. Lasciarlo vuoto è legittimo: resta
+        il percorso. Se hai già una lista di indirizzi, incollala in un campo solo e
+        si divide da sé, una riga per pagina.</p>
     </div>
 
     <div class="riga">
@@ -1431,14 +1455,15 @@ function comandiAttivi(attivi) {
 function espandiModulo() {
   $('modulo').hidden = false;
   $('barra').hidden = true;
-  $('urls').focus();
+  const primo = document.querySelector('.riga-url .url-pagina');
+  if (primo) primo.focus();
 }
 
 function ricorda() {
   // Chi usa il tool torna sugli stessi template: reincollarli ogni volta e' lavoro
   // inutile. Restano nel browser di chi la usa, non vengono mandati da nessuna parte.
   try {
-    localStorage.setItem('speed_urls', $('urls').value);
+    localStorage.setItem('speed_pagine', JSON.stringify(leggiModulo()));
     localStorage.setItem('speed_domini', $('domini').value);
     localStorage.setItem('speed_desktop', $('desktop').checked ? '1' : '');
   } catch (e) { /* modalita' privata: si perde la memoria, non l'analisi */ }
@@ -1458,7 +1483,7 @@ const SECONDI_PAGINA_MINIMO = 45;    // un giro, PSI veloce, campo con le fasi L
 const SECONDI_PAGINA_MASSIMO = 165;  // due giri, PSI lento, piu' l'attesa in mezzo
 
 function stimaDurata() {
-  const quante = leggiRighe($('urls').value).length;
+  const quante = leggiModulo().length;
   if (!quante) { $('stima').textContent = ''; return; }
   const da = Math.max(1, Math.round(quante * SECONDI_PAGINA_MINIMO / 60));
   const a = Math.ceil(quante * SECONDI_PAGINA_MASSIMO / 60);
@@ -1520,6 +1545,44 @@ function leggiRighe(testo) {
 // riga di modulo, non un dato del server.
 const NOMI = new Map();
 
+/* Le righe del modulo: un nome e un indirizzo ciascuna.
+
+   Si parte da tre perche' tre e' il minimo che il tool chiede - una pagina per
+   template, e un sito ne ha almeno tre tipi - e perche' una riga sola sembra
+   un campo, non una lista. */
+const RIGHE_INIZIALI = 3;
+
+function rigaUrl(nome, url) {
+  return `<div class="riga-url">
+    <input type="text" class="nome-pagina" value="${esc(nome || '')}"
+           placeholder="Nome del template" aria-label="Nome del template">
+    <input type="text" class="url-pagina" value="${esc(url || '')}" spellcheck="false"
+           placeholder="https://www.esempio.it/" aria-label="Indirizzo della pagina">
+    <button type="button" class="minuto togli-riga" title="Togli questa riga"
+            aria-label="Togli questa riga">&times;</button>
+  </div>`;
+}
+
+function disegnaRighe(righe) {
+  const lista = [...(righe || [])];
+  while (lista.length < RIGHE_INIZIALI) lista.push({ nome: '', url: '' });
+  $('righe').innerHTML = lista.map(r => rigaUrl(r.nome, r.url)).join('');
+}
+
+// Le righe vuote non contano: chi lascia un campo in mezzo non sta chiedendo di
+// analizzare niente.
+function leggiModulo() {
+  return [...document.querySelectorAll('.riga-url')].map(riga => ({
+    nome: riga.querySelector('.nome-pagina').value.trim(),
+    url: riga.querySelector('.url-pagina').value.trim(),
+  })).filter(r => r.url);
+}
+
+function aggiungiRiga(nome, url) {
+  $('righe').insertAdjacentHTML('beforeend', rigaUrl(nome, url));
+  return $('righe').lastElementChild;
+}
+
 // Gemelli di `core/aggregazione.etichetta_template` e `nome_in_prosa`.
 //
 // Il sintomo che li ha resi necessari: nel verdetto comparivano affiancati "Home"
@@ -1568,7 +1631,7 @@ async function analizzaUna(url, desktop, domini) {
 }
 
 async function avvia() {
-  const righe = leggiRighe($('urls').value);
+  const righe = leggiModulo();
   const urls = righe.map(r => r.url);
   NOMI.clear();
   for (const r of righe) if (r.nome) NOMI.set(r.url, r.nome);
@@ -1722,11 +1785,20 @@ async function scarica(formato = 'nota') {
 // --- avvio ------------------------------------------------------------------ //
 
 function ripristina() {
+  let righe = [];
   try {
-    $('urls').value = localStorage.getItem('speed_urls') || '';
+    // Le liste salvate prima che il modulo avesse due campi erano un testo solo,
+    // con il nome davanti all'indirizzo: si leggono ancora, e diventano righe.
+    const salvate = localStorage.getItem('speed_pagine');
+    righe = salvate ? JSON.parse(salvate)
+                    : leggiRighe(localStorage.getItem('speed_urls') || '');
     $('domini').value = localStorage.getItem('speed_domini') || '';
     $('desktop').checked = !!localStorage.getItem('speed_desktop');
-  } catch (e) { /* modalita' privata */ }
+  } catch (e) { /* modalita' privata, o memoria illeggibile */ }
+  // Fuori dal try: in navigazione privata `localStorage` puo' sollevare al primo
+  // tocco, e senza righe il modulo resterebbe vuoto - cioe' inutilizzabile - per
+  // non aver potuto leggere una preferenza.
+  disegnaRighe(righe);
   stimaDurata();
 }
 
@@ -2057,7 +2129,48 @@ $('avvia').addEventListener('click', avvia);
 $('scarica-nota').addEventListener('click', () => scarica('nota'));
 $('rianalizza').addEventListener('click', avvia);
 $('modifica').addEventListener('click', espandiModulo);
-$('urls').addEventListener('input', stimaDurata);
+$('aggiungi').addEventListener('click', () => {
+  aggiungiRiga('', '').querySelector('.nome-pagina').focus();
+});
+
+$('campo-urls').addEventListener('input', (evento) => {
+  if (evento.target.closest('.url-pagina')) stimaDurata();
+});
+
+$('campo-urls').addEventListener('click', (evento) => {
+  const togli = evento.target.closest('.togli-riga');
+  if (!togli) return;
+  const righe = document.querySelectorAll('.riga-url');
+  // L'ultima non si toglie: un modulo senza righe non si riempie.
+  if (righe.length > 1) togli.closest('.riga-url').remove();
+  else {
+    togli.closest('.riga-url').querySelectorAll('input').forEach(c => { c.value = ''; });
+  }
+  stimaDurata();
+});
+
+/* Incollare una lista in un campo solo la divide in righe.
+
+   E' il modo in cui si arriva qui: gli indirizzi stanno gia' in un foglio o in
+   una mail. Riconosce anche il vecchio formato `Nome | indirizzo`, che e' come
+   erano scritte le liste finche' il modulo era una textarea sola. */
+$('campo-urls').addEventListener('paste', (evento) => {
+  const campo = evento.target.closest('.url-pagina');
+  if (!campo) return;
+  const testo = (evento.clipboardData || window.clipboardData).getData('text');
+  const righe = leggiRighe(testo);
+  if (righe.length < 2) return;
+  evento.preventDefault();
+  const riga = campo.closest('.riga-url');
+  campo.value = righe[0].url;
+  if (righe[0].nome) riga.querySelector('.nome-pagina').value = righe[0].nome;
+  let dopo = riga;
+  for (const r of righe.slice(1)) {
+    dopo.insertAdjacentHTML('afterend', rigaUrl(r.nome, r.url));
+    dopo = dopo.nextElementSibling;
+  }
+  stimaDurata();
+});
 $('confronta').addEventListener('click', confronta);
 disegnaStrumenti();
 ripristina();
