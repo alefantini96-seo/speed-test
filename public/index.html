@@ -254,6 +254,37 @@ button:disabled { opacity:.38; cursor:default; }
   button:active:not(:disabled) { transform:none }
 }
 
+/* --- il selettore delle pagine --------------------------------------------
+   Prima ogni pagina misurata era un riquadro in fila: con tre template la
+   pagina passava i cinquemila pixel e gli interventi, che sono la parte che si
+   usa, finivano in fondo. Ora se ne vede una per volta e le altre sono a un
+   click, col nome che ha dato chi ha lanciato l'analisi. */
+/* Le voci si scrivono `.pagine-scelta .scelta-pagina` e non `.scelta-pagina`
+   per una ragione precisa: sono anche `[role=tab]`, come le linguette dentro la
+   scheda, e un selettore d'attributo pesa quanto una classe. A parita' decide
+   l'ordine nel foglio, e le linguette stanno piu' sotto: vincevano loro, e la
+   voce selezionata usciva senza bordi, senza padding e col testo nero su blu.
+   Con il genitore davanti la regola pesa di piu' e non dipende piu' da dove
+   sta scritta. */
+.pagine-scelta { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 16px; }
+.pagine-scelta .scelta-pagina {
+  font-family:var(--font); font-size:13px; font-weight:500;
+  padding:7px 13px; border:1px solid var(--bordo); border-bottom-width:1px;
+  border-radius:var(--raggio); background:var(--sfondo); color:var(--tenue);
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  margin-bottom:0; }
+.pagine-scelta .scelta-pagina:hover:not(:disabled) {
+  background:var(--sfondo); border-color:var(--testo); color:var(--testo); }
+.pagine-scelta .scelta-pagina[aria-selected="true"] {
+  background:var(--blu); border-color:var(--blu); color:var(--bianco); }
+.pagine-scelta .scelta-pagina[aria-selected="true"]:hover:not(:disabled) {
+  background:var(--blu-scuro); border-color:var(--blu-scuro); color:var(--bianco); }
+/* Una pagina mancata resta selezionabile: sparire darebbe l'idea che il report
+   sia completo quando non lo e'. */
+.pagine-scelta .scelta-pagina.mancata { color:var(--scarso); border-color:var(--scarso); }
+.pagine-scelta .scelta-pagina.mancata[aria-selected="true"] {
+  background:var(--scarso); border-color:var(--scarso); color:var(--bianco); }
+
 /* --- verdetto: domina, e' la risposta -------------------------------------
    La gerarchia e' esplicita: il verdetto ha il filetto blu in testa e il corpo
    piu' grande, le pagine sono riquadri normali, gli interventi sono righe dentro
@@ -552,10 +583,15 @@ a { color:var(--blu); }
   <div class="riquadro" id="modulo">
     <div id="campo-urls">
       <label for="urls">URL da analizzare</label>
-      <textarea id="urls" placeholder="https://www.esempio.it/&#10;https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
+      <textarea id="urls" placeholder="Home | https://www.esempio.it/&#10;Categoria | https://www.esempio.it/categoria/&#10;https://www.esempio.it/prodotto/"></textarea>
       <p class="aiuto">Uno per riga, da tre a sei: una pagina per template, la più
         trafficata del suo gruppo. Sotto una certa soglia di traffico i dati di campo
         non esistono, e resta la sola diagnosi di laboratorio.</p>
+      <p class="aiuto">Davanti all&rsquo;indirizzo puoi mettere <strong>il nome del
+        template</strong> separato da una barra verticale: <code>Scheda prodotto |
+        https://&hellip;</code>. È il nome con cui il cliente chiama quella pagina, e
+        da lì arriva ovunque — il selettore qui sotto, la tabella degli interventi, la
+        sintesi e i documenti Word. Senza, resta il percorso.</p>
     </div>
 
     <div class="riga">
@@ -1145,6 +1181,55 @@ function disegnaInterventi() {
   $('risultati').appendChild(div);
 }
 
+/* Le pagine misurate: una per volta, le altre a un click.
+
+   Prima erano riquadri in fila e la pagina cresceva con il numero di template -
+   con tre passava i cinquemila pixel, e gli interventi, che sono la parte che
+   si usa, finivano in fondo. Il selettore e' un `tablist` come le linguette
+   dentro la scheda, quindi si muove con le frecce e si annuncia da solo; quello
+   che cambia e' l'aspetto, perche' sono due livelli e devono distinguersi. */
+function contenitorePagine() {
+  let dove = document.getElementById('pagine');
+  if (!dove) {
+    dove = document.createElement('div');
+    dove.id = 'pagine';
+    dove.innerHTML = '<div class="pagine-scelta" role="tablist" ' +
+      'aria-label="Pagine misurate"></div>';
+    $('risultati').appendChild(dove);
+  }
+  return dove;
+}
+
+function aggiungiPagina(pannello, etichetta, mancata) {
+  const dove = contenitorePagine();
+  const barra = dove.querySelector('[role=tablist]');
+  const prima = !barra.children.length;
+  indicePagina += 1;
+  const idScelta = `scelta-${indicePagina}`;
+  pannello.id = `template-${indicePagina}`;
+  pannello.setAttribute('role', 'tabpanel');
+  pannello.setAttribute('aria-labelledby', idScelta);
+  pannello.hidden = !prima;
+  barra.insertAdjacentHTML('beforeend', `
+    <button type="button" role="tab" class="scelta-pagina${mancata ? ' mancata' : ''}"
+            id="${idScelta}" aria-controls="${pannello.id}"
+            aria-selected="${prima}" tabindex="${prima ? 0 : -1}"
+            title="${esc(etichetta)}">${esc(etichetta)}</button>`);
+  dove.appendChild(pannello);
+}
+
+// Togliere una pagina vuol dire togliere anche la sua voce, e dare il posto a
+// un'altra: una barra con una voce selezionata che non ha piu' pannello non si
+// ripara da sola.
+function togliPagina(pannello) {
+  const scelta = document.getElementById(pannello.getAttribute('aria-labelledby'));
+  const eraAperta = scelta && scelta.getAttribute('aria-selected') === 'true';
+  if (scelta) scelta.remove();
+  pannello.remove();
+  const rimaste = document.querySelectorAll('.scelta-pagina');
+  if (eraAperta && rimaste.length) apriLinguetta(rimaste[0]);
+}
+
 function disegnaFallita(pagina) {
   // Una pagina mancata resta visibile al suo posto: sparire darebbe l'idea che
   // il report sia completo quando non lo e'. E si puo' riprovare da sola, senza
@@ -1161,18 +1246,16 @@ function disegnaFallita(pagina) {
     <div class="comandi">
       <button class="minuto riprova" data-url="${esc(pagina.url)}">Riprova questa pagina</button>
     </div>`;
-  $('risultati').appendChild(div);
+  aggiungiPagina(div, etichettaTemplate(pagina.url), true);
 }
 
 let indicePagina = 0;
 
 function disegna(pagina) {
-  indicePagina += 1;
   const terze = pagina.terze_parti || {};
   const quota = terze.byte_totali ? terze.byte_terzi / terze.byte_totali : 0;
   const div = document.createElement('div');
   div.className = 'riquadro';
-  div.id = `template-${indicePagina}`;
   div.dataset.url = pagina.url;
   const sintesi = `
     ${tabellaCampo(pagina.campo)}
@@ -1203,14 +1286,14 @@ function disegna(pagina) {
       <span class="quando">${plurale(pagina.misurazioni || 1,
         'misurazione', 'misurazioni')} di laboratorio</span>
     </div>
-    ${schede(indicePagina, etichettaTemplate(pagina.url), [
+    ${schede(indicePagina + 1, etichettaTemplate(pagina.url), [
       { nome: 'Sintesi', html: sintesi },
       { nome: 'Fotogrammi', html: filmstrip(pagina.caricamento)
                                  + catenaRedirect(pagina.caricamento) },
       { nome: 'Cascata', html: cascata(pagina.caricamento) },
       { nome: 'Laboratorio', html: laboratorio },
     ])}`;
-  $('risultati').appendChild(div);
+  aggiungiPagina(div, etichettaTemplate(pagina.url), false);
 }
 
 // --- il verdetto: la risposta prima del dettaglio --------------------------- //
@@ -1255,8 +1338,15 @@ function disegnaVerdetto() {
 
   // Un indice: con cinque template la pagina supera i cinquemila pixel e gli
   // interventi, che sono la parte che si usa, stanno in fondo.
-  const salti = risultati.map((p, i) =>
-    `<a href="#template-${i+1}">${esc(etichettaTemplate(p.url))}</a>`).join(' · ');
+  // Il salto da solo non basta piu': il pannello di quella pagina puo' essere
+  // chiuso, e un ancoraggio dentro un elemento `hidden` non porta da nessuna
+  // parte. Il link seleziona la pagina e poi ci va.
+  const salti = risultati.map(p => {
+    const pannello = document.querySelector(`[data-url="${CSS.escape(p.url)}"]`);
+    const id = pannello ? pannello.id : '';
+    return `<a href="#${esc(id)}" data-pagina="${esc(id)}">${
+      esc(etichettaTemplate(p.url))}</a>`;
+  }).join(' · ');
 
   vecchio.className = 'verdetto';
   vecchio.innerHTML = `<h2>In sintesi</h2><ul>${righe}</ul>${avviso}
@@ -1368,7 +1458,7 @@ const SECONDI_PAGINA_MINIMO = 45;    // un giro, PSI veloce, campo con le fasi L
 const SECONDI_PAGINA_MASSIMO = 165;  // due giri, PSI lento, piu' l'attesa in mezzo
 
 function stimaDurata() {
-  const quante = $('urls').value.split('\n').filter(s => s.trim()).length;
+  const quante = leggiRighe($('urls').value).length;
   if (!quante) { $('stima').textContent = ''; return; }
   const da = Math.max(1, Math.round(quante * SECONDI_PAGINA_MINIMO / 60));
   const a = Math.ceil(quante * SECONDI_PAGINA_MASSIMO / 60);
@@ -1408,6 +1498,28 @@ function mostraErrore(messaggio, rimedio) {
     ${rimedio ? `<div class="rimedio">${esc(rimedio)}</div>` : ''}</div>`;
 }
 
+/* Una riga del modulo: `Nome | https://...`, oppure il solo indirizzo.
+
+   Il nome e' quello con cui il cliente chiama quella pagina - "Scheda prodotto",
+   non "/prodotti/utilizzatori/buoni-pasto/" - e da qui arriva ovunque: il
+   selettore, la tabella degli interventi, la sintesi e i documenti Word. Il
+   separatore e' la barra verticale, che in un indirizzo non compare mai fuori da
+   una query; l'ordine non conta, perche' si riconosce l'indirizzo e non la
+   posizione. Senza nome resta il percorso, cioe' il comportamento di prima. */
+function leggiRighe(testo) {
+  return String(testo || '').split('\n').map(r => r.trim()).filter(Boolean)
+    .map(riga => {
+      const pezzi = riga.split('|').map(x => x.trim()).filter(Boolean);
+      if (pezzi.length < 2) return { url: riga, nome: '' };
+      const url = pezzi.find(x => /^https?:\/\//i.test(x)) || pezzi[pezzi.length - 1];
+      return { url, nome: pezzi.filter(x => x !== url).join(' ') };
+    });
+}
+
+// I nomi dichiarati nel modulo, per indirizzo. Vive quanto la pagina: e' una
+// riga di modulo, non un dato del server.
+const NOMI = new Map();
+
 // Gemelli di `core/aggregazione.etichetta_template` e `nome_in_prosa`.
 //
 // Il sintomo che li ha resi necessari: nel verdetto comparivano affiancati "Home"
@@ -1415,9 +1527,11 @@ function mostraErrore(messaggio, rimedio) {
 // elenco, e nessuna delle due era quella con cui il documento Word nomina le
 // stesse pagine. Adesso la regola e' una sola e sta nel core: qui si replica.
 //
-// Dal browser il nome del template non esiste - lo dichiara lo YAML del cliente,
-// che qui non c'e' - quindi l'etichetta e' sempre il percorso dell'URL.
+// Il nome dichiarato nel modulo vince; senza, l'etichetta e' il percorso
+// dell'URL, che e' come si chiamavano le pagine prima che il nome esistesse.
 function etichettaTemplate(url) {
+  const dichiarato = NOMI.get(String(url || '').trim());
+  if (dichiarato) return dichiarato;
   const testo = String(url || '').trim();
   const separatore = testo.indexOf('://');
   const resto = separatore >= 0 ? testo.slice(separatore + 3) : testo;
@@ -1454,7 +1568,10 @@ async function analizzaUna(url, desktop, domini) {
 }
 
 async function avvia() {
-  const urls = $('urls').value.split('\n').map(s => s.trim()).filter(Boolean);
+  const righe = leggiRighe($('urls').value);
+  const urls = righe.map(r => r.url);
+  NOMI.clear();
+  for (const r of righe) if (r.nome) NOMI.set(r.url, r.nome);
   const domini = $('domini').value.split(',').map(s => s.trim()).filter(Boolean);
   const desktop = $('desktop').checked;
 
@@ -1490,6 +1607,7 @@ async function avvia() {
     try {
       const dati = await analizzaUna(urls[i], desktop, domini);
       stati[i].stato = 'fatto';
+      if (NOMI.get(dati.url)) dati.template = NOMI.get(dati.url);
       risultati.push(dati);
       disegna(dati);
       disegnaInterventi();
@@ -1503,7 +1621,7 @@ async function avvia() {
       // `template` va al server, che lo etichetta col suo criterio: qui si
       // manda l'URL come fa `speed/web.py` per le pagine riuscite, cosi' il
       // documento non chiama le mancate in un modo e le altre in un altro.
-      const fallita = { template: urls[i], url: urls[i],
+      const fallita = { template: NOMI.get(urls[i]) || urls[i], url: urls[i],
                         errore: e.message, rimedio: e.rimedio || '' };
       falliti.push(fallita);
       disegnaFallita(fallita);
@@ -1532,7 +1650,8 @@ async function riprova(url) {
       url, $('desktop').checked,
       $('domini').value.split(',').map(s => s.trim()).filter(Boolean));
     if (indice >= 0) falliti.splice(indice, 1);
-    if (scheda) scheda.remove();
+    if (scheda) togliPagina(scheda);
+    if (NOMI.get(dati.url)) dati.template = NOMI.get(dati.url);
     risultati.push(dati);
     disegna(dati);
     disegnaInterventi();
@@ -1907,6 +2026,20 @@ $('risultati').addEventListener('keydown', (evento) => {
   evento.preventDefault();
   apriLinguetta(prossima);
   prossima.focus();
+});
+
+// L'indice del verdetto seleziona la pagina invece di saltarci: il pannello
+// puo' essere chiuso, e un ancoraggio dentro un elemento `hidden` non porta da
+// nessuna parte.
+$('verdetto').addEventListener('click', (evento) => {
+  const rimando = evento.target.closest('[data-pagina]');
+  if (!rimando || !rimando.dataset.pagina) return;
+  const scelta = document.querySelector(
+    `[aria-controls="${CSS.escape(rimando.dataset.pagina)}"]`);
+  if (!scelta) return;
+  evento.preventDefault();
+  apriLinguetta(scelta);
+  scelta.scrollIntoView({ block: 'nearest' });
 });
 
 $('consiglio').addEventListener('click', (evento) => {

@@ -113,7 +113,22 @@ frammento dell'indirizzo (`#gap`), non in memoria: così si manda a un collega i
 del confronto, e ricaricando si resta dov'eri.
 
 Nell'analisi incolli gli URL, il browser
-li manda **uno alla volta** e i risultati compaiono mano a mano. Ogni pagina misurata
+li manda **uno alla volta** e i risultati compaiono mano a mano.
+
+Davanti all'indirizzo si può mettere **il nome del template**, separato da una barra
+verticale: `Scheda prodotto | https://…`. È il nome con cui il cliente chiama quella
+pagina, e da lì arriva ovunque — il selettore delle pagine, la tabella degli
+interventi, la sintesi e i documenti Word. Senza, resta il percorso dell'URL, che è il
+comportamento di prima. Il nome va ai documenti **solo se dichiarato**: mandare il
+percorso farebbe scrivere alla nota «Senza dati di campo: /.», e dentro una frase quel
+carattere non si legge come il nome di una pagina.
+
+Le pagine misurate si vedono **una per volta**, scelte da un selettore in cima. Prima
+erano riquadri in fila e la pagina cresceva con il numero di template: con tre passava
+i cinquemila pixel, e gli interventi — che sono la parte che si usa — finivano in
+fondo. Il selettore è un `tablist` come le linguette dentro la scheda, quindi si muove
+con le frecce; quello che cambia è l'aspetto, perché sono due livelli e devono
+distinguersi. Ogni pagina misurata
 è una scheda con quattro linguette — sintesi, fotogrammi, cascata, laboratorio —
 perché i sei blocchi impilati facevano 3.400 pixel a template, e con tre template la
 cascata del primo e il verdetto del terzo non stavano nella stessa schermata. Il

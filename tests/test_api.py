@@ -376,6 +376,74 @@ def test_il_download_resta_possibile_con_pagine_fallite():
     assert "$('scarica-nota').disabled = risultati.length === 0;" in sorgente
 
 
+# --- il nome del template lo dichiara chi lancia l'analisi ------------------- #
+
+def test_il_modulo_accetta_il_nome_davanti_all_indirizzo():
+    """Il cliente chiama quella pagina "Scheda prodotto", non
+    "/prodotti/utilizzatori/buoni-pasto/". Il nome si scrive nel modulo e da li'
+    arriva ovunque."""
+    sorgente = _sorgente()
+    assert "function leggiRighe(" in sorgente
+    corpo = sorgente[sorgente.index("function leggiRighe("):sorgente.index("const NOMI")]
+    assert "riga.split('|')" in corpo, "il separatore e' la barra verticale"
+    assert "/^https?:" in corpo, "si riconosce l'indirizzo, non la posizione"
+    assert "return { url: riga, nome: '' }" in corpo, "senza nome resta il percorso"
+
+
+def test_il_nome_dichiarato_vince_sull_etichetta_dedotta():
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function etichettaTemplate("):
+                     sorgente.index("function nomeInProsa(")]
+    assert "NOMI.get(" in corpo
+    assert "if (dichiarato) return dichiarato;" in corpo
+
+
+def test_ai_documenti_il_nome_va_solo_se_dichiarato():
+    """`core/aggregazione.nome_in_prosa` distingue il nome dall'URL: mandargli il
+    percorso farebbe scrivere alla nota «Senza dati di campo: /.», che non si
+    legge come il nome di una pagina."""
+    sorgente = _sorgente()
+    assert "if (NOMI.get(dati.url)) dati.template = NOMI.get(dati.url);" in sorgente
+    assert "template: NOMI.get(urls[i]) || urls[i]" in sorgente
+
+
+# --- una pagina per volta, non tutte in fila -------------------------------- #
+
+def test_le_pagine_misurate_si_scelgono_invece_di_impilarsi():
+    """Con tre template la pagina passava i cinquemila pixel e gli interventi,
+    che sono la parte che si usa, finivano in fondo."""
+    sorgente = _sorgente()
+    assert "function contenitorePagine(" in sorgente
+    assert "function aggiungiPagina(" in sorgente
+    corpo = sorgente[sorgente.index("function aggiungiPagina("):
+                     sorgente.index("function togliPagina(")]
+    assert "role=tablist" in corpo or "role='tablist'" in corpo or \
+        "[role=tablist]" in corpo, "il selettore e' un tablist come le linguette"
+    assert "pannello.hidden = !prima;" in corpo, "se ne vede una per volta"
+    assert 'aria-selected="${prima}"' in corpo
+
+
+def test_una_pagina_tolta_si_porta_via_la_sua_voce():
+    """Una voce selezionata senza pannello non si ripara da sola: succede quando
+    una pagina mancata viene ritentata e riesce."""
+    sorgente = _sorgente()
+    corpo = sorgente[sorgente.index("function togliPagina("):
+                     sorgente.index("function disegnaFallita(")]
+    assert "scelta.remove();" in corpo and "pannello.remove();" in corpo
+    assert "apriLinguetta(rimaste[0]);" in corpo
+    assert "if (scheda) togliPagina(scheda);" in sorgente, "il ritento la usa"
+
+
+def test_la_voce_della_pagina_si_distingue_dalle_linguette():
+    """Sono due livelli di schede nella stessa pagina: se si somigliassero non si
+    capirebbe quale cambia cosa. E la regola deve pesare piu' di `[role=tab]`,
+    che vale quanto una classe e sta piu' sotto nel foglio: senza il genitore
+    davanti, la voce selezionata usciva senza bordi e col testo nero su blu."""
+    css = _css()
+    assert ".pagine-scelta .scelta-pagina {" in css
+    assert '.pagine-scelta .scelta-pagina[aria-selected="true"] {' in css
+
+
 # --- la lista degli interventi e' una sola per il sito ----------------------- #
 
 def test_l_interfaccia_raggruppa_gli_interventi_per_tipo():
@@ -539,13 +607,18 @@ def test_il_gemello_javascript_taglia_come_il_core():
     assert "resto.indexOf('/')" in funzione
 
 
-def test_una_pagina_fallita_manda_al_server_lo_stesso_campo_delle_altre():
-    """`speed/web.py` mette l'URL in `template`. Se il browser ci mettesse il
-    percorso, il documento chiamerebbe le pagine mancate in un modo e le altre
-    in un altro."""
+def test_una_pagina_fallita_si_chiama_come_le_altre():
+    """Le mancate e le riuscite devono seguire la stessa regola, o il documento
+    chiamerebbe le une in un modo e le altre in un altro.
+
+    La regola e' una sola: il nome dichiarato nel modulo se c'e', l'URL
+    altrimenti. Non il percorso: `core/aggregazione.nome_in_prosa` distingue i
+    due casi, e dentro una frase «Senza dati di campo: /.» non si legge."""
     sorgente = _sorgente()
-    assert "template: urls[i], url: urls[i]" in sorgente
-    assert "template: url, url," in sorgente
+    assert "template: NOMI.get(urls[i]) || urls[i]" in sorgente, "le mancate"
+    assert sorgente.count("if (NOMI.get(dati.url)) dati.template = NOMI.get(dati.url);") == 2, \
+        "le riuscite, sia alla prima analisi sia al ritento"
+    assert "template: url, url," in sorgente, "il server continua a mettere l'URL"
 
 
 # --- l'avanzamento si toglie di mezzo quando ha finito ----------------------- #
@@ -912,9 +985,15 @@ def test_la_sintesi_non_usa_il_punteggio_psi():
 
 
 def test_la_sintesi_indicizza_i_template():
+    """L'indice resta, ma non e' piu' un ancoraggio: da quando le pagine si
+    vedono una per volta, il pannello di quella cercata puo' essere chiuso, e un
+    ancoraggio dentro un elemento `hidden` non porta da nessuna parte. Il link
+    seleziona la pagina e poi ci va."""
     sorgente = _sorgente()
     assert 'href="#interventi"' in sorgente
-    assert 'href="#template-' in sorgente
+    assert 'data-pagina="${esc(id)}"' in sorgente
+    assert "$('verdetto').addEventListener('click'" in sorgente
+    assert "apriLinguetta(scelta);" in sorgente
 
 
 # --- il modulo si toglie di mezzo quando ci sono risultati ------------------- #
